@@ -234,8 +234,10 @@ export class BoardRenderer {
     if (b.maxX === b.minX || b.maxY === b.minY) return; // bounds not set yet
     const z = this.zoom;
     const f = this.fit;
-    const sw = this.app.screen.width;
-    const sh = this.app.screen.height;
+    // Clamp against the live viewport too (see computeTransform) so the centre
+    // snap lands on the visible window, not a stale-large canvas buffer.
+    const sw = window.innerWidth || this.app.screen.width;
+    const sh = window.innerHeight || this.app.screen.height;
     const M = BoardRenderer.PAN_MARGIN;
     const MY = BoardRenderer.PAN_MARGIN_Y;
     // Board edges on screen (pan excluded — it's the value we're solving for).
@@ -1539,8 +1541,13 @@ export class BoardRenderer {
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
     this.contentBounds = { minX, maxX, minY, maxY };
-    const w = this.app.screen.width;
-    const h = this.app.screen.height;
+    // Fit against the LIVE viewport, never app.screen. Pixi's resizeTo:window
+    // defers its resize a frame, so app.screen (and the autoDensity inline canvas
+    // size, which overrides our 100vw CSS) can lag stale-large after a resize —
+    // centering for that stale width drops the map into the right side of the
+    // actually-visible window. window.innerWidth is always current.
+    const w = window.innerWidth || this.app.screen.width;
+    const h = window.innerHeight || this.app.screen.height;
     const pad = 80;
     const sx = (w - pad * 2) / (maxX - minX || 1);
     const sy = (h - pad * 2) / (maxY - minY || 1);
