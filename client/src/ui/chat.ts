@@ -83,10 +83,6 @@ export class ChatBox {
 
     document.body.appendChild(this.toggle);
     document.body.appendChild(this.panel);
-
-    this.system(
-      `Welcome to Comms. Type <b>${DEV_CODE}</b> for dev mode, or a name then <b>&lt;3</b> to send love.`,
-    );
   }
 
   destroy(): void {

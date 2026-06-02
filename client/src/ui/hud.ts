@@ -772,9 +772,9 @@ export class HUD {
             <span class="ms-lbl">${label}</span>
             <span class="ms-val">${val}</span>
           </div>`);
-    stats.appendChild(stat(upgradeIco("booster"), "Boosters", me.upgrades.booster, "#6fb3ff"));
-    stats.appendChild(stat(upgradeIco("cannon"), "Cannons", me.upgrades.cannon, "#ff6b6b"));
-    stats.appendChild(stat(upgradeIco("freightPod"), "Freight pods", me.upgrades.freightPod, "#57e389"));
+    stats.appendChild(stat(upgradeIco("booster"), "Boosters", me.upgrades.booster, "#ef8a2b"));
+    stats.appendChild(stat(upgradeIco("cannon"), "Cannons", me.upgrades.cannon, "#6fb3ff"));
+    stats.appendChild(stat(upgradeIco("freightPod"), "Freight pods", me.upgrades.freightPod, "#ff6b6b"));
     stats.appendChild(stat(shipIco(), "Transport ships", me.supply.transportShips, "#c98bff"));
     stats.appendChild(stat(colonyIco(), "Colonies", me.supply.colonies, "#ffd23f"));
     {
@@ -852,6 +852,7 @@ export class HUD {
                 <span class="ally-text">
                   <span class="ally-civ">${CIV_LABEL[civ]}</span>
                   <span class="ally-name">${escapeHtml(card?.name ?? id)}</span>
+                  <span class="ally-desc">${escapeHtml(card?.text ?? "")}</span>
                   <span class="ally-use">${hint}</span>
                 </span>
               </div>`,
@@ -868,6 +869,7 @@ export class HUD {
                 <span class="ally-text">
                   <span class="ally-civ">${CIV_LABEL[civ]}</span>
                   <span class="ally-name">${escapeHtml(card?.name ?? id)}</span>
+                  <span class="ally-desc">${escapeHtml(card?.text ?? "")}</span>
                 </span>
               </div>`),
         );
@@ -2671,9 +2673,7 @@ function resourceGlyphSvg(r: Resource): string {
         `<circle cx="12" cy="12" r="8.5" fill="#4ca63a" stroke="#0a0f1e" stroke-width="0.7"/>
          <circle cx="8.4" cy="9.4" r="2" fill="#8fd66f" opacity="0.7"/>
          <circle cx="15.2" cy="14.5" r="1.7" fill="#8fd66f" opacity="0.7"/>
-         <circle cx="9.5" cy="15.5" r="1.6" fill="#8fd66f" opacity="0.7"/>
-         <circle cx="13" cy="11" r="2.9" fill="#eafff0" stroke="#0a0f1e" stroke-width="0.6"/>
-         <circle cx="13.7" cy="11.4" r="1.4" fill="#0a0f1e"/>`,
+         <circle cx="9.5" cy="15.5" r="1.6" fill="#8fd66f" opacity="0.7"/>`,
       );
     case "ore":
       return wrap(
@@ -2707,9 +2707,14 @@ function mothershipSvg(
     freightPod: 0,
   },
 ): string {
-  const BOOST = "#6fb3ff";
-  const CANNON = "#ff6b6b";
-  const FREIGHT = "#57e389";
+  // Slot colours per the requested loadout: cannons = blue (on top), boosters =
+  // orange (at the base near the legs), freight pods = red (on the side).
+  const CANNON = "#6fb3ff";
+  const CANNON_RIM = "#1d3a5c";
+  const BOOST = "#ef8a2b";
+  const BOOST_RIM = "#8a4a12";
+  const FREIGHT = "#ff6b6b";
+  const FREIGHT_RIM = "#7a2424";
   const EMPTY = "#2a3142"; // unfilled socket
   const EMPTY_RIM = "#475066";
 
@@ -2789,30 +2794,31 @@ function mothershipSvg(
       ${[68, 78, 88, 98].map((y) => `<circle cx="48" cy="${y}" r="1.2"/><circle cx="60" cy="${y}" r="1.2"/><circle cx="72" cy="${y}" r="1.2"/>`).join("")}
     </g>
 
-    <!-- BOOSTER slot: ribbed fin on the upper-left -->
+    <!-- CANNON slot (blue): ribbed fin up top, alongside the nose cone. -->
     <g>
-      <path d="M34 64 C24 70 22 84 28 96 L38 92 L40 66 Z"
-            fill="${boosterOn ? BOOST : EMPTY}" stroke="${boosterOn ? "#1d3a5c" : EMPTY_RIM}" stroke-width="1.4"
-            ${boosterOn ? "" : 'stroke-dasharray="3 2.5"'}/>
-      ${boosterOn ? `<g stroke="#1d3a5c" stroke-width="1" opacity="0.7"><line x1="28" y1="74" x2="38" y2="71"/><line x1="28" y1="80" x2="38" y2="78"/><line x1="29" y1="86" x2="38" y2="85"/></g>` : ""}
-    </g>
-    ${pips(20, 80, MAX_UPGRADES.booster, upgrades.booster, BOOST, true)}
-
-    <!-- CANNON slot: teardrop pod on the left -->
-    <g>
-      <path d="M40 84 C30 86 28 98 36 106 C44 102 44 88 40 84 Z"
-            fill="${cannonOn ? CANNON : EMPTY}" stroke="${cannonOn ? "#7a2424" : EMPTY_RIM}" stroke-width="1.4"
+      <path d="M40 24 C29 30 26 44 32 58 L42 54 L44 26 Z"
+            fill="${cannonOn ? CANNON : EMPTY}" stroke="${cannonOn ? CANNON_RIM : EMPTY_RIM}" stroke-width="1.4"
             ${cannonOn ? "" : 'stroke-dasharray="3 2.5"'}/>
+      ${cannonOn ? `<g stroke="${CANNON_RIM}" stroke-width="1" opacity="0.7"><line x1="31" y1="34" x2="42" y2="31"/><line x1="30" y1="42" x2="42" y2="40"/><line x1="31" y1="50" x2="42" y2="49"/></g>` : ""}
     </g>
-    ${pips(96, 80, MAX_UPGRADES.cannon, upgrades.cannon, CANNON, true)}
+    ${pips(20, 42, MAX_UPGRADES.cannon, upgrades.cannon, CANNON, true)}
 
-    <!-- FREIGHT slot: nozzle pod under the engine -->
+    <!-- FREIGHT slot (red): teardrop pod on the side of the hull. -->
+    <g>
+      <path d="M40 82 C30 84 28 96 36 104 C44 100 44 86 40 82 Z"
+            fill="${freightOn ? FREIGHT : EMPTY}" stroke="${freightOn ? FREIGHT_RIM : EMPTY_RIM}" stroke-width="1.4"
+            ${freightOn ? "" : 'stroke-dasharray="3 2.5"'}/>
+    </g>
+    ${pips(96, 86, MAX_UPGRADES.freightPod, upgrades.freightPod, FREIGHT, true)}
+
+    <!-- BOOSTER slot (orange): nozzle pod at the base between the legs. -->
     <g>
       <ellipse cx="60" cy="142" rx="11" ry="7"
-               fill="${freightOn ? FREIGHT : EMPTY}" stroke="${freightOn ? "#1f6e3a" : EMPTY_RIM}" stroke-width="1.4"
-               ${freightOn ? "" : 'stroke-dasharray="3 2.5"'}/>
+               fill="${boosterOn ? BOOST : EMPTY}" stroke="${boosterOn ? BOOST_RIM : EMPTY_RIM}" stroke-width="1.4"
+               ${boosterOn ? "" : 'stroke-dasharray="3 2.5"'}/>
+      ${boosterOn ? `<g stroke="${BOOST_RIM}" stroke-width="1" opacity="0.6"><line x1="52" y1="142" x2="68" y2="142"/></g>` : ""}
     </g>
-    ${pips(60, 156, MAX_UPGRADES.freightPod, upgrades.freightPod, FREIGHT, false)}
+    ${pips(60, 156, MAX_UPGRADES.booster, upgrades.booster, BOOST, false)}
   </svg>`;
 }
 

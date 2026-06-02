@@ -301,7 +301,7 @@ export class BoardRenderer {
   /** (Re)start the 10s idle countdown that auto-recenters the map. */
   private resetIdleTimer(): void {
     window.clearTimeout(this.idleTimer);
-    this.idleTimer = window.setTimeout(() => this.animateRecenter(), 10000);
+    this.idleTimer = window.setTimeout(() => this.animateRecenter(), 60000);
   }
 
   /**
@@ -964,8 +964,9 @@ export class BoardRenderer {
       const onDock = !!inter.dockingPointOf;
       const color = damaged ? 0xff3b30 : OWNER_FILL[pc];
       // Q1: ships in general a bit larger; Q3: ships docked inside an outpost
-      // drawn ~300% bigger than a travelling ship so the occupant is unmistakable.
-      const r = scale * (onDock ? 0.46 : 0.2);
+      // drawn bigger so the occupant is unmistakable. Travelling ships are
+      // doubled (0.2 → 0.4) so colony/trade ships read clearly on the map.
+      const r = scale * (onDock ? 0.55 : 0.4);
       const selected = ship.id === this.selectedShipId;
       const g = new Graphics();
       if (selected) g.circle(sx, sy, r * 1.5).stroke({ color: 0x57e389, width: 3, alpha: 0.95 });
@@ -1218,9 +1219,6 @@ export class BoardRenderer {
         ] as const) {
           g.circle(x + bx * r, y + by * r, br * r).fill({ color: lite, alpha: 0.7 });
         }
-        // Eye.
-        g.circle(x + r * 0.12, y - r * 0.05, r * 0.3).fill({ color: 0xeafff0 }).stroke({ color: ink, width: 1 });
-        g.circle(x + r * 0.2, y - r * 0.02, r * 0.14).fill({ color: ink });
         break;
       }
       case "ore": {

@@ -865,6 +865,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .friend-head .fh-av { flex: 0 0 auto; line-height: 0; }
 .ally-card .ally-civ { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--c); }
 .ally-card .ally-name { font-size: 12px; font-weight: 700; color: var(--text); }
+/* Show the concrete ability text so the player knows what each card does. */
+.ally-card .ally-desc {
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: color-mix(in srgb, var(--text) 72%, transparent);
+  white-space: normal;
+}
 /* #2: active (usable) outpost ability cards are clickable buttons. */
 .ally-card-active { cursor: pointer; transition: transform 0.1s ease, box-shadow 0.15s ease; }
 .ally-card-active:not(.disabled):hover {
