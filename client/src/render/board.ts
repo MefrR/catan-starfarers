@@ -232,6 +232,16 @@ export class BoardRenderer {
   private clampPan(): void {
     const b = this.contentBounds;
     if (b.maxX === b.minX || b.maxY === b.minY) return; // bounds not set yet
+    // At (or below) the fitted zoom the map is already centered by
+    // computeTransform — so just pin pan to zero. No clamp/centre-snap math runs
+    // here, which is exactly the "remove the locking" check: the default view is
+    // positioned purely by the window-based fit. The clamp below only constrains
+    // panning once the player has zoomed IN past the fit.
+    if (this.zoom <= 1) {
+      this.panX = 0;
+      this.panY = 0;
+      return;
+    }
     const z = this.zoom;
     const f = this.fit;
     // Clamp against the live viewport too (see computeTransform) so the centre
