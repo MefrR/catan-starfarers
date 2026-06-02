@@ -171,10 +171,18 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
   color: var(--muted); font-weight: 700; margin: 0 4px 8px;
 }
+.score-rows { display: flex; flex-direction: column; }
 .score-row {
   display: flex; flex-direction: column; gap: 3px;
   padding: 7px 9px; border-radius: 10px;
 }
+/* Mothership upgrades per player (expanded view) — booster/cannon/freight pod. */
+.score-upg { display: flex; gap: 12px; padding-left: 19px; margin-top: 1px; }
+.score-upg .su {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; font-weight: 700; color: var(--muted);
+}
+.score-upg .su svg { width: 15px; height: 15px; opacity: 0.8; }
 .score-row .score-main { display: flex; align-items: center; gap: 9px; }
 .score-row.active { background: rgba(111,179,255,0.14); box-shadow: inset 0 0 0 1px var(--panel-border); }
 .score-meta { display: flex; gap: 10px; padding-left: 19px; }
@@ -916,13 +924,26 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .sidebar-left.collapsed .side-head { color: var(--text); }
 
-/* R2: compact victory tracker — hide the names, keep colour + VP + chips. */
+/* R2 / M7: compact victory tracker — lay the players out as narrow side-by-side
+   columns (colour dot stacked over VP) so the panel is short and slim, freeing
+   the middle of the screen for the map. Names, bonus chips, the per-player
+   upgrade row and the resource/fame/marker meta all hide; only the over-limit
+   discard warning chip is kept (it must never be missed). */
 .scoreboard.compact { min-width: 0; }
 .scoreboard.compact .pname { display: none; }
 .scoreboard.compact .vp-bonus { display: none; }
-.scoreboard.compact .score-row { padding: 4px 8px; }
-.scoreboard.compact .score-meta { padding-left: 0; gap: 7px; }
-.scoreboard.compact .vp { font-size: 22px; min-width: 40px; }
+.scoreboard.compact .score-upg { display: none; }
+.scoreboard.compact .score-rows {
+  flex-direction: row; gap: 6px; justify-content: flex-end; align-items: flex-start;
+}
+.scoreboard.compact .score-row {
+  flex-direction: column; align-items: center; gap: 2px; padding: 5px 8px; min-width: 0;
+}
+.scoreboard.compact .score-main { flex-direction: column; align-items: center; gap: 1px; }
+.scoreboard.compact .vp { font-size: 22px; min-width: 0; text-align: center; }
+.scoreboard.compact .vp-target { display: none; }
+.scoreboard.compact .score-meta { padding-left: 0; gap: 4px; justify-content: center; }
+.scoreboard.compact .score-meta .sm:not(.over-limit) { display: none; }
 
 /* R6: exit-to-menu button + confirm modal. */
 .exit-menu {

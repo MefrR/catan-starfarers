@@ -445,9 +445,15 @@ export class HUD {
     const scoreboard = el(`<div class="hud-panel scoreboard ${this.scoreCompact ? "compact" : ""}"></div>`);
     // R2: tap the title to compress the victory tracker — names hide, leaving just
     // each player's colour, VP and the medal/card/marker chips.
-    const vpTitle = el(`<div class="vp-title toggle" title="Tap to ${this.scoreCompact ? "expand" : "compress"}">Victory · first to ${target}<span class="tg-caret">${this.scoreCompact ? "▸" : "▾"}</span></div>`);
+    // Compact uses a short title so the collapsed widget stays narrow and the
+    // map gets more room; expanded shows the full label.
+    const titleText = this.scoreCompact ? `Race to ${target}` : `Victory · first to ${target}`;
+    const vpTitle = el(`<div class="vp-title toggle" title="Tap to ${this.scoreCompact ? "expand" : "compress"}">${titleText}<span class="tg-caret">${this.scoreCompact ? "▸" : "▾"}</span></div>`);
     vpTitle.addEventListener("click", () => { this.scoreCompact = !this.scoreCompact; this.rerender(); });
     scoreboard.appendChild(vpTitle);
+    // Rows live in their own flex container so compact mode can lay the players
+    // out as side-by-side columns (narrow) instead of stacked full-width rows.
+    const scoreRows = el(`<div class="score-rows"></div>`);
     for (const p of state.players) {
       const isActive = p.id === active.id;
       const bonus = reserveDrawForVP(p.victoryPoints);
@@ -484,6 +490,15 @@ export class HUD {
           <span class="sm ${markers > 0 ? "on" : "off"}" title="${markers} friendship marker${markers === 1 ? "" : "s"} (+2 VP each)">${markerGlyphSvg()}${markers}</span>
           ${conquestBadge}
         </div>`;
+      // Mothership upgrades, visible to everyone (expanded view only). Lets all
+      // players gauge each fleet's speed/combat/cargo strength.
+      const upg = p.upgrades;
+      const upgRow = `
+        <div class="score-upg">
+          <span class="su" title="${upg.booster} booster${upg.booster === 1 ? "" : "s"} (+flight speed)">${upgradeIco("booster")}${upg.booster}</span>
+          <span class="su" title="${upg.cannon} cannon${upg.cannon === 1 ? "" : "s"} (+combat strength)">${upgradeIco("cannon")}${upg.cannon}</span>
+          <span class="su" title="${upg.freightPod} freight pod${upg.freightPod === 1 ? "" : "s"} (cargo / trade stations)">${upgradeIco("freightPod")}${upg.freightPod}</span>
+        </div>`;
       const row = el(`
         <div class="score-row ${isActive ? "active" : ""}" data-pid="${p.id}">
           <div class="score-main">
@@ -493,9 +508,11 @@ export class HUD {
             <span class="vp" style="color:${COLOR_HEX[p.color]}">${p.victoryPoints}<span class="vp-target">/${target}</span></span>
           </div>
           ${meta}
+          ${upgRow}
         </div>`);
-      scoreboard.appendChild(row);
+      scoreRows.appendChild(row);
     }
+    scoreboard.appendChild(scoreRows);
 
     // M2: the activity log is now a section inside the Fleet sidebar (see
     // buildSidebar) rather than a separate floating panel.
