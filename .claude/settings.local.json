@@ -21,7 +21,9 @@
       "Bash(npx tsc *)",
       "PowerShell($cmds = 'node','npm','npx' | ForEach-Object { try { \"$_ => \" + \\(Get-Command $_ -ErrorAction Stop\\).Source } catch { \"$_ => MISSING\" } }; $cmds; \"PATH node dirs:\"; $env:Path -split ';' | Where-Object { $_ -match 'node' })",
       "PowerShell($env:Path = \"C:\\\\Program Files\\\\nodejs;\" + $env:Path; cd \"C:\\\\Users\\\\Admin\\\\Downloads\\\\Catan Starfarers\"; npx tsc -b shared 2>&1 | Select-Object -First 40; \"EXIT=$LASTEXITCODE\")",
-      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\)\")"
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\)\")",
+      "Bash(git commit -m ' *)",
+      "Bash(git add *)"
     ]
   }
 }

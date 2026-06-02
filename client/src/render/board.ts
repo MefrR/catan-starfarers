@@ -125,9 +125,7 @@ export class BoardRenderer {
     // zoom+pan transform (fit-space coords × zoom), independent of the board's
     // baked-zoom geometry, so animations land correctly at any zoom level.
     app.stage.addChild(this.fx);
-    window.addEventListener("resize", () => {
-      if (this.last) this.render(this.last);
-    });
+    window.addEventListener("resize", () => this.syncSize());
     this.tooltipEl = document.createElement("div");
     this.tooltipEl.className = "map-tooltip";
     document.body.appendChild(this.tooltipEl);
@@ -450,10 +448,29 @@ export class BoardRenderer {
    * settled to full-window size) so the map is always centered.
    */
   recenter(): void {
+    this.syncSize();
     this.zoom = 1;
     this.panX = 0;
     this.panY = 0;
     this.applyViewTransform();
+    if (this.last) this.render(this.last);
+  }
+
+  /**
+   * Force the renderer (and so `app.screen`) to the live window size, then
+   * re-fit. PixiJS's `resizeTo: window` applies its resize on the *next*
+   * animation frame, so right after a window resize `app.screen` is still the
+   * old size — recomputing the fit then centers the map for a canvas wider/
+   * taller than what's actually visible, leaving it shoved to one side until
+   * the window is maximized. Resizing synchronously here keeps the map centered
+   * against the real viewport at every size (and on mobile address-bar shifts).
+   */
+  private syncSize(): void {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    if (w > 0 && h > 0 && (this.app.screen.width !== w || this.app.screen.height !== h)) {
+      this.app.renderer.resize(w, h);
+    }
     if (this.last) this.render(this.last);
   }
 
@@ -820,11 +837,11 @@ export class BoardRenderer {
       if (sector.kind !== "outpost") continue;
       const ocx = tx(1.5 * sector.q + 0.5);
       const ocy = ty(Math.sqrt(3) * (sector.r + sector.q / 2 + 0.5));
+      const dockPos = this.dockNodePositions(ocx, ocy, scale);
       for (const ts of state.tradeStations.filter((t) => t.outpostId === sector.id)) {
-        const a = (Math.PI * 2 * ts.dock) / 5 - Math.PI / 2;
-        const r = scale * 0.42;
-        const sx = ocx + Math.cos(a) * r;
-        const sy = ocy + Math.sin(a) * r;
+        const pos = dockPos[ts.dock % dockPos.length]!;
+        const sx = pos.x;
+        const sy = pos.y;
         // Q3: established-player markers inside an outpost drawn ~300% bigger so
         // it's obvious who is docked there.
         buildLayer.addChild(
@@ -840,8 +857,18 @@ export class BoardRenderer {
     for (const ship of state.ships) {
       const inter = state.intersections[ship.intersectionId];
       if (!inter) continue;
-      const sx = tx(inter.x);
-      const sy = ty(inter.y);
+      let sx = tx(inter.x);
+      let sy = ty(inter.y);
+      // P8-7 fix: a ship parked on an outpost docking point sits on a docking
+      // *node*, not the hub centre — it takes the next free dock (one past the
+      // stations already established there), matching the painted nodes.
+      if (inter.dockingPointOf) {
+        const dockPos = this.dockNodePositions(sx, sy, scale);
+        const taken = state.tradeStations.filter((t) => t.outpostId === inter.dockingPointOf).length;
+        const node = dockPos[taken % dockPos.length]!;
+        sx = node.x;
+        sy = node.y;
+      }
       const pc = ownerColor.get(ship.owner) ?? "yellow";
       // P8-5: a ship damaged in an encounter (frozen for the turn) is drawn red
       // with a warning ring so the player can see why it can't move.
@@ -1330,6 +1357,31 @@ export class BoardRenderer {
   }
 
   /**
+   * The six docking-node angles around an outpost hub, in dock-index order
+   * (i=0..2 lobes, each with a -0.42 then +0.42 offset node). Shared by
+   * `drawOutpost` (painted nodes), trade-station pips, and docked ships so all
+   * three land on exactly the same spots — otherwise stations render "next to"
+   * the painted docks instead of on them.
+   */
+  private static readonly DOCK_ANGLES: number[] = (() => {
+    const out: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const base = -Math.PI / 2 + (Math.PI * 2 * i) / 3;
+      for (const off of [-0.42, 0.42]) out.push(base + off);
+    }
+    return out;
+  })();
+
+  /** World-space positions of the docking nodes for an outpost at (cx,cy). */
+  private dockNodePositions(cx: number, cy: number, scale: number): { x: number; y: number }[] {
+    const nd = scale * 0.4 + scale * 0.34 * 0.55; // lobeDist + lobeR*0.55 (matches drawOutpost)
+    return BoardRenderer.DOCK_ANGLES.map((a) => ({
+      x: cx + Math.cos(a) * nd,
+      y: cy + Math.sin(a) * nd,
+    }));
+  }
+
+  /**
    * Alien outpost station: a dark navy tri-lobe hub with six docking nodes and
    * teal connector struts, echoing the printed outpost tokens. The civ emblem is
    * layered on top by `drawCivIcon`.
@@ -1354,17 +1406,12 @@ export class BoardRenderer {
     station.circle(cx, cy, scale * 0.3).fill({ color: navyHi, alpha: 0.5 });
 
     // Docking nodes: two per lobe on the outer arc, with teal struts to the hub.
-    for (let i = 0; i < 3; i++) {
-      const base = (-Math.PI / 2) + (Math.PI * 2 * i) / 3;
-      for (const off of [-0.42, 0.42]) {
-        const a = base + off;
-        const nd = lobeDist + lobeR * 0.55;
-        const nx = cx + Math.cos(a) * nd;
-        const ny = cy + Math.sin(a) * nd;
-        this.strokeLine(station, cx, cy, nx, ny, scale * 0.03, teal, 0.85);
-        station.circle(nx, ny, scale * 0.1).fill({ color: edge }).stroke({ color: node, width: 1.4 });
-        station.circle(nx, ny, scale * 0.045).fill({ color: node });
-      }
+    // Positions come from the shared helper so trade-station pips / docked ships
+    // land exactly on these same nodes.
+    for (const { x: nx, y: ny } of this.dockNodePositions(cx, cy, scale)) {
+      this.strokeLine(station, cx, cy, nx, ny, scale * 0.03, teal, 0.85);
+      station.circle(nx, ny, scale * 0.1).fill({ color: edge }).stroke({ color: node, width: 1.4 });
+      station.circle(nx, ny, scale * 0.045).fill({ color: node });
     }
     layer.addChild(station);
   }
@@ -1463,34 +1510,7 @@ export class BoardRenderer {
     layer.addChild(g);
   }
 
-  /**
-   * Measure how far the persistent HUD panels (left fleet sidebar, right
-   * scoreboard) intrude from each side, in canvas pixels. The board is centered
-   * within the *visible* region between them rather than the raw window, so the
-   * map never looks shifted toward one side behind a panel. Self-adjusts when a
-   * panel collapses/shrinks (e.g. on mobile) because it's read every render.
-   */
-  private playInsets(): { left: number; right: number } {
-    const w = this.app.screen.width;
-    const ins = { left: 0, right: 0 };
-    const measure = (sel: string, side: "left" | "right"): void => {
-      const node = document.querySelector(sel) as HTMLElement | null;
-      if (!node) return;
-      const r = node.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) return; // hidden/unmounted
-      if (side === "left") ins.left = Math.max(ins.left, r.right);
-      else ins.right = Math.max(ins.right, w - r.left);
-    };
-    measure(".sidebar-left", "left");
-    measure(".scoreboard", "right");
-    // Never let the panels claim more than 35% of the width each — keeps the
-    // map a sensible size on narrow screens where panels are proportionally big.
-    ins.left = Math.max(0, Math.min(ins.left, w * 0.35));
-    ins.right = Math.max(0, Math.min(ins.right, w * 0.35));
-    return ins;
-  }
-
-  /** Fit the board's bounding box into the visible play area with padding. */
+  /** Fit the board's bounding box into the viewport with padding. */
   private computeTransform(state: GameState): { scale: number; ox: number; oy: number } {
     const xs: number[] = [];
     const ys: number[] = [];
@@ -1506,17 +1526,10 @@ export class BoardRenderer {
     const w = this.app.screen.width;
     const h = this.app.screen.height;
     const pad = 80;
-    // Center within the gap between the side panels, not the whole window.
-    const ins = this.playInsets();
-    const availLeft = ins.left + pad;
-    const availRight = w - ins.right - pad;
-    const availW = Math.max(1, availRight - availLeft);
-    const availH = Math.max(1, h - pad * 2);
-    const sx = availW / (maxX - minX || 1);
-    const sy = availH / (maxY - minY || 1);
+    const sx = (w - pad * 2) / (maxX - minX || 1);
+    const sy = (h - pad * 2) / (maxY - minY || 1);
     const scale = Math.min(sx, sy);
-    const regionCx = (availLeft + availRight) / 2;
-    const ox = regionCx - ((maxX + minX) / 2) * scale;
+    const ox = (w - (maxX + minX) * scale) / 2;
     const oy = (h - (maxY + minY) * scale) / 2;
     return { scale, ox, oy };
   }
