@@ -161,7 +161,15 @@ export class HUD {
     document.body.appendChild(this.costPop);
     // F2/F4/F5: toggle-able chat box (dev-mode + heart codes live here).
     this.chat = new ChatBox(game);
+    // On-map colony/trade-ship picker, anchored over the clicked launch point.
+    this.launchPicker = document.createElement("div");
+    this.launchPicker.className = "map-picker";
+    document.body.appendChild(this.launchPicker);
   }
+
+  /** Floating colony/trade-ship chooser shown over the clicked green launch
+   *  point (instead of in the center action bar). */
+  private launchPicker!: HTMLDivElement;
 
   /** F2: the toggle-able chat box, mounted at body level. */
   private chat: ChatBox | null = null;
@@ -175,6 +183,8 @@ export class HUD {
     this.diceTimers.forEach((t) => window.clearTimeout(t));
     this.diceTimers = [];
     this.costPop?.remove();
+    this.launchPicker?.remove();
+    this.board.onViewChange = null;
     this.chat?.destroy();
     this.chat = null;
     this.root.replaceChildren();
@@ -379,9 +389,57 @@ export class HUD {
     this.cGive = {};
     this.cWant = {};
     this.tradeOpen = false;
+    this.hideLaunchPicker();
     this.board.clearHighlights();
     this.board.onIntersectionClick = null;
     this.board.onShipClick = null;
+  }
+
+  /** Hide the on-map colony/trade-ship picker and stop tracking the view. */
+  private hideLaunchPicker(): void {
+    this.launchPicker.classList.remove("show");
+    this.board.onViewChange = null;
+  }
+
+  /** Pop the colony/trade-ship chooser right over the clicked launch point. The
+   *  two ship icons appear on the map (not the center bar); it re-anchors itself
+   *  whenever the board is panned or zoomed, and closes on pick / cancel. */
+  private showLaunchPicker(me: PlayerState, site: string): void {
+    const afford = (cost: Partial<ResourceBag>): boolean =>
+      RESOURCES.every((r) => me.hand[r] >= (cost[r] ?? 0));
+    const noTransport = me.supply.transportShips <= 0;
+    const pick = this.launchPicker;
+    pick.replaceChildren();
+
+    const mkBtn = (kind: ShipKind, label: string, cost: Partial<ResourceBag>): HTMLElement => {
+      const b = el(
+        `<button class="mp-ship" title="${label}">${shipIco(kind)}<span class="mp-lbl">${label}</span></button>`,
+      );
+      if (!afford(cost) || noTransport) (b as HTMLButtonElement).disabled = true;
+      else
+        b.addEventListener("click", () => {
+          this.act({ t: "build", what: kind, targetId: site });
+          this.resetSelection();
+        });
+      return b;
+    };
+    const row = el(`<div class="mp-row"></div>`);
+    row.appendChild(mkBtn("colonyShip", "Colony Ship", BUILD_COSTS.colonyShip));
+    row.appendChild(mkBtn("tradeShip", "Trade Ship", BUILD_COSTS.tradeShip));
+    pick.appendChild(row);
+    const close = el(`<button class="mp-close" title="Cancel">✕</button>`);
+    close.addEventListener("click", () => { this.launchPickSite = null; this.hideLaunchPicker(); });
+    pick.appendChild(close);
+
+    const reposition = (): void => {
+      const p = this.board.pagePosOf(site);
+      if (!p) return;
+      pick.style.left = `${p.x}px`;
+      pick.style.top = `${p.y}px`;
+    };
+    reposition();
+    this.board.onViewChange = reposition;
+    pick.classList.add("show");
   }
 
   private render(state: GameState): void {
@@ -1064,9 +1122,15 @@ export class HUD {
         this.board.onIntersectionClick = (id) => {
           if (sites.includes(id)) {
             this.launchPickSite = id;
-            this.rerender();
+            // Show the colony/trade chooser right on the map over the clicked
+            // point (not in the center action bar).
+            this.showLaunchPicker(me, id);
           }
         };
+        // Keep an already-open picker anchored after a re-render.
+        if (this.launchPickSite && sites.includes(this.launchPickSite)) {
+          this.showLaunchPicker(me, this.launchPickSite);
+        }
         return;
       }
       this.board.clearHighlights();
@@ -1208,38 +1272,8 @@ export class HUD {
         break;
 
       case "tradeBuild": {
-        // A green launch point was clicked on the map → let the player choose
-        // which ship to launch from it (colony ship / trade ship).
-        if (this.launchPickSite) {
-          const site = this.launchPickSite;
-          const noTransport = me.supply.transportShips <= 0;
-          actions.appendChild(
-            el(`<div class="waiting">Choose a ship to launch from this point.</div>`),
-          );
-          actions.appendChild(
-            btn(`${shipIco("colonyShip")} Colony Ship`, () => {
-              this.act({ t: "build", what: "colonyShip", targetId: site });
-              this.resetSelection();
-            }, {
-              disabled: !afford(BUILD_COSTS.colonyShip) || noTransport,
-              title: buildTip(BUILD_COSTS.colonyShip, "Launches a colony ship."),
-            }),
-          );
-          actions.appendChild(
-            btn(`${shipIco("tradeShip")} Trade Ship`, () => {
-              this.act({ t: "build", what: "tradeShip", targetId: site });
-              this.resetSelection();
-            }, {
-              disabled: !afford(BUILD_COSTS.tradeShip) || noTransport,
-              secondary: true,
-              title: buildTip(BUILD_COSTS.tradeShip, "Launches a trade ship."),
-            }),
-          );
-          actions.appendChild(
-            btn("Cancel", () => { this.launchPickSite = null; this.rerender(); }, { secondary: true }),
-          );
-          break;
-        }
+        // When a green launch point is clicked the colony/trade ship chooser
+        // appears on the MAP (see showLaunchPicker), not here in the center bar.
         const hasColony = state.buildings.some((b) => b.owner === me.id && b.kind === "colony");
         const hasLaunch = shipLaunchSites(me, state).length > 0;
         const noTransport = me.supply.transportShips <= 0;

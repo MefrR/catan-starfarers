@@ -458,6 +458,52 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .score-row.marker-gain { animation: markerGainPulse 1.2s ease; border-radius: 8px; }
 
 /* Q5: floating popover on build buttons — per-resource have/need with icons. */
+/* On-map colony/trade-ship chooser, anchored over the clicked launch point. */
+.map-picker {
+  position: fixed; z-index: 85; left: 0; top: 0;
+  transform: translate(-50%, -116%) scale(0.85);
+  transform-origin: 50% 120%;
+  display: none; gap: 6px; align-items: flex-start;
+  padding: 7px 8px; border-radius: 12px;
+  background: rgba(8, 12, 24, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65);
+  opacity: 0; transition: opacity 0.13s ease, transform 0.13s ease;
+}
+.map-picker.show { display: flex; opacity: 1; transform: translate(-50%, -112%) scale(1); }
+/* Little pointer tail aiming down at the launch dot. */
+.map-picker.show::after {
+  content: ""; position: absolute; left: 50%; bottom: -7px;
+  width: 12px; height: 12px; transform: translateX(-50%) rotate(45deg);
+  background: rgba(8, 12, 24, 0.97);
+  border-right: 1px solid rgba(255, 255, 255, 0.18);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+}
+.map-picker .mp-row { display: flex; gap: 6px; }
+.map-picker .mp-ship {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  width: 74px; padding: 8px 6px; border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--text); cursor: pointer;
+  transition: background 0.12s ease, transform 0.08s ease, border-color 0.12s ease;
+}
+.map-picker .mp-ship:hover:not(:disabled) {
+  background: rgba(120, 200, 255, 0.16);
+  border-color: rgba(120, 200, 255, 0.5);
+  transform: translateY(-1px);
+}
+.map-picker .mp-ship:disabled { opacity: 0.4; cursor: not-allowed; }
+.map-picker .mp-ship svg { width: 34px; height: 34px; }
+.map-picker .mp-lbl { font-size: 10.5px; font-weight: 600; white-space: nowrap; }
+.map-picker .mp-close {
+  width: 22px; height: 22px; padding: 0; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--text); font-size: 12px; line-height: 1; cursor: pointer;
+}
+.map-picker .mp-close:hover { background: rgba(255, 120, 120, 0.22); }
+
 .build-cost-pop {
   position: fixed; z-index: 80; pointer-events: none;
   min-width: 120px; max-width: 260px;

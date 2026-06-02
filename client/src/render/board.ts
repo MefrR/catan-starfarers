@@ -95,9 +95,9 @@ export class BoardRenderer {
   private static readonly MAX_ZOOM = 6;
   // How far past the board's edges the view may pan before it's clamped — empty
   // "overscroll" so the map can never be dragged off into the void where players
-  // would get lost. Horizontally ~5cm; vertically a roomier ~20cm so tall maps
+  // would get lost. Horizontally ~15cm; vertically a roomier ~20cm so tall maps
   // can be scrolled well up/down. (96 CSS px/in ÷ 2.54 cm/in × cm.)
-  private static readonly PAN_MARGIN = Math.round((96 / 2.54) * 5);
+  private static readonly PAN_MARGIN = Math.round((96 / 2.54) * 15);
   private static readonly PAN_MARGIN_Y = Math.round((96 / 2.54) * 20);
   // Board content bounds in board-space (set each render) — drives pan clamping.
   private contentBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
@@ -214,6 +214,19 @@ export class BoardRenderer {
     return this.worldToScreen(inter.x, inter.y);
   }
 
+  /** Page-space (viewport) pixel position of an intersection — for anchoring a
+   *  floating DOM overlay (e.g. the on-map launch picker) right over the point. */
+  pagePosOf(intersectionId: string): { x: number; y: number } | null {
+    const p = this.screenPosOf(intersectionId);
+    if (!p) return null;
+    const rect = (this.app.canvas as HTMLCanvasElement).getBoundingClientRect();
+    return { x: rect.left + p.x, y: rect.top + p.y };
+  }
+
+  /** Optional callback fired whenever the view transform changes (pan/zoom), so
+   *  an open DOM overlay anchored to the map can reposition itself live. */
+  onViewChange: (() => void) | null = null;
+
   private applyViewTransform(): void {
     // Keep the map from being dragged off into empty space before we commit pan.
     this.clampPan();
@@ -225,6 +238,7 @@ export class BoardRenderer {
     // FX uses fit-space coords, so it carries the full zoom (old model).
     this.fx.scale.set(this.zoom);
     this.fx.position.set(this.panX, this.panY);
+    this.onViewChange?.();
   }
 
   /**
