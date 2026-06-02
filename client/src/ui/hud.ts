@@ -236,7 +236,7 @@ export class HUD {
    * Q6: Space performs the *primary* action for the current phase — "the last
    * button that should be pressed" to advance your turn:
    *   production → roll dice
-   *   trade & build → end build → flight
+   *   trade & build → end build + shake mothership (one step)
    *   flight → shake mothership (then, once shaken, end turn)
    * Skipped whenever a specific choice is owed (discard, steal, encounter,
    * friendship pick, pending trade) so Space never bypasses a required decision.
@@ -263,8 +263,10 @@ export class HUD {
         if (!ps.lastRoll) intent = { t: "rollDice" };
         break;
       case "tradeBuild":
-        intent = { t: "endTradeBuild" };
-        break;
+        // Space ends the build phase and shakes the mothership in one go.
+        e.preventDefault();
+        this.endBuildAndShake();
+        return;
       case "flight":
         if (!ps.shake) intent = { t: "shakeMothership" };
         else { this.resetSelection(); intent = { t: "endTurn" }; }
@@ -275,6 +277,26 @@ export class HUD {
     if (!intent) return;
     e.preventDefault();
     this.act(intent);
+  }
+
+  /**
+   * Leave Trade & Build and immediately shake the mothership, so the player goes
+   * straight from building into the flight roll in one click (no separate "Shake
+   * mothership" press). Abandons any half-composed/live trade first so the engine
+   * doesn't refuse the phase change.
+   */
+  private endBuildAndShake(): void {
+    const state = this.game.getState();
+    const ps = state.phaseState;
+    const meId = this.game.humanId;
+    if (ps.pendingTrade && ps.pendingTrade.fromId === meId) this.act({ t: "cancelTrade" });
+    this.resetSelection();
+    this.act({ t: "endTradeBuild" });
+    // Now in flight (unless the phase change errored): shake right away.
+    const after = this.game.getState().phaseState;
+    if (after.phase === "flight" && !after.shake && !after.encounter) {
+      this.act({ t: "shakeMothership" });
+    }
   }
 
   private act(
@@ -1312,14 +1334,7 @@ export class HUD {
             }),
           );
         }
-        actions.appendChild(btn("End build → Flight", () => {
-          // Leaving trade & build abandons any half-composed or live trade: clear
-          // the local Give/Want selection and withdraw a pending offer so the
-          // engine doesn't block the phase change ("resolve your trade first").
-          if (ps.pendingTrade && ps.pendingTrade.fromId === me.id) this.act({ t: "cancelTrade" });
-          this.resetSelection();
-          this.act({ t: "endTradeBuild" });
-        }));
+        actions.appendChild(btn("End build → Shake", () => this.endBuildAndShake()));
         break;
       }
 

@@ -89,10 +89,12 @@ export class BoardRenderer {
   private panY = 0;
   private static readonly MIN_ZOOM = 0.5;
   private static readonly MAX_ZOOM = 6;
-  // How far past the board's edges the view may pan before it's clamped — ~5cm of
-  // empty "overscroll" on any side, so the map can never be dragged off into the
-  // void where players would get lost. (96 CSS px/in ÷ 2.54 cm/in × 5 cm.)
+  // How far past the board's edges the view may pan before it's clamped — empty
+  // "overscroll" so the map can never be dragged off into the void where players
+  // would get lost. Horizontally ~5cm; vertically a roomier ~20cm so tall maps
+  // can be scrolled well up/down. (96 CSS px/in ÷ 2.54 cm/in × cm.)
   private static readonly PAN_MARGIN = Math.round((96 / 2.54) * 5);
+  private static readonly PAN_MARGIN_Y = Math.round((96 / 2.54) * 20);
   // Board content bounds in board-space (set each render) — drives pan clamping.
   private contentBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
   // Auto-recenter: a double-tap, or 10s of no interaction, glides back to the
@@ -237,6 +239,7 @@ export class BoardRenderer {
     const sw = this.app.screen.width;
     const sh = this.app.screen.height;
     const M = BoardRenderer.PAN_MARGIN;
+    const MY = BoardRenderer.PAN_MARGIN_Y;
     // Board edges on screen (pan excluded — it's the value we're solving for).
     const bx0 = (f.ox + b.minX * f.scale) * z;
     const bx1 = (f.ox + b.maxX * f.scale) * z;
@@ -245,8 +248,8 @@ export class BoardRenderer {
     const loX = sw - M - bx1;
     const hiX = M - bx0;
     this.panX = loX > hiX ? (loX + hiX) / 2 : Math.max(loX, Math.min(hiX, this.panX));
-    const loY = sh - M - by1;
-    const hiY = M - by0;
+    const loY = sh - MY - by1;
+    const hiY = MY - by0;
     this.panY = loY > hiY ? (loY + hiY) / 2 : Math.max(loY, Math.min(hiY, this.panY));
   }
 
@@ -1460,7 +1463,34 @@ export class BoardRenderer {
     layer.addChild(g);
   }
 
-  /** Fit the board's bounding box into the viewport with padding. */
+  /**
+   * Measure how far the persistent HUD panels (left fleet sidebar, right
+   * scoreboard) intrude from each side, in canvas pixels. The board is centered
+   * within the *visible* region between them rather than the raw window, so the
+   * map never looks shifted toward one side behind a panel. Self-adjusts when a
+   * panel collapses/shrinks (e.g. on mobile) because it's read every render.
+   */
+  private playInsets(): { left: number; right: number } {
+    const w = this.app.screen.width;
+    const ins = { left: 0, right: 0 };
+    const measure = (sel: string, side: "left" | "right"): void => {
+      const node = document.querySelector(sel) as HTMLElement | null;
+      if (!node) return;
+      const r = node.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return; // hidden/unmounted
+      if (side === "left") ins.left = Math.max(ins.left, r.right);
+      else ins.right = Math.max(ins.right, w - r.left);
+    };
+    measure(".sidebar-left", "left");
+    measure(".scoreboard", "right");
+    // Never let the panels claim more than 35% of the width each — keeps the
+    // map a sensible size on narrow screens where panels are proportionally big.
+    ins.left = Math.max(0, Math.min(ins.left, w * 0.35));
+    ins.right = Math.max(0, Math.min(ins.right, w * 0.35));
+    return ins;
+  }
+
+  /** Fit the board's bounding box into the visible play area with padding. */
   private computeTransform(state: GameState): { scale: number; ox: number; oy: number } {
     const xs: number[] = [];
     const ys: number[] = [];
@@ -1476,10 +1506,17 @@ export class BoardRenderer {
     const w = this.app.screen.width;
     const h = this.app.screen.height;
     const pad = 80;
-    const sx = (w - pad * 2) / (maxX - minX || 1);
-    const sy = (h - pad * 2) / (maxY - minY || 1);
+    // Center within the gap between the side panels, not the whole window.
+    const ins = this.playInsets();
+    const availLeft = ins.left + pad;
+    const availRight = w - ins.right - pad;
+    const availW = Math.max(1, availRight - availLeft);
+    const availH = Math.max(1, h - pad * 2);
+    const sx = availW / (maxX - minX || 1);
+    const sy = availH / (maxY - minY || 1);
     const scale = Math.min(sx, sy);
-    const ox = (w - (maxX + minX) * scale) / 2;
+    const regionCx = (availLeft + availRight) / 2;
+    const ox = regionCx - ((maxX + minX) / 2) * scale;
     const oy = (h - (maxY + minY) * scale) / 2;
     return { scale, ox, oy };
   }
