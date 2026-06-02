@@ -89,6 +89,12 @@ export class BoardRenderer {
   private panY = 0;
   private static readonly MIN_ZOOM = 0.5;
   private static readonly MAX_ZOOM = 6;
+  // The zoom level the board geometry was last *drawn* at. Zoom is baked into the
+  // draw scale (so text and strokes stay crisp); between a zoom gesture and the
+  // crisp re-render, the container is scaled by zoom/renderedZoom for instant
+  // feedback. A short debounce then redraws everything sharp at the new zoom.
+  private renderedZoom = 1;
+  private rerenderTimer = 0;
 
   // Floating DOM tooltip describing whatever the pointer is over.
   private tooltipEl: HTMLDivElement;
@@ -101,6 +107,10 @@ export class BoardRenderer {
   constructor(app: Application) {
     this.app = app;
     app.stage.addChild(this.root);
+    // The FX overlay (move comets, build pulses) lives on the stage with its own
+    // zoom+pan transform (fit-space coords × zoom), independent of the board's
+    // baked-zoom geometry, so animations land correctly at any zoom level.
+    app.stage.addChild(this.fx);
     window.addEventListener("resize", () => {
       if (this.last) this.render(this.last);
     });
@@ -189,8 +199,26 @@ export class BoardRenderer {
   }
 
   private applyViewTransform(): void {
-    this.root.scale.set(this.zoom);
+    // Geometry is drawn baked at `renderedZoom`; the container only needs to make
+    // up the difference to the live zoom (= 1 right after a render). Pan is in
+    // screen pixels and is unaffected by this transient scale.
+    this.root.scale.set(this.zoom / this.renderedZoom);
     this.root.position.set(this.panX, this.panY);
+    // FX uses fit-space coords, so it carries the full zoom (old model).
+    this.fx.scale.set(this.zoom);
+    this.fx.position.set(this.panX, this.panY);
+  }
+
+  /**
+   * After a zoom gesture settles, redraw the board with the new zoom baked into
+   * the draw scale so numbers and outlines are pixel-sharp (instead of a blurry
+   * up-scaled bitmap). Debounced so a continuous pinch/wheel doesn't thrash.
+   */
+  private scheduleCrispRender(): void {
+    window.clearTimeout(this.rerenderTimer);
+    this.rerenderTimer = window.setTimeout(() => {
+      if (this.last && this.renderedZoom !== this.zoom) this.render(this.last);
+    }, 130);
   }
 
   /** Zoom toward a screen point (canvas-relative math), clamped to limits. */
@@ -208,6 +236,7 @@ export class BoardRenderer {
     this.panX = mx - worldX * this.zoom;
     this.panY = my - worldY * this.zoom;
     this.applyViewTransform();
+    this.scheduleCrispRender();
   }
 
   /**
@@ -304,7 +333,9 @@ export class BoardRenderer {
     this.zoom = 1;
     this.panX = 0;
     this.panY = 0;
-    this.applyViewTransform();
+    // Redraw at zoom 1 so geometry is baked sharp (also resets renderedZoom).
+    if (this.last) this.render(this.last);
+    else this.applyViewTransform();
   }
 
   /**
@@ -345,7 +376,13 @@ export class BoardRenderer {
 
     const fit = this.computeTransform(state);
     this.fit = fit;
-    const { scale, ox, oy } = fit;
+    // Bake the current zoom into the draw scale so text and strokes are drawn at
+    // their true on-screen size (crisp), rather than up-scaled by the container.
+    // `this.fit` stays unzoomed so worldToScreen / animations keep working.
+    this.renderedZoom = this.zoom;
+    const scale = fit.scale * this.zoom;
+    const ox = fit.ox * this.zoom;
+    const oy = fit.oy * this.zoom;
     const tx = (x: number): number => ox + x * scale;
     const ty = (y: number): number => oy + y * scale;
 
@@ -742,8 +779,9 @@ export class BoardRenderer {
       hot.on("pointertap", () => this.onShipClick?.(id));
     }
 
-    // Keep the FX overlay on top across wholesale re-renders, then detect builds.
-    this.root.addChild(this.fx);
+    // Sync the view transform: zoom is now baked into the geometry above, so the
+    // container scale resets to 1 (renderedZoom === zoom) and only pan applies.
+    this.applyViewTransform();
     this.detectBuilds(state, ownerColor);
     this.detectMoves(state, ownerColor);
   }

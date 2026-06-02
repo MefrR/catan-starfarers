@@ -359,10 +359,32 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
 
   const sectors: Sector[] = [];
 
+  // Starting-colony rule: the Catanian home systems must collectively show
+  // exactly two 6s and two 8s — one "hot" production number per home system —
+  // so every player's start sits next to a strong number. The remaining home
+  // planets get cool (non-6/8) numbers; non-home systems keep the shuffled bag.
+  // (Home systems sit on the bottom edge with column gaps, so their hot planets
+  // never share a corner with each other — no within-home 6/8 adjacency.)
+  const homeCount = homeSystems.length;
+  const hotForHome = shuffle([6, 6, 8, 8].slice(0, homeCount), rand);
+  const coolPool = shuffle(
+    NUMBER_BAG.filter((n) => !HOT_NUMBERS.has(n)),
+    rand,
+  );
+  let coolIdx = 0;
+  const nextCool = (): number => coolPool[coolIdx++ % coolPool.length]!;
+  const homeNumbers: number[][] = [];
+  for (let h = 0; h < homeCount; h++) {
+    const trip = [nextCool(), nextCool(), nextCool()];
+    trip[Math.floor(rand() * 3)] = hotForHome[h] ?? nextCool();
+    homeNumbers.push(trip);
+  }
+  const homePlanetIds = new Set<string>();
+
   // Build planetary-system sectors with 3 planet-hexes each.
-  let paletteIdx = 0;
-  for (const sys of orderedSystems) {
-    const palette = palettes[paletteIdx++ % palettes.length]!;
+  orderedSystems.forEach((sys, sysIdx) => {
+    const palette = palettes[sysIdx % palettes.length]!;
+    const isHome = sysIdx < homeCount;
     const planets: Planet[] = sys.hexes.map(([hq, hr], k) => {
       const { x, y } = hexCenter(hq, hr);
       const planet: Planet = {
@@ -370,10 +392,11 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
         color: palette[k]!,
         x,
         y,
-        number: nextNumber(),
+        number: isHome ? homeNumbers[sysIdx]![k]! : nextNumber(),
         explored: true,
         special: "none",
       };
+      if (isHome) homePlanetIds.add(planet.id);
       // Tag this planet's 6 hex corners as adjacent.
       const { x: cx, y: cy } = hexCenter(hq, hr);
       for (let i = 0; i < 6; i++) {
@@ -392,7 +415,7 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
       discovered: true,
       home: sys.home,
     });
-  }
+  });
 
   // Outpost sectors: a SINGLE docking point — the shared CENTER corner of the
   // outpost's 3-hex triangle. A trade ship must sit exactly on that center
@@ -483,7 +506,8 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
   // Q8: never let the two "hot" numbers (6 and 8 — the highest-frequency chits)
   // sit on planets that share an intersection. Repair after assignment by
   // swapping a conflicting hot number with a cool one elsewhere on the board.
-  separateHotNumbers(sectors, intersections, rand);
+  // Home planets are protected so the two-6s/two-8s starting rule is preserved.
+  separateHotNumbers(sectors, intersections, rand, homePlanetIds);
 
   return { sectors, intersections };
 }
@@ -519,6 +543,7 @@ function separateHotNumbers(
   sectors: Sector[],
   intersections: Record<string, Intersection>,
   rand: () => number,
+  protectedIds: Set<string> = new Set(),
 ): void {
   const planets: Planet[] = [];
   for (const s of sectors) for (const p of s.planets) planets.push(p);
@@ -530,12 +555,18 @@ function separateHotNumbers(
   const conflicts = (p: Planet): boolean => isHot(p) && neighbours(p).some(isHot);
 
   for (let pass = 0; pass < 300; pass++) {
-    const bad = planets.find(conflicts);
-    if (!bad) return; // fully separated
+    // Resolve by moving a *non-protected* conflicting planet (home planets keep
+    // their numbers so the starting two-6s/two-8s rule holds). A home hot planet
+    // adjacent to a non-home hot is still fixed because that non-home neighbour
+    // is itself conflicting and gets picked here.
+    const bad = planets.find((p) => conflicts(p) && !protectedIds.has(p.id));
+    if (!bad) return; // fully separated (or only protected planets remain)
     // Candidate cool planets whose neighbourhood (ignoring `bad`) has no hot
     // number, so giving them `bad`'s hot value introduces no new conflict.
     const cool = shuffle(
-      planets.filter((p) => p.number != null && !HOT_NUMBERS.has(p.number)),
+      planets.filter(
+        (p) => p.number != null && !HOT_NUMBERS.has(p.number) && !protectedIds.has(p.id),
+      ),
       rand,
     );
     let swapped = false;
