@@ -183,7 +183,7 @@ export class LobbyUI {
           <label>Your color</label>
           <div class="row" id="colors"></div>
           ${isHost ? `<label class="mt">Map style</label><div class="row" id="mapstyle"></div>` : ""}
-          ${isHost ? `<button class="mt" id="start" ${lobby.players.length < 3 ? "disabled" : ""}>Start game (${lobby.players.length}/3-4)</button>` : `<p class="subtitle mt">Waiting for the host to start…</p>`}
+          ${isHost ? `<button class="mt" id="start">Start game (${lobby.players.length} ${lobby.players.length === 1 ? "player" : "players"})</button>` : `<p class="subtitle mt">Waiting for the host to start…</p>`}
           <div class="error">${this.errorText}</div>
         </div>
       </div>

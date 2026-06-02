@@ -33,7 +33,7 @@ export class NewGameMenu {
   private onLaunch: (opts: LaunchOptions) => void;
   private onBack: (() => void) | undefined;
   private color: PlayerColor = "yellow";
-  private opponents = 2;
+  private opponents = 2; // 0 = play solo (no AI rivals)
   private fogMap = false;
   private aiDifficulty: AiDifficulty = "normal";
 
@@ -92,10 +92,10 @@ export class NewGameMenu {
     const oppRow = screen.querySelector("#opponents")!;
     const paintOpps = (): void => {
       oppRow.replaceChildren();
-      for (const n of [1, 2, 3]) {
+      for (const n of [0, 1, 2, 3]) {
         const sel = n === this.opponents;
         const btn = el(
-          `<button class="secondary" style="flex:1;${sel ? "outline:2px solid var(--accent);" : ""}">${n}</button>`,
+          `<button class="secondary" style="flex:1;${sel ? "outline:2px solid var(--accent);" : ""}">${n === 0 ? "Solo" : n}</button>`,
         );
         btn.addEventListener("click", () => {
           this.opponents = n;
