@@ -291,6 +291,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .dice-stage {
   display: flex; align-items: center; gap: 30px; flex-wrap: wrap; justify-content: center;
+  max-width: 96vw; box-sizing: border-box;
   transform: scale(0.55); opacity: 0;
   transition: transform 0.28s cubic-bezier(0.2, 1.5, 0.4, 1), opacity 0.28s ease;
 }
@@ -339,6 +340,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .shake-stage {
   display: flex; flex-direction: column; align-items: center; gap: 18px;
   padding: 26px 38px; border-radius: 22px;
+  max-width: 92vw; max-height: 88vh; overflow-y: auto; box-sizing: border-box;
   background: radial-gradient(circle at 50% 30%, rgba(20, 30, 56, 0.92), rgba(8, 12, 26, 0.92));
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.6), inset 0 0 0 2px var(--accent, rgba(120, 150, 220, 0.5)), 0 0 40px -8px var(--accent, transparent);
   transform: scale(0.6); opacity: 0;
@@ -346,7 +348,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .shake-stage.show { transform: scale(1); opacity: 1; }
 .shake-stage .cs-title { font-size: 18px; font-weight: 700; color: #dfe7ff; letter-spacing: 0.3px; }
-.shake-stage .cs-balls { display: flex; gap: 22px; align-items: center; }
+.shake-stage .cs-balls { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; justify-content: center; }
 .cs-ball {
   width: 54px; height: 54px; opacity: 0.4;
   display: grid; place-items: center;
@@ -711,6 +713,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .encounter-card {
   pointer-events: auto;
   width: min(420px, 92vw);
+  max-height: 88vh; overflow-y: auto; box-sizing: border-box;
   background: linear-gradient(160deg, #16203c, #0a0f1e);
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   border-radius: 16px; padding: 20px 22px;
@@ -760,6 +763,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   position: fixed; left: 50%; top: 38%; transform: translate(-50%, -50%) scale(0.6);
   z-index: 61; pointer-events: none;
   display: flex; align-items: center; gap: 10px;
+  max-width: 92vw; box-sizing: border-box;
   padding: 12px 20px; border-radius: 14px;
   background: linear-gradient(160deg, #1b2748, #0a0f1e);
   border: 1px solid color-mix(in srgb, var(--good) 60%, transparent);
@@ -773,7 +777,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* --- Center notification: build-block / missing-requirement (#12) --- */
 .center-note {
   position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(0.85);
-  z-index: 70; pointer-events: none; max-width: 440px; text-align: center;
+  z-index: 70; pointer-events: none; max-width: min(440px, 92vw); box-sizing: border-box; text-align: center;
   padding: 16px 26px; border-radius: 16px;
   background: linear-gradient(160deg, #2a1b2e, #160a12);
   border: 1px solid color-mix(in srgb, var(--danger) 65%, transparent);
@@ -970,4 +974,21 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     -webkit-overflow-scrolling: touch;
   }
   .exit-menu { top: 10px; left: 10px; }
+
+  /* M6: center-screen overlays must fit small screens. Shrink the shaker
+     balls, dice and encounter card so nothing spills past the viewport. */
+  .shake-stage { padding: 18px 18px; gap: 12px; }
+  .shake-stage .cs-title { font-size: 15px; }
+  .shake-stage .cs-balls { gap: 12px; }
+  .cs-ball { width: 42px; height: 42px; }
+  .cs-ball::after { font-size: 15px; }
+  .shake-stage .cs-result { font-size: 18px; }
+  .shake-stage .cs-result b { font-size: 21px; }
+  .dice-stage { gap: 16px; }
+  .big-die { width: 88px; height: 88px; border-radius: 18px; padding: 12px; }
+  .big-die i.on::before { width: 16px; height: 16px; }
+  .dice-sum { font-size: 24px; }
+  .encounter-card { padding: 16px 16px; }
+  .encounter-card .enc-title { font-size: 17px; }
+  .encounter-card .enc-text { font-size: 13px; }
 }
