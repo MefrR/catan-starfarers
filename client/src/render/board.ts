@@ -1042,7 +1042,7 @@ export class BoardRenderer {
             .stroke({ color: ink, width: 1 });
           g.poly([tip[0]!, tip[1]!, bx + lean * 0.3, by + h * 0.05, lft[0]!, lft[1]!]).fill({ color: lo });
           // Highlight edge.
-          g.moveTo(tip[0]!, tip[1]!).lineTo(bx + lean * 0.3, by + h * 0.05).stroke({ color: hi, width: 1, alpha: 0.8 });
+          this.strokeLine(g, tip[0]!, tip[1]!, bx + lean * 0.3, by + h * 0.05, 1, hi, 0.8);
         };
         shard(x - r * 0.42, y + r * 0.7, r * 0.32, r * 1.0, -r * 0.08);
         shard(x + r * 0.42, y + r * 0.78, r * 0.3, r * 0.85, r * 0.1);
@@ -1287,6 +1287,36 @@ export class BoardRenderer {
   }
 
   /**
+   * Draw a straight line segment as a self-closing filled quad. Using a stroked
+   * `moveTo().lineTo()` inside a Graphics that also draws `.circle()`/`.poly()`
+   * shapes triggers a Pixi v8 path-accumulation bug where later shapes connect
+   * back to the world origin [0,0] (rendering as stray beams across the board).
+   * A filled poly closes its own subpath, so it never leaks into later shapes.
+   */
+  private strokeLine(
+    g: Graphics,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    width: number,
+    color: number,
+    alpha = 1,
+  ): void {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.hypot(dx, dy) || 1;
+    const px = (-dy / len) * (width / 2);
+    const py = (dx / len) * (width / 2);
+    g.poly([
+      x1 + px, y1 + py,
+      x2 + px, y2 + py,
+      x2 - px, y2 - py,
+      x1 - px, y1 - py,
+    ]).fill({ color, alpha });
+  }
+
+  /**
    * Alien outpost station: a dark navy tri-lobe hub with six docking nodes and
    * teal connector struts, echoing the printed outpost tokens. The civ emblem is
    * layered on top by `drawCivIcon`.
@@ -1318,7 +1348,7 @@ export class BoardRenderer {
         const nd = lobeDist + lobeR * 0.55;
         const nx = cx + Math.cos(a) * nd;
         const ny = cy + Math.sin(a) * nd;
-        station.moveTo(cx, cy).lineTo(nx, ny).stroke({ color: teal, width: scale * 0.03, alpha: 0.85 });
+        this.strokeLine(station, cx, cy, nx, ny, scale * 0.03, teal, 0.85);
         station.circle(nx, ny, scale * 0.1).fill({ color: edge }).stroke({ color: node, width: 1.4 });
         station.circle(nx, ny, scale * 0.045).fill({ color: node });
       }
@@ -1344,7 +1374,7 @@ export class BoardRenderer {
           const a = (-Math.PI / 2) + (Math.PI * 2 * i) / 3;
           const ox = cx + Math.cos(a) * s * 0.78;
           const oy = cy + Math.sin(a) * s * 0.78;
-          g.moveTo(cx, cy).lineTo(ox, oy).stroke({ color: 0x2f7325, width: s * 0.22 });
+          this.strokeLine(g, cx, cy, ox, oy, s * 0.22, 0x2f7325);
         }
         for (let i = 0; i < 3; i++) {
           const a = (-Math.PI / 2) + (Math.PI * 2 * i) / 3;
