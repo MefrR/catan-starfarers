@@ -1,6 +1,7 @@
 import {
   createGameState,
   applyIntent,
+  RESOURCES,
   type GameState,
   type GameConfig,
   type ClientIntent,
@@ -28,6 +29,10 @@ export interface GameDriver {
   subscribe(fn: Listener): () => void;
   isHumanTurn(): boolean;
   dispatch(intent: ClientIntent): string | undefined;
+  /** Single-player dev cheat (unlimited resources + supply). Optional: only the
+   *  LocalGame driver supports it; LAN games leave it undefined. */
+  readonly devMode?: boolean;
+  setDevMode?(on: boolean): void;
 }
 
 /** AI move pacing (ms) so the human can watch opponents play. */
@@ -48,6 +53,12 @@ export class LocalGame {
   private listeners = new Set<Listener>();
   private aiIds: Set<string>;
   readonly humanId: string;
+  /** F4: dev cheat — when on, the human's hand + supply are kept topped up so
+   *  builds/cards are effectively unlimited for fast self-testing. */
+  private _devMode = false;
+  get devMode(): boolean {
+    return this._devMode;
+  }
 
   constructor(seats: Seat[], config: Partial<GameConfig> = {}) {
     this.id = ++LocalGame.activeId;
@@ -71,7 +82,31 @@ export class LocalGame {
   }
 
   private emit(): void {
+    if (this._devMode) this.topUpDev();
     for (const l of this.listeners) l(this.state);
+  }
+
+  /** Toggle the dev cheat. Tops up immediately when enabled so the effect is
+   *  visible without waiting for the next state change. */
+  setDevMode(on: boolean): void {
+    this._devMode = on;
+    if (on) this.topUpDev();
+    this.emit();
+  }
+
+  /** Keep the human flush with resources + personal supply, and never force the
+   *  human to discard on a 7, so experimentation isn't gated on the economy.
+   *  A moderate stack (not absurd) keeps the rest of the UI sane. */
+  private topUpDev(): void {
+    const me = this.state.players.find((p) => p.id === this.humanId);
+    if (!me) return;
+    for (const r of RESOURCES) if (me.hand[r] < 15) me.hand[r] = 25;
+    me.supply.colonies = Math.max(me.supply.colonies, 20);
+    me.supply.tradeStations = Math.max(me.supply.tradeStations, 20);
+    me.supply.transportShips = Math.max(me.supply.transportShips, 20);
+    me.supply.shipyards = Math.max(me.supply.shipyards, 20);
+    const pd = this.state.phaseState.pendingDiscards;
+    if (pd && pd[this.humanId]) pd[this.humanId] = 0;
   }
 
   private active(): GameState["players"][number] | undefined {

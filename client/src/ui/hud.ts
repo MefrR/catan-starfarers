@@ -26,6 +26,7 @@ import {
 } from "@starfarers/shared";
 import type { GameDriver } from "../game/store.js";
 import type { BoardRenderer } from "../render/board.js";
+import { ChatBox } from "./chat.js";
 
 const el = (html: string): HTMLElement => {
   const t = document.createElement("template");
@@ -158,7 +159,12 @@ export class HUD {
     this.costPop = document.createElement("div");
     this.costPop.className = "build-cost-pop";
     document.body.appendChild(this.costPop);
+    // F2/F4/F5: toggle-able chat box (dev-mode + heart codes live here).
+    this.chat = new ChatBox(game);
   }
+
+  /** F2: the toggle-able chat box, mounted at body level. */
+  private chat: ChatBox | null = null;
 
   /** Cleanly tear the HUD down (R18: returning to the lobby for a rematch). Drops
    *  all subscriptions, window listeners, pending timers, and body-level overlays
@@ -169,6 +175,8 @@ export class HUD {
     this.diceTimers.forEach((t) => window.clearTimeout(t));
     this.diceTimers = [];
     this.costPop?.remove();
+    this.chat?.destroy();
+    this.chat = null;
     this.root.replaceChildren();
     document
       .querySelectorAll(
@@ -2684,7 +2692,13 @@ function resourceGlyphSvg(r: Resource): string {
   }
 }
 
-/** Stylized top-down mothership illustration in the owner's color. */
+/**
+ * Brass / bronze riveted mothership in a 3-quarter view (modelled on the
+ * official Starfarers rocket reference). Each upgrade type mounts in real
+ * attachment slots on the hull: a slot fills with its accent colour when the
+ * player owns that upgrade, and shows as a grayed-out empty socket otherwise —
+ * so the loadout reads at a glance, with no confusing numbers on the rocket.
+ */
 function mothershipSvg(
   color: string,
   upgrades: { booster: number; cannon: number; freightPod: number } = {
@@ -2696,42 +2710,109 @@ function mothershipSvg(
   const BOOST = "#6fb3ff";
   const CANNON = "#ff6b6b";
   const FREIGHT = "#57e389";
-  // A small numbered badge pinned to the relevant part of the hull.
-  const badge = (x: number, y: number, fill: string, n: number): string =>
-    `<g>
-       <circle cx="${x}" cy="${y}" r="9.5" fill="${fill}" stroke="#05060f" stroke-width="1.6"/>
-       <text x="${x}" y="${y + 4}" text-anchor="middle" font-size="12" font-weight="800"
-             font-family="system-ui, sans-serif" fill="#0a0f1e">${n}</text>
-     </g>`;
-  // Light a part up when the player owns at least one of that upgrade.
-  const lit = (on: boolean, hot: string): string => (on ? hot : "#2a3350");
-  return `<svg viewBox="0 0 120 104" width="150" height="130" fill="none">
+  const EMPTY = "#2a3142"; // unfilled socket
+  const EMPTY_RIM = "#475066";
+
+  // A compact strip of slot pips next to an attachment: `n` of `max` lit.
+  const pips = (
+    cx: number,
+    cy: number,
+    max: number,
+    n: number,
+    hot: string,
+    vertical: boolean,
+  ): string => {
+    const step = 6.2;
+    const out: string[] = [];
+    for (let i = 0; i < max; i++) {
+      const on = i < n;
+      const x = vertical ? cx : cx + (i - (max - 1) / 2) * step;
+      const y = vertical ? cy + (i - (max - 1) / 2) * step : cy;
+      out.push(
+        `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.1" fill="${on ? hot : EMPTY}" stroke="${on ? "#05060f" : EMPTY_RIM}" stroke-width="0.7"/>`,
+      );
+    }
+    return out.join("");
+  };
+
+  const boosterOn = upgrades.booster > 0;
+  const cannonOn = upgrades.cannon > 0;
+  const freightOn = upgrades.freightPod > 0;
+
+  return `<svg viewBox="0 0 120 184" width="150" height="200" fill="none">
     <defs>
-      <radialGradient id="msglow" cx="50%" cy="42%" r="60%">
-        <stop offset="0%" stop-color="${color}" stop-opacity="0.9"/>
-        <stop offset="100%" stop-color="${color}" stop-opacity="0.25"/>
+      <linearGradient id="msbody" x1="30%" y1="0%" x2="78%" y2="0%">
+        <stop offset="0%" stop-color="#a06a2c"/>
+        <stop offset="42%" stop-color="#d9a85a"/>
+        <stop offset="100%" stop-color="#7a5021"/>
+      </linearGradient>
+      <linearGradient id="msnose" x1="35%" y1="0%" x2="80%" y2="0%">
+        <stop offset="0%" stop-color="#b07d38"/>
+        <stop offset="45%" stop-color="#e6bd72"/>
+        <stop offset="100%" stop-color="#83571f"/>
+      </linearGradient>
+      <radialGradient id="msowner" cx="50%" cy="50%" r="60%">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.95"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0.3"/>
       </radialGradient>
     </defs>
-    <!-- engine boosters (glow when boosters owned) -->
-    <rect x="20" y="70" width="14" height="18" rx="4" fill="${lit(upgrades.booster > 0, BOOST)}" stroke="${color}" stroke-width="1.4"/>
-    <rect x="86" y="70" width="14" height="18" rx="4" fill="${lit(upgrades.booster > 0, BOOST)}" stroke="${color}" stroke-width="1.4"/>
-    <rect x="53" y="74" width="14" height="18" rx="4" fill="${lit(upgrades.booster > 0, BOOST)}" stroke="${color}" stroke-width="1.4"/>
-    <!-- freight pods slung under the hull (glow when owned) -->
-    <rect x="40" y="62" width="12" height="9" rx="2" fill="${lit(upgrades.freightPod > 0, FREIGHT)}" stroke="${color}" stroke-width="1.2"/>
-    <rect x="68" y="62" width="12" height="9" rx="2" fill="${lit(upgrades.freightPod > 0, FREIGHT)}" stroke="${color}" stroke-width="1.2"/>
-    <!-- hull -->
-    <path d="M60 6 C40 18 30 40 32 64 L88 64 C90 40 80 18 60 6 Z"
-          fill="url(#msglow)" stroke="${color}" stroke-width="2"/>
-    <!-- side cannons (glow when owned) -->
-    <rect x="14" y="40" width="18" height="8" rx="3" fill="${lit(upgrades.cannon > 0, CANNON)}" stroke="${color}" stroke-width="1.4"/>
-    <rect x="88" y="40" width="18" height="8" rx="3" fill="${lit(upgrades.cannon > 0, CANNON)}" stroke="${color}" stroke-width="1.4"/>
-    <!-- cockpit -->
-    <circle cx="60" cy="34" r="11" fill="#0a0f1e" stroke="${color}" stroke-width="2"/>
-    <circle cx="60" cy="34" r="5" fill="${color}" opacity="0.85"/>
-    <!-- live upgrade counts pinned to each system -->
-    ${badge(23, 44, CANNON, upgrades.cannon)}
-    ${badge(60, 84, BOOST, upgrades.booster)}
-    ${badge(86, 67, FREIGHT, upgrades.freightPod)}
+
+    <!-- tripod landing legs -->
+    <g stroke="#5e3d18" stroke-width="2.2" fill="#9a6a30">
+      <path d="M46 118 C30 128 24 142 26 158" fill="none" stroke-width="6" stroke-linecap="round"/>
+      <ellipse cx="25" cy="160" rx="6" ry="4" />
+      <path d="M74 118 C90 128 96 142 94 158" fill="none" stroke-width="6" stroke-linecap="round"/>
+      <ellipse cx="95" cy="160" rx="6" ry="4" />
+    </g>
+
+    <!-- exhaust bell at the base -->
+    <path d="M52 150 L68 150 L72 170 L48 170 Z" fill="#6f4a20" stroke="#4a3010" stroke-width="1.6"/>
+    <ellipse cx="60" cy="170" rx="13" ry="5" fill="#3a2810" stroke="#4a3010" stroke-width="1.4"/>
+
+    <!-- main hull body -->
+    <path d="M42 56 L78 56 L76 120 L44 120 Z" fill="url(#msbody)" stroke="#4a3010" stroke-width="1.8"/>
+    <!-- ribbed engine bands near the base -->
+    <g stroke="#5e3d18" stroke-width="1.4">
+      <line x1="44.6" y1="104" x2="75.4" y2="104"/>
+      <line x1="45"   y1="109" x2="75"   y2="109"/>
+      <line x1="45.3" y1="114" x2="74.7" y2="114"/>
+    </g>
+
+    <!-- nose cone with vertical vent -->
+    <path d="M60 6 C44 20 38 38 42 58 L78 58 C82 38 76 20 60 6 Z" fill="url(#msnose)" stroke="#4a3010" stroke-width="1.8"/>
+    <rect x="55" y="14" width="10" height="30" rx="5" fill="#3a2810" stroke="#5e3d18" stroke-width="1.2"/>
+    <!-- owner-colour cockpit glow on the shoulder -->
+    <circle cx="60" cy="64" r="6.5" fill="url(#msowner)" stroke="${color}" stroke-width="1.6"/>
+
+    <!-- rivet lines down the body -->
+    <g fill="#5e3d18">
+      ${[68, 78, 88, 98].map((y) => `<circle cx="48" cy="${y}" r="1.2"/><circle cx="60" cy="${y}" r="1.2"/><circle cx="72" cy="${y}" r="1.2"/>`).join("")}
+    </g>
+
+    <!-- BOOSTER slot: ribbed fin on the upper-left -->
+    <g>
+      <path d="M34 64 C24 70 22 84 28 96 L38 92 L40 66 Z"
+            fill="${boosterOn ? BOOST : EMPTY}" stroke="${boosterOn ? "#1d3a5c" : EMPTY_RIM}" stroke-width="1.4"
+            ${boosterOn ? "" : 'stroke-dasharray="3 2.5"'}/>
+      ${boosterOn ? `<g stroke="#1d3a5c" stroke-width="1" opacity="0.7"><line x1="28" y1="74" x2="38" y2="71"/><line x1="28" y1="80" x2="38" y2="78"/><line x1="29" y1="86" x2="38" y2="85"/></g>` : ""}
+    </g>
+    ${pips(20, 80, MAX_UPGRADES.booster, upgrades.booster, BOOST, true)}
+
+    <!-- CANNON slot: teardrop pod on the left -->
+    <g>
+      <path d="M40 84 C30 86 28 98 36 106 C44 102 44 88 40 84 Z"
+            fill="${cannonOn ? CANNON : EMPTY}" stroke="${cannonOn ? "#7a2424" : EMPTY_RIM}" stroke-width="1.4"
+            ${cannonOn ? "" : 'stroke-dasharray="3 2.5"'}/>
+    </g>
+    ${pips(96, 80, MAX_UPGRADES.cannon, upgrades.cannon, CANNON, true)}
+
+    <!-- FREIGHT slot: nozzle pod under the engine -->
+    <g>
+      <ellipse cx="60" cy="142" rx="11" ry="7"
+               fill="${freightOn ? FREIGHT : EMPTY}" stroke="${freightOn ? "#1f6e3a" : EMPTY_RIM}" stroke-width="1.4"
+               ${freightOn ? "" : 'stroke-dasharray="3 2.5"'}/>
+    </g>
+    ${pips(60, 156, MAX_UPGRADES.freightPod, upgrades.freightPod, FREIGHT, false)}
   </svg>`;
 }
 

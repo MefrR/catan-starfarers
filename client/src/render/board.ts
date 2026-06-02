@@ -74,6 +74,10 @@ export class BoardRenderer {
 
   private highlightIds = new Set<string>();
   private selectedShipId: string | null = null;
+  // Continuously pulsing/glowing build-site markers (live on the FX overlay so
+  // they survive wholesale re-renders and animate every frame).
+  private highlightG: Graphics | null = null;
+  private highlightTick: (() => void) | null = null;
 
   // Persistent FX overlay (build pulses) — survives wholesale re-renders.
   private fx = new Container();
@@ -501,6 +505,7 @@ export class BoardRenderer {
   /** Highlight a set of intersections (e.g. legal move destinations). */
   setHighlights(ids: string[]): void {
     this.highlightIds = new Set(ids);
+    this.ensureHighlightFx();
     if (this.last) this.render(this.last);
   }
 
@@ -508,7 +513,66 @@ export class BoardRenderer {
     if (this.highlightIds.size === 0 && this.selectedShipId === null) return;
     this.highlightIds.clear();
     this.selectedShipId = null;
+    this.ensureHighlightFx();
     if (this.last) this.render(this.last);
+  }
+
+  /**
+   * Drive a single FX-overlay graphic that continuously pulses + glows a green
+   * ring over every highlighted build site (e.g. where a colony/trade ship can
+   * land). Runs only while there are highlights; tears itself down otherwise.
+   */
+  private ensureHighlightFx(): void {
+    if (this.highlightIds.size === 0) {
+      if (this.highlightTick) {
+        this.app.ticker.remove(this.highlightTick);
+        this.highlightTick = null;
+      }
+      if (this.highlightG) {
+        this.highlightG.destroy();
+        this.highlightG = null;
+      }
+      return;
+    }
+    if (this.highlightTick) return; // already animating
+    const g = new Graphics();
+    this.fx.addChild(g);
+    this.highlightG = g;
+    const tick = (): void => {
+      if (!this.last || this.highlightIds.size === 0) {
+        g.clear();
+        return;
+      }
+      const s = this.fit.scale;
+      const t = performance.now() / 1000;
+      const pulse = 0.5 + 0.5 * Math.sin(t * 3.4); // 0..1 breathing
+      g.clear();
+      for (const id of this.highlightIds) {
+        const inter = this.last.intersections[id];
+        if (!inter) continue;
+        const cx = this.fit.ox + inter.x * s;
+        const cy = this.fit.oy + inter.y * s;
+        // Base radius is the old marker (s*0.13) enlarged 30%, then it breathes.
+        const base = s * 0.13 * 1.3;
+        const r = base * (1 + 0.16 * pulse);
+        // Soft outer glow that swells with the pulse.
+        g.circle(cx, cy, r + s * 0.16 * pulse).fill({
+          color: 0x57e389,
+          alpha: 0.1 + 0.14 * pulse,
+        });
+        g.circle(cx, cy, r + s * 0.08).stroke({
+          color: 0x57e389,
+          width: 2.5,
+          alpha: 0.45 + 0.45 * pulse,
+        });
+        // Bright core ring.
+        g.circle(cx, cy, r)
+          .fill({ color: 0x57e389, alpha: 0.24 })
+          .stroke({ color: 0xbfffd9, width: 2.5 + 1.5 * pulse, alpha: 0.95 });
+      }
+    };
+    this.app.ticker.add(tick);
+    this.highlightTick = tick;
   }
 
   setSelectedShip(id: string | null): void {
@@ -790,15 +854,9 @@ export class BoardRenderer {
       const isColonySite = inter.adjacentPlanets.length === 2;
       const isDock = inter.dockingPointOf != null;
 
-      // Highlight ring for legal targets (move destinations / colony picks).
-      if (this.highlightIds.has(inter.id)) {
-        highlightLayer.addChild(
-          new Graphics()
-            .circle(ix, iy, scale * 0.13)
-            .fill({ color: 0x57e389, alpha: 0.22 })
-            .stroke({ color: 0x57e389, width: 2.5, alpha: 0.95 }),
-        );
-      }
+      // Legal-target rings (move destinations / colony picks) are drawn as a
+      // continuously pulsing/glowing marker on the FX overlay — see
+      // ensureHighlightFx(). Nothing static is painted here.
 
       const node = new Graphics().circle(ix, iy, isColonySite ? scale * 0.06 : scale * 0.035);
       node.fill({
