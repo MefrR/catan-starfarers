@@ -142,10 +142,9 @@ export class HUD {
   private encSnapshot: Record<string, { fame: number; medals: number; hand: ResourceBag }> = {};
   /** Whether the center-screen game-over results overlay is already shown. */
   private gameOverShown = false;
-  /** R1/R2/R4: collapse toggles for the side panels on small screens. */
+  /** R1/R2: collapse toggles for the side panels on small screens. */
   private sidebarCollapsed = true;
   private scoreCompact = true;
-  private logCollapsed = true;
 
   constructor(mount: HTMLElement, game: GameDriver, board: BoardRenderer) {
     this.root = mount;
@@ -498,17 +497,8 @@ export class HUD {
       scoreboard.appendChild(row);
     }
 
-    // R4: the log/details bar collapses to a slim header button on a tap.
-    const logPanel = el(`<div class="hud-panel log ${this.logCollapsed ? "collapsed" : ""}"></div>`);
-    const logHead = el(`<div class="log-head toggle" title="Tap to ${this.logCollapsed ? "show" : "hide"} the log">Log<span class="tg-caret">${this.logCollapsed ? "▸" : "▾"}</span></div>`);
-    logHead.addEventListener("click", () => { this.logCollapsed = !this.logCollapsed; this.rerender(); });
-    logPanel.appendChild(logHead);
-    if (!this.logCollapsed) {
-      for (const line of state.log.slice(-6)) {
-        logPanel.appendChild(el(`<div class="log-line">${escapeHtml(line)}</div>`));
-      }
-    }
-
+    // M2: the activity log is now a section inside the Fleet sidebar (see
+    // buildSidebar) rather than a separate floating panel.
     const bar = el(`<div class="hud-panel actionbar"></div>`);
 
     const discardMode = owesDiscard > 0;
@@ -640,7 +630,6 @@ export class HUD {
 
     screen.appendChild(this.buildSidebar(state, me));
     screen.appendChild(scoreboard);
-    screen.appendChild(logPanel);
     screen.appendChild(bar);
     this.root.replaceChildren(screen);
 
@@ -843,6 +832,22 @@ export class HUD {
 
     // --- Reference card (build costs + VP), collapsible ---
     side.appendChild(this.buildReferencePanel());
+
+    // --- Log (M2): the activity log now lives inside the Fleet panel, so the
+    // single Fleet toggle shows/hides it too (no separate floating log panel). ---
+    const logSec = el(`<div class="side-sec side-log"></div>`);
+    logSec.appendChild(el(`<div class="side-title">Log</div>`));
+    const logBody = el(`<div class="side-log-body"></div>`);
+    const lines = state.log.slice(-8);
+    if (lines.length === 0) {
+      logBody.appendChild(el(`<div class="log-line">No events yet.</div>`));
+    } else {
+      for (const line of lines) {
+        logBody.appendChild(el(`<div class="log-line">${escapeHtml(line)}</div>`));
+      }
+    }
+    logSec.appendChild(logBody);
+    side.appendChild(logSec);
 
     return side;
   }

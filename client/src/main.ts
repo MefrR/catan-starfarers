@@ -71,7 +71,6 @@ async function boot(): Promise<void> {
           <p class="subtitle">Voyage into deep space. Command your fleet to 15 victory points.</p>
           <button class="mt" id="single">Single Player</button>
           <button class="mt secondary" id="online">Play Online</button>
-          <button class="mt secondary" id="lan">Multiplayer (LAN)</button>
         </div>
       </div>
     `);
@@ -80,9 +79,6 @@ async function boot(): Promise<void> {
     });
     screen.querySelector("#online")!.addEventListener("click", () => {
       void startNetwork("online");
-    });
-    screen.querySelector("#lan")!.addEventListener("click", () => {
-      void startNetwork("lan");
     });
     app.replaceChildren(screen);
   };

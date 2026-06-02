@@ -1,4 +1,4 @@
-import { Application, Circle, Container, Graphics, Text, TextStyle } from "pixi.js";
+import { Application, Circle, Container, type FederatedPointerEvent, Graphics, Text, TextStyle } from "pixi.js";
 import {
   PLANET_RESOURCE,
   type GameState,
@@ -93,6 +93,10 @@ export class BoardRenderer {
   // Floating DOM tooltip describing whatever the pointer is over.
   private tooltipEl: HTMLDivElement;
   private mouse = { x: 0, y: 0 };
+  // Touch has no hover/"pointerout", so tooltips are tap-to-show, placed away
+  // from the finger, and auto-dismissed by a timer so they can never get stuck.
+  private tipTouch = false;
+  private tipTimer = 0;
 
   constructor(app: Application) {
     this.app = app;
@@ -111,26 +115,60 @@ export class BoardRenderer {
   }
 
   private positionTooltip(): void {
-    const pad = 14;
-    let x = this.mouse.x + pad;
-    let y = this.mouse.y + pad;
     const r = this.tooltipEl.getBoundingClientRect();
-    if (x + r.width > window.innerWidth - 8) x = this.mouse.x - r.width - pad;
-    if (y + r.height > window.innerHeight - 8) y = this.mouse.y - r.height - pad;
-    this.tooltipEl.style.left = `${Math.max(8, x)}px`;
-    this.tooltipEl.style.top = `${Math.max(8, y)}px`;
+    let x: number;
+    let y: number;
+    if (this.tipTouch) {
+      // Touch: centre the tip and lift it well ABOVE the finger so the touch
+      // point never covers it. Drop below only if there's no room above.
+      x = this.mouse.x - r.width / 2;
+      y = this.mouse.y - r.height - 30;
+      if (y < 8) y = this.mouse.y + 38;
+    } else {
+      const pad = 14;
+      x = this.mouse.x + pad;
+      y = this.mouse.y + pad;
+      if (x + r.width > window.innerWidth - 8) x = this.mouse.x - r.width - pad;
+      if (y + r.height > window.innerHeight - 8) y = this.mouse.y - r.height - pad;
+    }
+    x = Math.max(8, Math.min(x, window.innerWidth - r.width - 8));
+    y = Math.max(8, Math.min(y, window.innerHeight - r.height - 8));
+    this.tooltipEl.style.left = `${x}px`;
+    this.tooltipEl.style.top = `${y}px`;
   }
 
-  /** Make a display object hover-describable: shows `text` in the floating tooltip. */
+  private showTip(text: string, touch: boolean): void {
+    this.tipTouch = touch;
+    this.tooltipEl.innerHTML = text;
+    this.tooltipEl.classList.add("show");
+    this.positionTooltip();
+    window.clearTimeout(this.tipTimer);
+    if (touch) {
+      // Touch fires no "pointerout" — guarantee the tip clears itself.
+      this.tipTimer = window.setTimeout(() => this.hideTip(), 2600);
+    }
+  }
+
+  private hideTip(): void {
+    window.clearTimeout(this.tipTimer);
+    this.tooltipEl.classList.remove("show");
+  }
+
+  /** Make a display object describable: shows `text` on hover (mouse) or tap (touch). */
   private attachTip(obj: Container, hit: Circle, text: string): void {
     obj.eventMode = "static";
     obj.hitArea = hit;
-    obj.on("pointerover", () => {
-      this.tooltipEl.innerHTML = text;
-      this.tooltipEl.classList.add("show");
-      this.positionTooltip();
+    obj.on("pointerover", (e: FederatedPointerEvent) => {
+      this.mouse = { x: e.clientX, y: e.clientY };
+      this.showTip(text, e.pointerType === "touch");
     });
-    obj.on("pointerout", () => this.tooltipEl.classList.remove("show"));
+    obj.on("pointermove", (e: FederatedPointerEvent) => {
+      if (e.pointerType === "touch") {
+        this.mouse = { x: e.clientX, y: e.clientY };
+        this.positionTooltip();
+      }
+    });
+    obj.on("pointerout", () => this.hideTip());
   }
 
   private last: GameState | null = null;
@@ -155,61 +193,110 @@ export class BoardRenderer {
     this.root.position.set(this.panX, this.panY);
   }
 
-  /** Wheel-zoom (toward cursor) and drag-pan on the canvas. */
+  /** Zoom toward a screen point (canvas-relative math), clamped to limits. */
+  private zoomToward(clientX: number, clientY: number, factor: number): void {
+    const canvas = this.app.canvas as HTMLCanvasElement;
+    const rect = canvas.getBoundingClientRect();
+    const mx = clientX - rect.left;
+    const my = clientY - rect.top;
+    const worldX = (mx - this.panX) / this.zoom;
+    const worldY = (my - this.panY) / this.zoom;
+    this.zoom = Math.max(
+      BoardRenderer.MIN_ZOOM,
+      Math.min(BoardRenderer.MAX_ZOOM, this.zoom * factor),
+    );
+    this.panX = mx - worldX * this.zoom;
+    this.panY = my - worldY * this.zoom;
+    this.applyViewTransform();
+  }
+
+  /**
+   * Pointer-based view controls covering both mouse and touch:
+   * - mouse wheel zooms toward the cursor;
+   * - one finger / left-drag pans;
+   * - two fingers pinch to zoom (toward the pinch midpoint) and pan together.
+   * `touch-action: none` stops the browser from hijacking touch gestures
+   * (native page scroll/zoom), which would otherwise swallow these events.
+   */
   private installViewControls(): void {
     const canvas = this.app.canvas as HTMLCanvasElement;
+    canvas.style.touchAction = "none";
 
     canvas.addEventListener(
       "wheel",
       (e: WheelEvent) => {
         e.preventDefault();
-        const rect = canvas.getBoundingClientRect();
-        const mx = e.clientX - rect.left;
-        const my = e.clientY - rect.top;
-        const worldX = (mx - this.panX) / this.zoom;
-        const worldY = (my - this.panY) / this.zoom;
-        const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-        this.zoom = Math.max(
-          BoardRenderer.MIN_ZOOM,
-          Math.min(BoardRenderer.MAX_ZOOM, this.zoom * factor),
-        );
-        this.panX = mx - worldX * this.zoom;
-        this.panY = my - worldY * this.zoom;
-        this.applyViewTransform();
+        this.zoomToward(e.clientX, e.clientY, e.deltaY < 0 ? 1.12 : 1 / 1.12);
       },
       { passive: false },
     );
 
-    // Drag-pan. A small move threshold keeps node taps working.
-    let dragging = false;
+    // Track every active pointer so we can tell one-finger pan from a pinch.
+    const pts = new Map<number, { x: number; y: number }>();
     let moved = false;
-    let lastX = 0;
-    let lastY = 0;
+    let pinchDist = 0;
+    let pinchMid = { x: 0, y: 0 };
+
     canvas.addEventListener("pointerdown", (e: PointerEvent) => {
-      dragging = true;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       moved = false;
-      lastX = e.clientX;
-      lastY = e.clientY;
+      if (pts.size === 2) {
+        const vs = [...pts.values()];
+        const a = vs[0]!;
+        const b = vs[1]!;
+        pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+        pinchMid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      }
     });
+
     window.addEventListener("pointermove", (e: PointerEvent) => {
-      if (!dragging) return;
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      if (!moved && Math.hypot(dx, dy) < 4) return;
+      const prev = pts.get(e.pointerId);
+      if (!prev) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (pts.size >= 2) {
+        // Pinch: zoom by the change in finger distance, and pan by how the
+        // midpoint between the two fingers moved.
+        const vs = [...pts.values()];
+        const a = vs[0]!;
+        const b = vs[1]!;
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        this.hideTip();
+        moved = true;
+        if (pinchDist > 0) {
+          this.panX += mid.x - pinchMid.x;
+          this.panY += mid.y - pinchMid.y;
+          this.zoomToward(mid.x, mid.y, dist / pinchDist);
+        }
+        pinchDist = dist;
+        pinchMid = mid;
+        return;
+      }
+
+      // Single pointer: drag-pan, with a small threshold so taps still register.
+      const dx = e.clientX - prev.x;
+      const dy = e.clientY - prev.y;
+      if (!moved && Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < 4) {
+        // restore prev so the threshold measures from the press point
+        pts.set(e.pointerId, prev);
+        return;
+      }
       moved = true;
+      this.hideTip();
       this.panX += dx;
       this.panY += dy;
-      lastX = e.clientX;
-      lastY = e.clientY;
       canvas.style.cursor = "grabbing";
       this.applyViewTransform();
     });
-    const endDrag = (): void => {
-      dragging = false;
-      canvas.style.cursor = "";
+
+    const endPointer = (e: PointerEvent): void => {
+      pts.delete(e.pointerId);
+      if (pts.size < 2) pinchDist = 0;
+      if (pts.size === 0) canvas.style.cursor = "";
     };
-    window.addEventListener("pointerup", endDrag);
-    window.addEventListener("pointercancel", endDrag);
+    window.addEventListener("pointerup", endPointer);
+    window.addEventListener("pointercancel", endPointer);
   }
 
   /** Reset zoom/pan to the fitted default. */

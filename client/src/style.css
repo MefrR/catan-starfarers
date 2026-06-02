@@ -208,9 +208,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .vp-bonus.empty { background: none; border: none; padding: 0; }
 
-.log { left: 248px; bottom: 16px; padding: 10px 12px; max-width: 320px; }
 .log-line { font-size: 12px; color: var(--muted); line-height: 1.5; }
 .log-line:last-child { color: var(--text); }
+/* M2: log lives inside the Fleet sidebar; scroll if the section gets tall. */
+.side-log-body { display: flex; flex-direction: column; gap: 2px; max-height: 168px; overflow-y: auto; }
 
 /* --- Left sidebar: mothership + shaker + trade --- */
 .sidebar-left {
@@ -919,13 +920,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .scoreboard.compact .score-meta { padding-left: 0; gap: 7px; }
 .scoreboard.compact .vp { font-size: 22px; min-width: 40px; }
 
-/* R4: collapsible log. */
-.log-head {
-  font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
-  color: var(--muted); font-weight: 800;
-}
-.log.collapsed { padding: 8px 12px; }
-
 /* R6: exit-to-menu button + confirm modal. */
 .exit-menu {
   position: fixed; top: 16px; left: 16px; z-index: 60;
@@ -965,7 +959,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .actionbar button .b-ico svg { width: 15px; height: 15px; }
   .actionbar button .b-name { font-size: 12px; }
   .scoreboard { top: 10px; right: 10px; min-width: 0; padding: 9px 9px 8px; }
-  .log { left: 10px; bottom: 10px; max-width: 44vw; }
   .sidebar-left { left: 10px; top: 56px; width: 180px; padding: 10px; }
+  /* M3: when expanded, the Fleet panel must not run under the bottom action
+     bar. Pin it between the top and a gap above the bar, and scroll inside. */
+  .sidebar-left:not(.collapsed) {
+    width: min(74vw, 230px);
+    bottom: 150px;
+    max-height: none;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
   .exit-menu { top: 10px; left: 10px; }
 }
