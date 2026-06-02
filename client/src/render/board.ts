@@ -1011,124 +1011,230 @@ export class BoardRenderer {
     this.app.ticker.add(tick);
   }
 
-  /** PDF-style resource glyph centred at (x,y), sized to radius r. */
+  /**
+   * Full-colour resource glyph centred at (x,y), sized to radius r. Drawn as
+   * crisp original vectors that echo the printed card art: carbon = blue crystal
+   * cluster, fuel = gold fuel cylinder, food = green seed-creature, ore = red
+   * rock, goods = purple/gold treasure chest.
+   */
   private drawResourceGlyph(layer: Container, res: Resource, x: number, y: number, r: number): void {
-    const ink = 0xf4f7ff;
+    const ink = 0x0a0f1e;
     const g = new Graphics();
     switch (res) {
-      case "ore": {
-        // Flat-top hexagon.
-        const pts: number[] = [];
-        for (let i = 0; i < 6; i++) {
-          const a = (Math.PI / 180) * (60 * i);
-          pts.push(x + r * Math.cos(a), y + r * Math.sin(a));
-        }
-        g.poly(pts).fill({ color: ink, alpha: 0.92 }).stroke({ color: 0x05060f, width: 1 });
-        break;
-      }
       case "carbon": {
-        // Triangle subdivided into four by midpoint lines.
-        const A = { x, y: y - r };
-        const B = { x: x - r * 0.92, y: y + r * 0.72 };
-        const C = { x: x + r * 0.92, y: y + r * 0.72 };
-        const mAB = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
-        const mBC = { x: (B.x + C.x) / 2, y: (B.y + C.y) / 2 };
-        const mCA = { x: (C.x + A.x) / 2, y: (C.y + A.y) / 2 };
-        g.poly([A.x, A.y, B.x, B.y, C.x, C.y])
-          .fill({ color: ink, alpha: 0.9 })
-          .stroke({ color: 0x05060f, width: 1 });
-        g.moveTo(mAB.x, mAB.y)
-          .lineTo(mBC.x, mBC.y)
-          .lineTo(mCA.x, mCA.y)
-          .lineTo(mAB.x, mAB.y)
-          .stroke({ color: 0x05060f, width: 1, alpha: 0.8 });
+        // Cluster of angular ice-blue crystal shards.
+        const lo = 0x2f7fd6;
+        const mid = 0x57b6f0;
+        const hi = 0xbfe9ff;
+        const shard = (
+          bx: number,
+          by: number,
+          w: number,
+          h: number,
+          lean: number,
+        ): void => {
+          const tip = [bx + lean, by - h];
+          const lft = [bx - w, by];
+          const rgt = [bx + w, by];
+          // Body (two facets, lit + shaded).
+          g.poly([tip[0]!, tip[1]!, rgt[0]!, rgt[1]!, bx + lean * 0.3, by + h * 0.05, lft[0]!, lft[1]!])
+            .fill({ color: mid })
+            .stroke({ color: ink, width: 1 });
+          g.poly([tip[0]!, tip[1]!, bx + lean * 0.3, by + h * 0.05, lft[0]!, lft[1]!]).fill({ color: lo });
+          // Highlight edge.
+          g.moveTo(tip[0]!, tip[1]!).lineTo(bx + lean * 0.3, by + h * 0.05).stroke({ color: hi, width: 1, alpha: 0.8 });
+        };
+        shard(x - r * 0.42, y + r * 0.7, r * 0.32, r * 1.0, -r * 0.08);
+        shard(x + r * 0.42, y + r * 0.78, r * 0.3, r * 0.85, r * 0.1);
+        shard(x, y + r * 0.92, r * 0.42, r * 1.5, r * 0.02);
         break;
       }
       case "fuel": {
-        // Teardrop: pointed top, round bottom.
-        g.moveTo(x, y - r)
-          .quadraticCurveTo(x + r * 0.95, y, x, y + r)
-          .quadraticCurveTo(x - r * 0.95, y, x, y - r)
-          .fill({ color: ink, alpha: 0.92 })
-          .stroke({ color: 0x05060f, width: 1 });
+        // Upright gold fuel cylinder with cap, bands and a sheen strip.
+        const body = 0xd99a2b;
+        const lite = 0xf6c659;
+        const dark = 0xa06c14;
+        const w = r * 0.62;
+        const top = y - r * 1.02;
+        const bot = y + r * 1.02;
+        const capH = r * 0.26;
+        // Barrel.
+        g.rect(x - w, top + capH, w * 2, bot - top - capH * 2)
+          .fill({ color: body })
+          .stroke({ color: ink, width: 1.2 });
+        // Sheen.
+        g.rect(x - w * 0.55, top + capH, w * 0.5, bot - top - capH * 2).fill({ color: lite, alpha: 0.55 });
+        // Caps (ellipse-like rounded rects).
+        g.roundRect(x - w * 1.12, top, w * 2.24, capH * 1.6, capH * 0.7)
+          .fill({ color: lite })
+          .stroke({ color: ink, width: 1.2 });
+        g.roundRect(x - w * 1.12, bot - capH * 1.6, w * 2.24, capH * 1.6, capH * 0.7)
+          .fill({ color: dark })
+          .stroke({ color: ink, width: 1.2 });
+        // Mid bands.
+        g.rect(x - w, y - r * 0.18, w * 2, r * 0.16).fill({ color: dark, alpha: 0.85 });
         break;
       }
       case "food": {
-        // Concentric rings.
-        g.circle(x, y, r).stroke({ color: ink, width: Math.max(1.5, r * 0.22) });
-        g.circle(x, y, r * 0.45).fill({ color: ink, alpha: 0.92 });
+        // Round green seed-creature: bumpy sphere + a single eye.
+        const skin = 0x4ca63a;
+        const shade = 0x2f7325;
+        const lite = 0x8fd66f;
+        g.circle(x, y, r * 0.95).fill({ color: skin }).stroke({ color: ink, width: 1.2 });
+        // Shaded lower-right crescent.
+        g.arc(x, y, r * 0.95, -Math.PI * 0.15, Math.PI * 0.85).fill({ color: shade, alpha: 0.5 });
+        // Surface bumps.
+        for (const [bx, by, br] of [
+          [-0.35, -0.3, 0.22],
+          [0.32, -0.12, 0.18],
+          [-0.1, 0.4, 0.2],
+          [0.4, 0.35, 0.15],
+        ] as const) {
+          g.circle(x + bx * r, y + by * r, br * r).fill({ color: lite, alpha: 0.7 });
+        }
+        // Eye.
+        g.circle(x + r * 0.12, y - r * 0.05, r * 0.3).fill({ color: 0xeafff0 }).stroke({ color: ink, width: 1 });
+        g.circle(x + r * 0.2, y - r * 0.02, r * 0.14).fill({ color: ink });
+        break;
+      }
+      case "ore": {
+        // Angular red ore rock with a bright facet.
+        const red = 0xcc3633;
+        const dark = 0x8c2120;
+        const lite = 0xf0746a;
+        g.poly([
+          x - r * 0.95, y + r * 0.1,
+          x - r * 0.5, y - r * 0.7,
+          x + r * 0.25, y - r * 0.85,
+          x + r * 0.95, y - r * 0.1,
+          x + r * 0.7, y + r * 0.75,
+          x - r * 0.45, y + r * 0.8,
+        ])
+          .fill({ color: red })
+          .stroke({ color: ink, width: 1.2 });
+        // Lit top facet.
+        g.poly([x - r * 0.5, y - r * 0.7, x + r * 0.25, y - r * 0.85, x + r * 0.1, y - r * 0.1, x - r * 0.4, y - r * 0.05])
+          .fill({ color: lite, alpha: 0.85 });
+        // Shaded base facet.
+        g.poly([x - r * 0.45, y + r * 0.8, x + r * 0.7, y + r * 0.75, x + r * 0.55, y + r * 0.2, x - r * 0.3, y + r * 0.25])
+          .fill({ color: dark, alpha: 0.7 });
         break;
       }
       case "goods": {
-        // Isometric cube/crate.
-        const s = r * 0.82;
-        const top = [x, y - s, x + s, y - s * 0.5, x, y, x - s, y - s * 0.5];
-        g.poly(top).fill({ color: ink, alpha: 0.95 }).stroke({ color: 0x05060f, width: 1 });
-        g.poly([x - s, y - s * 0.5, x, y, x, y + s, x - s, y + s * 0.5]).fill({
-          color: ink,
-          alpha: 0.6,
-        });
-        g.poly([x + s, y - s * 0.5, x, y, x, y + s, x + s, y + s * 0.5]).fill({
-          color: ink,
-          alpha: 0.78,
-        });
+        // Purple treasure chest with gold trim and a lock.
+        const body = 0x7b4fc4;
+        const dark = 0x4f2e8a;
+        const gold = 0xe3b341;
+        const w = r * 0.98;
+        const h = r * 0.62;
+        const lidH = r * 0.5;
+        // Chest body.
+        g.rect(x - w, y - h * 0.1, w * 2, h * 1.5).fill({ color: body }).stroke({ color: ink, width: 1.2 });
+        g.rect(x - w, y - h * 0.1, w * 2, h * 0.4).fill({ color: dark, alpha: 0.5 });
+        // Domed lid.
+        g.moveTo(x - w, y - h * 0.1)
+          .lineTo(x - w, y - h * 0.45)
+          .arc(x, y - h * 0.45, w, Math.PI, 0)
+          .lineTo(x + w, y - h * 0.1)
+          .closePath()
+          .fill({ color: body })
+          .stroke({ color: ink, width: 1.2 });
+        void lidH;
+        // Gold trim bands.
+        g.rect(x - w, y - h * 0.1, w * 2, r * 0.13).fill({ color: gold }).stroke({ color: ink, width: 0.8 });
+        g.rect(x - w * 0.18, y - h * 0.55, w * 0.36, h * 1.9).fill({ color: gold }).stroke({ color: ink, width: 0.8 });
+        // Lock.
+        g.circle(x, y + h * 0.3, r * 0.16).fill({ color: gold }).stroke({ color: ink, width: 1 });
         break;
       }
     }
     layer.addChild(g);
   }
 
-  /** Colony icon: a domed habitat module with a base, in the owner colour. */
-  private drawColony(g: Graphics, cx: number, cy: number, s: number, color: number): void {
-    const dark = 0x0a0f1e;
-    const base = cy + s * 0.7;
-    // Dome.
-    g.moveTo(cx - s, base)
-      .lineTo(cx - s, cy)
-      .arc(cx, cy, s, Math.PI, 0)
-      .lineTo(cx + s, base)
-      .closePath()
-      .fill({ color })
-      .stroke({ color: 0xffffff, width: 1.5, alpha: 0.9 });
-    // Window band.
-    g.rect(cx - s * 0.55, cy + s * 0.05, s * 1.1, s * 0.3)
-      .fill({ color: tint(color, 0.6) })
-      .stroke({ color: dark, width: 0.8 });
-    // Antenna mast.
-    g.moveTo(cx, cy - s).lineTo(cx, cy - s * 1.5).stroke({ color: 0xffffff, width: 1.4, alpha: 0.9 });
-    g.circle(cx, cy - s * 1.5, s * 0.16).fill({ color: tint(color, 0.7) });
+  /**
+   * Draws an upright isometric block (rectangular prism) in the owner colour:
+   * three lit/shaded faces so a stack of these reads as the chunky 3D plastic
+   * towers from the printed pieces. Base-centre at (tx,ty), footprint half-width
+   * `hw`, pixel height `h`.
+   */
+  private isoTower(
+    g: Graphics,
+    tx: number,
+    ty: number,
+    hw: number,
+    h: number,
+    topC: number,
+    leftC: number,
+    rightC: number,
+  ): void {
+    const ink = 0x0a0f1e;
+    const dh = hw * 0.5; // iso depth
+    // Left face.
+    g.poly([tx - hw, ty, tx, ty + dh, tx, ty + dh - h, tx - hw, ty - h])
+      .fill({ color: leftC })
+      .stroke({ color: ink, width: 0.8 });
+    // Right face.
+    g.poly([tx, ty + dh, tx + hw, ty, tx + hw, ty - h, tx, ty + dh - h])
+      .fill({ color: rightC })
+      .stroke({ color: ink, width: 0.8 });
+    // Top face (diamond).
+    g.poly([tx - hw, ty - h, tx, ty + dh - h, tx + hw, ty - h, tx, ty - dh - h])
+      .fill({ color: topC })
+      .stroke({ color: ink, width: 0.8 });
   }
 
-  /** Spaceport icon: a colony dome topped with a launch tower & gantry. */
+  /** Flat isometric hexagonal platform used as the base for colony/spaceport. */
+  private isoHexBase(g: Graphics, cx: number, cy: number, s: number, topC: number, sideC: number): void {
+    const ink = 0x0a0f1e;
+    const thick = s * 0.32;
+    const hex = (yy: number): number[] => {
+      const p: number[] = [];
+      for (let i = 0; i < 6; i++) {
+        const a = (Math.PI / 180) * (60 * i + 30);
+        p.push(cx + s * Math.cos(a), yy + s * 0.52 * Math.sin(a));
+      }
+      return p;
+    };
+    g.poly(hex(cy + thick)).fill({ color: sideC }).stroke({ color: ink, width: 1 });
+    g.poly(hex(cy)).fill({ color: topC }).stroke({ color: ink, width: 1 });
+  }
+
+  /** Colony: a hex platform topped with a small cluster of red iso towers. */
+  private drawColony(g: Graphics, cx: number, cy: number, s: number, color: number): void {
+    const topC = tint(color, 0.42);
+    const rightC = color;
+    const leftC = tint(color, -0.32) >>> 0;
+    this.isoHexBase(g, cx, cy + s * 0.45, s, tint(color, 0.18), leftC);
+    // Towers, drawn back-to-front for correct overlap.
+    this.isoTower(g, cx + s * 0.04, cy + s * 0.18, s * 0.34, s * 1.05, topC, leftC, rightC); // tall centre
+    this.isoTower(g, cx - s * 0.42, cy + s * 0.4, s * 0.26, s * 0.6, topC, leftC, rightC);
+    this.isoTower(g, cx + s * 0.44, cy + s * 0.46, s * 0.24, s * 0.48, topC, leftC, rightC);
+  }
+
+  /** Spaceport: a bigger platform with a denser, taller cluster of towers. */
   private drawSpaceport(g: Graphics, cx: number, cy: number, s: number, color: number): void {
-    const dark = 0x0a0f1e;
-    const base = cy + s * 0.8;
-    // Wider habitat base.
-    g.moveTo(cx - s, base)
-      .lineTo(cx - s, cy + s * 0.1)
-      .arc(cx, cy + s * 0.1, s, Math.PI, 0)
-      .lineTo(cx + s, base)
-      .closePath()
-      .fill({ color })
-      .stroke({ color: 0xffffff, width: 2.4, alpha: 0.95 });
-    // Launch tower.
-    const tw = s * 0.34;
-    g.rect(cx - tw, cy - s * 1.5, tw * 2, s * 1.5)
-      .fill({ color: tint(color, -0.2) >>> 0 })
-      .stroke({ color: 0xffffff, width: 1.4, alpha: 0.9 });
-    // Tower cross-braces.
-    g.moveTo(cx - tw, cy - s).lineTo(cx + tw, cy - s * 0.6)
-      .moveTo(cx - tw, cy - s * 0.6).lineTo(cx + tw, cy - s)
-      .stroke({ color: dark, width: 1 });
-    // Beacon.
-    g.circle(cx, cy - s * 1.5, s * 0.2).fill({ color: 0xffd23f }).stroke({ color: dark, width: 1 });
+    const topC = tint(color, 0.42);
+    const rightC = color;
+    const leftC = tint(color, -0.32) >>> 0;
+    this.isoHexBase(g, cx, cy + s * 0.55, s * 1.18, tint(color, 0.18), leftC);
+    // Back row.
+    this.isoTower(g, cx - s * 0.36, cy + s * 0.1, s * 0.28, s * 0.9, topC, leftC, rightC);
+    this.isoTower(g, cx + s * 0.36, cy + s * 0.14, s * 0.26, s * 0.78, topC, leftC, rightC);
+    // Tall central spire.
+    this.isoTower(g, cx + s * 0.02, cy + s * 0.22, s * 0.32, s * 1.55, topC, leftC, rightC);
+    // Front row (shorter, overlaps the back).
+    this.isoTower(g, cx - s * 0.5, cy + s * 0.5, s * 0.24, s * 0.55, topC, leftC, rightC);
+    this.isoTower(g, cx + s * 0.46, cy + s * 0.54, s * 0.26, s * 0.66, topC, leftC, rightC);
+    // Beacon atop the spire.
+    g.circle(cx + s * 0.02, cy - s * 1.33 + s * 0.22, s * 0.16).fill({ color: 0xffd23f }).stroke({ color: 0x0a0f1e, width: 1 });
   }
 
   /**
-   * Owner-coloured rocket piece (matches the printed plastic ships). Drawn into
-   * an existing Graphics `g` centred at (sx,sy), nose pointing up, height ~2r.
-   * Colony ships get a rounded capsule nose; trade ships a pointed nose + a
-   * cargo band so the two read apart at a glance.
+   * Owner-coloured rocket piece resting on a pedestal — echoes the printed
+   * plastic ships (chunky horizontal rocket on a hex/cylinder stand). Drawn into
+   * an existing Graphics `g`, centred at (sx,sy), nose pointing right, ~2.4r wide.
+   * Colony ships sit on a hex pedestal with a porthole; trade ships on a
+   * cylindrical pedestal with a cargo band.
    */
   private drawShip(
     g: Graphics,
@@ -1138,121 +1244,177 @@ export class BoardRenderer {
     r: number,
     color: number,
   ): void {
-    const bodyW = r * 0.7; // half-width of the fuselage
-    const top = sy - r * 1.15;
-    const bottom = sy + r * 0.95;
-    const dark = 0x0a0f1e;
+    const ink = 0x0a0f1e;
+    const dark = tint(color, -0.28) >>> 0;
+    const lite = tint(color, 0.5);
+    const rocketY = sy - r * 0.42; // rocket sits above the pedestal
+    const bodyR = r * 0.4;
+    const noseX = sx + r * 1.05;
+    const tailX = sx - r * 0.95;
 
-    // Exhaust flame beneath the engine.
-    g.poly([sx - bodyW * 0.7, bottom, sx, bottom + r * 0.7, sx + bodyW * 0.7, bottom])
-      .fill({ color: 0xffb347, alpha: 0.85 });
-
-    // Fins flaring out at the base.
-    g.poly([sx - bodyW, bottom - r * 0.1, sx - bodyW * 1.7, bottom + r * 0.25, sx - bodyW, bottom - r * 0.55])
-      .fill({ color: tint(color, -0.25) >>> 0 });
-    g.poly([sx + bodyW, bottom - r * 0.1, sx + bodyW * 1.7, bottom + r * 0.25, sx + bodyW, bottom - r * 0.55])
-      .fill({ color: tint(color, -0.25) >>> 0 });
-
-    // Fuselage: rounded body with a nose that differs by ship kind.
-    const noseTip = kind === "colonyShip" ? top + r * 0.18 : top;
-    g.moveTo(sx - bodyW, bottom - r * 0.1)
-      .lineTo(sx - bodyW, sy - r * 0.35)
-      .quadraticCurveTo(sx - bodyW, noseTip, sx, top)
-      .quadraticCurveTo(sx + bodyW, noseTip, sx + bodyW, sy - r * 0.35)
-      .lineTo(sx + bodyW, bottom - r * 0.1)
-      .closePath()
-      .fill({ color })
-      .stroke({ color: dark, width: 1.5 });
-
-    // Sheen down the left of the hull.
-    g.poly([sx - bodyW * 0.55, sy - r * 0.2, sx - bodyW * 0.2, sy - r * 0.2, sx - bodyW * 0.2, sy + r * 0.4, sx - bodyW * 0.55, sy + r * 0.4])
-      .fill({ color: 0xffffff, alpha: 0.22 });
-
-    // Porthole (colony) or cargo band (trade) to tell them apart.
+    // --- Pedestal ---
     if (kind === "colonyShip") {
-      g.circle(sx, sy - r * 0.15, bodyW * 0.42)
-        .fill({ color: tint(color, 0.6) })
-        .stroke({ color: dark, width: 1 });
+      this.isoHexBase(g, sx, sy + r * 0.55, r * 0.62, tint(color, 0.18), dark);
     } else {
-      g.rect(sx - bodyW, sy + r * 0.0, bodyW * 2, r * 0.34)
-        .fill({ color: tint(color, 0.5) })
-        .stroke({ color: dark, width: 1 });
+      // Cylindrical stand.
+      g.roundRect(sx - r * 0.5, sy + r * 0.18, r, r * 0.7, r * 0.18).fill({ color }).stroke({ color: ink, width: 1 });
+      g.ellipse(sx, sy + r * 0.18, r * 0.5, r * 0.2).fill({ color: tint(color, 0.18) }).stroke({ color: ink, width: 1 });
+    }
+    // Neck connecting rocket to pedestal.
+    g.rect(sx - r * 0.12, rocketY, r * 0.24, r * 0.85).fill({ color: dark }).stroke({ color: ink, width: 0.8 });
+
+    // --- Rocket (horizontal) ---
+    // Tail fins.
+    g.poly([tailX + r * 0.25, rocketY - bodyR, tailX - r * 0.25, rocketY - bodyR * 2, tailX + r * 0.15, rocketY])
+      .fill({ color: dark }).stroke({ color: ink, width: 0.8 });
+    g.poly([tailX + r * 0.25, rocketY + bodyR, tailX - r * 0.25, rocketY + bodyR * 2, tailX + r * 0.15, rocketY])
+      .fill({ color: dark }).stroke({ color: ink, width: 0.8 });
+    // Fuselage.
+    g.roundRect(tailX, rocketY - bodyR, noseX - r * 0.35 - tailX, bodyR * 2, bodyR * 0.9)
+      .fill({ color }).stroke({ color: ink, width: 1.2 });
+    // Nose cone.
+    g.poly([noseX, rocketY, sx + r * 0.4, rocketY - bodyR, sx + r * 0.4, rocketY + bodyR])
+      .fill({ color: dark }).stroke({ color: ink, width: 1.2 });
+    // Sheen along the top of the hull.
+    g.roundRect(tailX + r * 0.1, rocketY - bodyR * 0.78, (noseX - r * 0.5) - tailX, bodyR * 0.5, bodyR * 0.3)
+      .fill({ color: 0xffffff, alpha: 0.25 });
+    // Distinguishing detail.
+    if (kind === "colonyShip") {
+      g.circle(sx - r * 0.05, rocketY, bodyR * 0.62).fill({ color: lite }).stroke({ color: ink, width: 1 });
+    } else {
+      g.rect(sx - r * 0.35, rocketY - bodyR, r * 0.5, bodyR * 2).fill({ color: lite }).stroke({ color: ink, width: 1 });
     }
   }
 
-  /** Alien outpost in its civ colour: lattice ring with five docking points. */
+  /**
+   * Alien outpost station: a dark navy tri-lobe hub with six docking nodes and
+   * teal connector struts, echoing the printed outpost tokens. The civ emblem is
+   * layered on top by `drawCivIcon`.
+   */
   private drawOutpost(layer: Container, cx: number, cy: number, scale: number, color: number): void {
-    const station = new Graphics()
-      .circle(cx, cy, scale * 0.3)
-      .fill({ color, alpha: 0.16 })
-      .stroke({ color, width: 2, alpha: 0.85 });
-    station.circle(cx, cy, scale * 0.16).fill({ color, alpha: 0.92 });
-    // Radial docking arms.
-    for (let i = 0; i < 5; i++) {
-      const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
-      const r0 = scale * 0.16;
-      const r1 = scale * 0.3;
-      const dx = Math.cos(a);
-      const dy = Math.sin(a);
-      station.moveTo(cx + dx * r0, cy + dy * r0).lineTo(cx + dx * r1, cy + dy * r1);
+    const navy = 0x18253f;
+    const navyHi = 0x24365a;
+    const edge = 0x0a1222;
+    const teal = 0x3fd0d6;
+    const node = tint(color, 0.35);
+    const station = new Graphics();
+    const lobeDist = scale * 0.4;
+    const lobeR = scale * 0.34;
+    // Three rounded lobes around the hub (trefoil silhouette).
+    for (let i = 0; i < 3; i++) {
+      const a = (-Math.PI / 2) + (Math.PI * 2 * i) / 3;
+      station.circle(cx + Math.cos(a) * lobeDist, cy + Math.sin(a) * lobeDist, lobeR);
     }
-    station.stroke({ color, width: 1.5, alpha: 0.7 });
-    // Bright docking-point dots (lighter tint of the civ colour).
-    for (let i = 0; i < 5; i++) {
-      const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
-      const r1 = scale * 0.33;
-      station.circle(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1, scale * 0.04).fill({
-        color: tint(color, 0.55),
-      });
+    station.circle(cx, cy, scale * 0.32);
+    station.fill({ color: navy }).stroke({ color: edge, width: 2 });
+    // Hub highlight.
+    station.circle(cx, cy, scale * 0.3).fill({ color: navyHi, alpha: 0.5 });
+
+    // Docking nodes: two per lobe on the outer arc, with teal struts to the hub.
+    for (let i = 0; i < 3; i++) {
+      const base = (-Math.PI / 2) + (Math.PI * 2 * i) / 3;
+      for (const off of [-0.42, 0.42]) {
+        const a = base + off;
+        const nd = lobeDist + lobeR * 0.55;
+        const nx = cx + Math.cos(a) * nd;
+        const ny = cy + Math.sin(a) * nd;
+        station.moveTo(cx, cy).lineTo(nx, ny).stroke({ color: teal, width: scale * 0.03, alpha: 0.85 });
+        station.circle(nx, ny, scale * 0.1).fill({ color: edge }).stroke({ color: node, width: 1.4 });
+        station.circle(nx, ny, scale * 0.045).fill({ color: node });
+      }
     }
     layer.addChild(station);
   }
 
-  /** A distinct civ emblem drawn on top of the outpost station core. */
-  private drawCivIcon(layer: Container, cx: number, cy: number, scale: number, civ: string, color: number): void {
+  /**
+   * The civ emblem layered on the outpost hub, matching the printed tokens:
+   * greenFolk = green molecule, scientists = silver arrow-ship, merchants = gold
+   * dice, diplomats = red mech-claw.
+   */
+  private drawCivIcon(layer: Container, cx: number, cy: number, scale: number, civ: string, _color: number): void {
     const g = new Graphics();
-    const s = scale * 0.13;
+    const s = scale * 0.24;
     const ink = 0x0a0f1e;
-    const light = tint(color, 0.7);
     switch (civ) {
       case "greenFolk": {
-        // Leaf / sprout.
-        g.moveTo(cx, cy + s)
-          .quadraticCurveTo(cx - s, cy, cx, cy - s)
-          .quadraticCurveTo(cx + s, cy, cx, cy + s)
-          .fill({ color: light })
-          .stroke({ color: ink, width: 1.5 });
-        g.moveTo(cx, cy + s * 0.6).lineTo(cx, cy - s * 0.6).stroke({ color: ink, width: 1.2 });
+        // Molecule: central sphere bonded to three satellites.
+        const core = 0x3fae3a;
+        const sat = 0x7fe06a;
+        for (let i = 0; i < 3; i++) {
+          const a = (-Math.PI / 2) + (Math.PI * 2 * i) / 3;
+          const ox = cx + Math.cos(a) * s * 0.78;
+          const oy = cy + Math.sin(a) * s * 0.78;
+          g.moveTo(cx, cy).lineTo(ox, oy).stroke({ color: 0x2f7325, width: s * 0.22 });
+        }
+        for (let i = 0; i < 3; i++) {
+          const a = (-Math.PI / 2) + (Math.PI * 2 * i) / 3;
+          const ox = cx + Math.cos(a) * s * 0.78;
+          const oy = cy + Math.sin(a) * s * 0.78;
+          g.circle(ox, oy, s * 0.3).fill({ color: sat }).stroke({ color: ink, width: 1 });
+          g.circle(ox - s * 0.08, oy - s * 0.08, s * 0.1).fill({ color: 0xeafff0, alpha: 0.8 });
+        }
+        g.circle(cx, cy, s * 0.5).fill({ color: core }).stroke({ color: ink, width: 1.2 });
+        g.circle(cx - s * 0.14, cy - s * 0.14, s * 0.16).fill({ color: 0xeafff0, alpha: 0.85 });
         break;
       }
       case "scientists": {
-        // Atom: nucleus + two orbital rings.
-        g.circle(cx, cy, s * 0.35).fill({ color: light }).stroke({ color: ink, width: 1.2 });
-        g.ellipse(cx, cy, s, s * 0.42).stroke({ color: ink, width: 1.4 });
-        g.ellipse(cx, cy, s * 0.42, s).stroke({ color: ink, width: 1.4 });
-        break;
-      }
-      case "diplomats": {
-        // Dove / peace: simple bird chevron over a dot.
-        g.moveTo(cx - s, cy).quadraticCurveTo(cx, cy - s * 0.9, cx, cy)
-          .quadraticCurveTo(cx, cy - s * 0.9, cx + s, cy)
-          .stroke({ color: ink, width: 1.6 });
-        g.circle(cx, cy + s * 0.4, s * 0.28).fill({ color: light }).stroke({ color: ink, width: 1 });
+        // Sleek silver arrow-ship pointing up, swept wings.
+        const silver = 0xd8e2f0;
+        const steel = 0x8fa4c4;
+        const glass = 0x4fb6ff;
+        // Wings.
+        g.poly([cx, cy + s * 0.1, cx - s * 1.0, cy + s * 0.7, cx - s * 0.25, cy + s * 0.2])
+          .fill({ color: steel }).stroke({ color: ink, width: 1 });
+        g.poly([cx, cy + s * 0.1, cx + s * 1.0, cy + s * 0.7, cx + s * 0.25, cy + s * 0.2])
+          .fill({ color: steel }).stroke({ color: ink, width: 1 });
+        // Fuselage (arrowhead).
+        g.poly([cx, cy - s, cx + s * 0.42, cy + s * 0.7, cx, cy + s * 0.42, cx - s * 0.42, cy + s * 0.7])
+          .fill({ color: silver }).stroke({ color: ink, width: 1.2 });
+        // Cockpit.
+        g.circle(cx, cy - s * 0.05, s * 0.22).fill({ color: glass }).stroke({ color: ink, width: 1 });
         break;
       }
       case "merchants": {
-        // Coin with a value mark.
-        g.circle(cx, cy, s * 0.85).fill({ color: light }).stroke({ color: ink, width: 1.5 });
-        g.moveTo(cx, cy - s * 0.5).lineTo(cx, cy + s * 0.5).stroke({ color: ink, width: 1.6 });
-        g.moveTo(cx - s * 0.3, cy - s * 0.2).quadraticCurveTo(cx + s * 0.4, cy - s * 0.4, cx + s * 0.3, cy)
-          .stroke({ color: ink, width: 1.2 });
+        // Two gold dice.
+        const gold = 0xe9b83a;
+        const goldD = 0xb07f12;
+        const pip = 0x3a2705;
+        const die = (dx: number, dy: number, d: number): void => {
+          g.roundRect(dx - d, dy - d, d * 2, d * 2, d * 0.35).fill({ color: gold }).stroke({ color: ink, width: 1 });
+          g.roundRect(dx - d, dy + d * 0.3, d * 2, d * 0.7, d * 0.3).fill({ color: goldD, alpha: 0.5 });
+          for (const [px, py] of [[-0.45, -0.45], [0.45, 0.45], [0, 0]] as const) {
+            g.circle(dx + px * d, dy + py * d, d * 0.16).fill({ color: pip });
+          }
+        };
+        die(cx - s * 0.4, cy + s * 0.2, s * 0.55);
+        die(cx + s * 0.5, cy - s * 0.25, s * 0.45);
+        break;
+      }
+      case "diplomats": {
+        // Red mechanical claw/gauntlet.
+        const red = 0xd23a33;
+        const redD = 0x8c1f1c;
+        // Palm.
+        g.roundRect(cx - s * 0.55, cy - s * 0.1, s * 1.1, s * 0.9, s * 0.25)
+          .fill({ color: red }).stroke({ color: ink, width: 1.2 });
+        // Fingers.
+        for (const fx of [-0.42, -0.14, 0.14, 0.42]) {
+          g.roundRect(cx + fx * s - s * 0.1, cy - s * 0.85, s * 0.2, s * 0.85, s * 0.1)
+            .fill({ color: red }).stroke({ color: ink, width: 1 });
+          g.circle(cx + fx * s, cy - s * 0.85, s * 0.12).fill({ color: redD });
+        }
+        // Thumb.
+        g.roundRect(cx - s * 0.85, cy + s * 0.1, s * 0.35, s * 0.2, s * 0.08)
+          .fill({ color: red }).stroke({ color: ink, width: 1 });
+        // Knuckle joints.
+        g.rect(cx - s * 0.55, cy + s * 0.05, s * 1.1, s * 0.12).fill({ color: redD, alpha: 0.7 });
         break;
       }
       default: {
         // Travelers / generic: four-point star.
         g.poly([cx, cy - s, cx + s * 0.3, cy - s * 0.3, cx + s, cy, cx + s * 0.3, cy + s * 0.3,
                 cx, cy + s, cx - s * 0.3, cy + s * 0.3, cx - s, cy, cx - s * 0.3, cy - s * 0.3])
-          .fill({ color: light }).stroke({ color: ink, width: 1.2 });
+          .fill({ color: tint(_color, 0.7) }).stroke({ color: ink, width: 1.2 });
       }
     }
     layer.addChild(g);

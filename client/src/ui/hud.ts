@@ -818,9 +818,12 @@ export class HUD {
             : "Tap: pay 1 goods → 1 fame";
           const cardEl = el(
             `<div class="ally-card ally-card-active${enabled ? "" : " disabled"}" data-card-id="${id}" style="--c:${CIV_COLOR[civ]}" title="${escapeHtml(card?.text ?? "")}">
-                <span class="ally-civ">${CIV_LABEL[civ]}</span>
-                <span class="ally-name">${escapeHtml(card?.name ?? id)}</span>
-                <span class="ally-use">${hint}</span>
+                <span class="ally-av">${civAvatarSvg(civ)}</span>
+                <span class="ally-text">
+                  <span class="ally-civ">${CIV_LABEL[civ]}</span>
+                  <span class="ally-name">${escapeHtml(card?.name ?? id)}</span>
+                  <span class="ally-use">${hint}</span>
+                </span>
               </div>`,
           );
           if (enabled) {
@@ -831,8 +834,11 @@ export class HUD {
         }
         al.appendChild(
           el(`<div class="ally-card" data-card-id="${id}" style="--c:${CIV_COLOR[civ]}" title="${escapeHtml(card?.text ?? "")}">
-                <span class="ally-civ">${CIV_LABEL[civ]}</span>
-                <span class="ally-name">${escapeHtml(card?.name ?? id)}</span>
+                <span class="ally-av">${civAvatarSvg(civ)}</span>
+                <span class="ally-text">
+                  <span class="ally-civ">${CIV_LABEL[civ]}</span>
+                  <span class="ally-name">${escapeHtml(card?.name ?? id)}</span>
+                </span>
               </div>`),
         );
       }
@@ -1978,7 +1984,7 @@ export class HUD {
 
   private fillFriendshipChoice(actions: HTMLElement, civ: AlienCiv, options: string[]): void {
     actions.appendChild(
-      el(`<div class="encounter"><b>${CIV_LABEL[civ]} alliance</b><br>Choose an ability to add to your sidebar.</div>`),
+      el(`<div class="encounter friend-head"><span class="fh-av">${civAvatarSvg(civ)}</span><span><b>${CIV_LABEL[civ]} alliance</b><br>Choose an ability to add to your sidebar.</span></div>`),
     );
     const wrap = el(`<div class="friend-choices"></div>`);
     for (const id of options) {
@@ -2547,24 +2553,118 @@ function freeDock(state: GameState, intersectionId: string): number {
   return 0;
 }
 
-/** Inline SVG resource glyph mirroring the board art (24x24, currentColor). */
+/**
+ * Original stylized vector avatar for an alien civilisation, used on the
+ * friendship/outpost cards. Each civ has its own creature silhouette and
+ * palette — these are drawn from scratch (no copied art): Scientists = tan
+ * primate in a red cap, Green Folk = green frilled dragon, Diplomats = blue
+ * crested lizard in armour, Merchants = tan long-eared trader.
+ */
+function civAvatarSvg(civ: string): string {
+  const frame = (bg: string, inner: string): string =>
+    `<svg viewBox="0 0 40 40" width="34" height="34" style="display:block">
+      <circle cx="20" cy="20" r="19" fill="${bg}" stroke="#0a0f1e" stroke-width="1.5"/>
+      ${inner}
+    </svg>`;
+  switch (civ) {
+    case "scientists":
+      return frame(
+        "#1a2238",
+        `<ellipse cx="20" cy="23" rx="11" ry="12" fill="#c9925e" stroke="#0a0f1e" stroke-width="1"/>
+         <ellipse cx="20" cy="27" rx="6" ry="4.6" fill="#e3b98a"/>
+         <circle cx="16" cy="21" r="1.7" fill="#0a0f1e"/><circle cx="24" cy="21" r="1.7" fill="#0a0f1e"/>
+         <circle cx="19" cy="27" r="0.8" fill="#7a5532"/><circle cx="21" cy="27" r="0.8" fill="#7a5532"/>
+         <path d="M9 17 Q20 1 31 17 Z" fill="#d23a33" stroke="#0a0f1e" stroke-width="1"/>
+         <rect x="9" y="15.5" width="22" height="3" rx="1" fill="#f2f2f2" stroke="#0a0f1e" stroke-width="0.6"/>`,
+      );
+    case "greenFolk":
+      return frame(
+        "#11261a",
+        `<path d="M10 15 L3 9 L12 14 Z" fill="#3f8f30" stroke="#0a0f1e" stroke-width="0.6"/>
+         <path d="M30 15 L37 9 L28 14 Z" fill="#3f8f30" stroke="#0a0f1e" stroke-width="0.6"/>
+         <ellipse cx="20" cy="21" rx="11" ry="12" fill="#4ca63a" stroke="#0a0f1e" stroke-width="1"/>
+         <ellipse cx="20" cy="28" rx="5.6" ry="4" fill="#6fc456"/>
+         <circle cx="15.5" cy="19" r="2.6" fill="#ffd23f" stroke="#0a0f1e" stroke-width="0.8"/><circle cx="15.5" cy="19" r="1" fill="#0a0f1e"/>
+         <circle cx="24.5" cy="19" r="2.6" fill="#ffd23f" stroke="#0a0f1e" stroke-width="0.8"/><circle cx="24.5" cy="19" r="1" fill="#0a0f1e"/>
+         <circle cx="18.4" cy="28" r="0.8" fill="#0a0f1e"/><circle cx="21.6" cy="28" r="0.8" fill="#0a0f1e"/>`,
+      );
+    case "diplomats":
+      return frame(
+        "#0e1c33",
+        `<path d="M5 37 Q20 29 35 37 L35 40 L5 40 Z" fill="#cfd8e8" stroke="#0a0f1e" stroke-width="1"/>
+         <ellipse cx="20" cy="19" rx="10.5" ry="11.5" fill="#4f7fd0" stroke="#0a0f1e" stroke-width="1"/>
+         <path d="M20 8 Q24 4 21 1" stroke="#0a0f1e" stroke-width="1.2" fill="none"/>
+         <ellipse cx="22" cy="24" rx="5" ry="3.4" fill="#6f9ce0"/>
+         <circle cx="16" cy="17" r="2.1" fill="#fff" stroke="#0a0f1e" stroke-width="0.7"/><circle cx="16.4" cy="17" r="0.9" fill="#0a0f1e"/>
+         <circle cx="24" cy="17" r="2.1" fill="#fff" stroke="#0a0f1e" stroke-width="0.7"/><circle cx="24.4" cy="17" r="0.9" fill="#0a0f1e"/>
+         <circle cx="20" cy="30" r="1.4" fill="#ffd23f" stroke="#0a0f1e" stroke-width="0.6"/>`,
+      );
+    case "merchants":
+      return frame(
+        "#2a2114",
+        `<polygon points="7,19 3,10 12,15" fill="#caa46a" stroke="#0a0f1e" stroke-width="0.7"/>
+         <polygon points="33,19 37,10 28,15" fill="#caa46a" stroke="#0a0f1e" stroke-width="0.7"/>
+         <ellipse cx="20" cy="21" rx="10" ry="12" fill="#d8b483" stroke="#0a0f1e" stroke-width="1"/>
+         <path d="M20 20 L17.6 28 L22.4 28 Z" fill="#c49a63"/>
+         <circle cx="15.5" cy="19" r="1.6" fill="#0a0f1e"/><circle cx="24.5" cy="19" r="1.6" fill="#0a0f1e"/>
+         <path d="M16 31 Q20 33 24 31" stroke="#0a0f1e" stroke-width="1" fill="none"/>`,
+      );
+    default:
+      return frame(
+        "#1c2236",
+        `<circle cx="20" cy="20" r="11" fill="#8fa4c4" stroke="#0a0f1e" stroke-width="1"/>
+         <path d="M11 19 A9 9 0 0 1 29 19 L29 23 L11 23 Z" fill="#cfe0f5" stroke="#0a0f1e" stroke-width="0.7"/>
+         <circle cx="20" cy="13" r="2" fill="#ffd23f" stroke="#0a0f1e" stroke-width="0.6"/>`,
+      );
+  }
+}
+
+/**
+ * Full-colour inline SVG resource glyph mirroring the board art (24x24):
+ * carbon = blue crystal cluster, fuel = gold cylinder, food = green
+ * seed-creature, ore = red rock, goods = purple/gold chest.
+ */
 function resourceGlyphSvg(r: Resource): string {
   const wrap = (inner: string): string =>
-    `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">${inner}</svg>`;
+    `<svg viewBox="0 0 24 24" width="22" height="22" stroke-linejoin="round">${inner}</svg>`;
   switch (r) {
-    case "ore":
-      return wrap(`<polygon points="21,12 16.5,19.8 7.5,19.8 3,12 7.5,4.2 16.5,4.2" fill="currentColor"/>`);
-    case "fuel":
-      return wrap(`<path d="M12 3 Q20.5 12 12 21 Q3.5 12 12 3 Z" fill="currentColor"/>`);
     case "carbon":
       return wrap(
-        `<polygon points="12,3 3.2,18.4 20.8,18.4" fill="currentColor"/><polygon points="7.6,10.7 16.4,10.7 12,18.4" fill="#0a0f1e" stroke="#0a0f1e"/>`,
+        `<polygon points="6,15.5 8.5,6.5 11,15.5" fill="#2f7fd6" stroke="#0a0f1e" stroke-width="0.7"/>
+         <polygon points="13,15.5 16,7.5 18.2,15.5" fill="#3f97e4" stroke="#0a0f1e" stroke-width="0.7"/>
+         <polygon points="9,16.5 12,2.5 15,16.5" fill="#57b6f0" stroke="#0a0f1e" stroke-width="0.7"/>
+         <line x1="12" y1="2.5" x2="12" y2="16.5" stroke="#bfe9ff" stroke-width="0.8"/>`,
+      );
+    case "fuel":
+      return wrap(
+        `<rect x="8" y="5" width="8" height="14" fill="#d99a2b" stroke="#0a0f1e" stroke-width="0.7"/>
+         <rect x="8.8" y="5" width="2.2" height="14" fill="#f6c659" opacity="0.6"/>
+         <ellipse cx="12" cy="5" rx="4" ry="1.7" fill="#f6c659" stroke="#0a0f1e" stroke-width="0.7"/>
+         <ellipse cx="12" cy="19" rx="4" ry="1.7" fill="#a06c14" stroke="#0a0f1e" stroke-width="0.7"/>
+         <rect x="8" y="11" width="8" height="1.8" fill="#a06c14"/>`,
       );
     case "food":
-      return wrap(`<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.6" fill="currentColor" stroke="none"/>`);
+      return wrap(
+        `<circle cx="12" cy="12" r="8.5" fill="#4ca63a" stroke="#0a0f1e" stroke-width="0.7"/>
+         <circle cx="8.4" cy="9.4" r="2" fill="#8fd66f" opacity="0.7"/>
+         <circle cx="15.2" cy="14.5" r="1.7" fill="#8fd66f" opacity="0.7"/>
+         <circle cx="9.5" cy="15.5" r="1.6" fill="#8fd66f" opacity="0.7"/>
+         <circle cx="13" cy="11" r="2.9" fill="#eafff0" stroke="#0a0f1e" stroke-width="0.6"/>
+         <circle cx="13.7" cy="11.4" r="1.4" fill="#0a0f1e"/>`,
+      );
+    case "ore":
+      return wrap(
+        `<polygon points="3.5,13 6.5,5.5 13,4.5 20,11 17.3,18.6 6,19" fill="#cc3633" stroke="#0a0f1e" stroke-width="0.7"/>
+         <polygon points="6.5,5.5 13,4.5 12,10.2 6,10.6" fill="#f0746a" opacity="0.85"/>
+         <polygon points="6,19 17.3,18.6 16,12 7,12.4" fill="#8c2120" opacity="0.7"/>`,
+      );
     case "goods":
       return wrap(
-        `<polygon points="12,4 20,8 12,12 4,8" fill="currentColor"/><polygon points="4,8 12,12 12,20 4,16" fill="currentColor" opacity="0.55"/><polygon points="20,8 12,12 12,20 20,16" fill="currentColor" opacity="0.8"/>`,
+        `<path d="M4 12 L4 9 Q4 4.5 12 4.5 Q20 4.5 20 9 L20 12 Z" fill="#7b4fc4" stroke="#0a0f1e" stroke-width="0.7"/>
+         <rect x="4" y="11.5" width="16" height="8.5" fill="#7b4fc4" stroke="#0a0f1e" stroke-width="0.7"/>
+         <rect x="4" y="11.5" width="16" height="2" fill="#e3b341" stroke="#0a0f1e" stroke-width="0.4"/>
+         <rect x="10.4" y="5" width="3.2" height="15" fill="#e3b341" stroke="#0a0f1e" stroke-width="0.4"/>
+         <circle cx="12" cy="14.8" r="1.6" fill="#e3b341" stroke="#0a0f1e" stroke-width="0.5"/>`,
       );
   }
 }
@@ -2666,40 +2766,77 @@ function markerGlyphSvg(): string {
 // on the build buttons, and in the costs reference.
 const PIECE_INK = "#0a0f1e";
 
-/** Finned rocket. Optional kind adds the board's colony porthole / trade band. */
+/** An upright isometric block (three shaded faces), base-centre (tx,ty). */
+function isoBoxSvg(tx: number, ty: number, hw: number, h: number): string {
+  const dh = hw * 0.5;
+  const f = (n: number): string => n.toFixed(1);
+  const top = `${f(tx - hw)},${f(ty - h)} ${f(tx)},${f(ty + dh - h)} ${f(tx + hw)},${f(ty - h)} ${f(tx)},${f(ty - dh - h)}`;
+  const left = `${f(tx - hw)},${f(ty)} ${f(tx)},${f(ty + dh)} ${f(tx)},${f(ty + dh - h)} ${f(tx - hw)},${f(ty - h)}`;
+  const right = `${f(tx)},${f(ty + dh)} ${f(tx + hw)},${f(ty)} ${f(tx + hw)},${f(ty - h)} ${f(tx)},${f(ty + dh - h)}`;
+  return `<polygon points="${left}" fill="currentColor" fill-opacity="0.55" stroke="${PIECE_INK}" stroke-width="0.4"/>
+    <polygon points="${right}" fill="currentColor" fill-opacity="0.85" stroke="${PIECE_INK}" stroke-width="0.4"/>
+    <polygon points="${top}" fill="currentColor" stroke="${PIECE_INK}" stroke-width="0.4"/>`;
+}
+
+/** A flat isometric hexagonal platform centred at (cx,cy). */
+function isoHexSvg(cx: number, cy: number, s: number): string {
+  const f = (n: number): string => n.toFixed(1);
+  const hex = (yy: number): string => {
+    const p: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI / 180) * (60 * i + 30);
+      p.push(`${f(cx + s * Math.cos(a))},${f(yy + s * 0.52 * Math.sin(a))}`);
+    }
+    return p.join(" ");
+  };
+  const t = s * 0.32;
+  return `<polygon points="${hex(cy + t)}" fill="currentColor" fill-opacity="0.55" stroke="${PIECE_INK}" stroke-width="0.4"/>
+    <polygon points="${hex(cy)}" fill="currentColor" stroke="${PIECE_INK}" stroke-width="0.4"/>`;
+}
+
+/** Isometric rocket on a pedestal — matches the board's drawShip. */
 function shipIco(kind?: "colonyShip" | "tradeShip"): string {
+  const pedestal =
+    kind === "tradeShip"
+      ? `<ellipse cx="12" cy="21" rx="4.6" ry="1.6" fill="currentColor" fill-opacity="0.6" stroke="${PIECE_INK}" stroke-width="0.4"/><rect x="8" y="17" width="8" height="4" rx="1" fill="currentColor" stroke="${PIECE_INK}" stroke-width="0.4"/>`
+      : isoHexSvg(12, 20, 5);
   const detail =
     kind === "tradeShip"
-      ? `<rect x="8.2" y="11" width="7.6" height="2.6" rx="0.6" fill="${PIECE_INK}" opacity="0.5"/>`
+      ? `<rect x="9.5" y="6.5" width="3.6" height="6" fill="${PIECE_INK}" opacity="0.4"/>`
       : kind === "colonyShip"
-      ? `<circle cx="12" cy="9.4" r="2.1" fill="${PIECE_INK}" opacity="0.5"/>`
-      : "";
+        ? `<circle cx="11" cy="9.5" r="1.9" fill="${PIECE_INK}" opacity="0.4"/>`
+        : "";
   return `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="none">
-    <path d="M10 18 L12 21.5 L14 18 Z" fill="#ffb347"/>
-    <path d="M8 15 L4.8 19 L8 17.2 Z" fill="currentColor" opacity="0.8"/>
-    <path d="M16 15 L19.2 19 L16 17.2 Z" fill="currentColor" opacity="0.8"/>
-    <path d="M8 18 L8 9 Q8 2.6 12 2 Q16 2.6 16 9 L16 18 Z" stroke="${PIECE_INK}" stroke-width="1" stroke-linejoin="round"/>
+    ${pedestal}
+    <rect x="11" y="11" width="2" height="7" fill="currentColor" fill-opacity="0.55"/>
+    <polygon points="5,7 2.6,3.8 6,8" fill="currentColor" fill-opacity="0.7" stroke="${PIECE_INK}" stroke-width="0.4"/>
+    <polygon points="5,12.5 2.6,15.7 6,11.5" fill="currentColor" fill-opacity="0.7" stroke="${PIECE_INK}" stroke-width="0.4"/>
+    <rect x="4" y="6.6" width="12.5" height="6.4" rx="3.2" stroke="${PIECE_INK}" stroke-width="0.7"/>
+    <polygon points="16.5,6.6 20.8,9.8 16.5,13" fill="currentColor" fill-opacity="0.85" stroke="${PIECE_INK}" stroke-width="0.7"/>
     ${detail}
   </svg>`;
 }
 
-/** Colony: domed habitat with a window band and an antenna mast. */
+/** Colony: a hex platform topped with a small cluster of iso towers. */
 function colonyIco(): string {
   return `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="none">
-    <path d="M6 19 L6 12.5 A6 6 0 0 1 18 12.5 L18 19 Z" stroke="${PIECE_INK}" stroke-width="0.8"/>
-    <rect x="8" y="13" width="8" height="2.4" fill="${PIECE_INK}" opacity="0.55"/>
-    <path d="M12 6.6 L12 4" stroke="currentColor" stroke-width="1.5"/>
-    <circle cx="12" cy="3.4" r="1.3"/>
+    ${isoHexSvg(12, 17.5, 7)}
+    ${isoBoxSvg(12, 15, 3.4, 9)}
+    ${isoBoxSvg(7.6, 17, 2.6, 5.4)}
+    ${isoBoxSvg(16.4, 17.4, 2.4, 4.4)}
   </svg>`;
 }
 
-/** Spaceport: a wide habitat dome topped by a launch tower & beacon. */
+/** Spaceport: a wider platform with a denser, taller tower cluster + beacon. */
 function spaceportIco(): string {
   return `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="none">
-    <path d="M4 20 L4 13.5 A8 5.5 0 0 1 20 13.5 L20 20 Z" stroke="${PIECE_INK}" stroke-width="0.8"/>
-    <rect x="9.6" y="3.5" width="4.8" height="10.5" fill="currentColor" stroke="${PIECE_INK}" stroke-width="0.8"/>
-    <path d="M9.6 7 L14.4 9 M9.6 9 L14.4 7" stroke="${PIECE_INK}" stroke-width="0.9"/>
-    <circle cx="12" cy="3" r="1.7" fill="#ffd23f" stroke="${PIECE_INK}" stroke-width="0.7"/>
+    ${isoHexSvg(12, 19, 8.4)}
+    ${isoBoxSvg(8, 15.5, 2.6, 7)}
+    ${isoBoxSvg(16, 15.8, 2.4, 6)}
+    ${isoBoxSvg(12, 16.6, 3, 12)}
+    ${isoBoxSvg(6, 18.6, 2.2, 4.4)}
+    ${isoBoxSvg(17.5, 18.8, 2.4, 5.2)}
+    <circle cx="12" cy="4.4" r="1.6" fill="#ffd23f" stroke="${PIECE_INK}" stroke-width="0.6"/>
   </svg>`;
 }
 

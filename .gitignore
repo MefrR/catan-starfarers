@@ -8,3 +8,5 @@ rulebook.txt
 almanac.txt
 # official Catan rulebooks — copyrighted, reference only, never publish
 *.pdf
+# official Catan art used only as visual reference — never publish; we ship original vectors
+*.png

@@ -854,11 +854,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* --- Sidebar alliances (#2) --- */
 .side-alliances .ally-stations { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
 .ally-card {
-  display: flex; flex-direction: column; gap: 1px;
+  display: flex; flex-direction: row; align-items: center; gap: 8px;
   padding: 6px 8px; margin-bottom: 5px; border-radius: 8px;
   border-left: 3px solid var(--c);
   background: color-mix(in srgb, var(--c) 12%, rgba(255,255,255,0.03));
 }
+.ally-card .ally-av { flex: 0 0 auto; line-height: 0; }
+.ally-card .ally-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.friend-head { display: flex; align-items: center; gap: 10px; text-align: left; }
+.friend-head .fh-av { flex: 0 0 auto; line-height: 0; }
 .ally-card .ally-civ { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--c); }
 .ally-card .ally-name { font-size: 12px; font-weight: 700; color: var(--text); }
 /* #2: active (usable) outpost ability cards are clickable buttons. */
