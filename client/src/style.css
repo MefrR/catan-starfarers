@@ -496,13 +496,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .map-picker .mp-ship:disabled { opacity: 0.4; cursor: not-allowed; }
 .map-picker .mp-ship svg { width: 34px; height: 34px; }
 .map-picker .mp-lbl { font-size: 10.5px; font-weight: 600; white-space: nowrap; }
-.map-picker .mp-close {
-  width: 22px; height: 22px; padding: 0; border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: var(--text); font-size: 12px; line-height: 1; cursor: pointer;
-}
-.map-picker .mp-close:hover { background: rgba(255, 120, 120, 0.22); }
 
 .build-cost-pop {
   position: fixed; z-index: 80; pointer-events: none;

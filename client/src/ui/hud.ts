@@ -183,6 +183,10 @@ export class HUD {
     this.diceTimers.forEach((t) => window.clearTimeout(t));
     this.diceTimers = [];
     this.costPop?.remove();
+    if (this.pickerOutside) {
+      document.removeEventListener("pointerdown", this.pickerOutside, true);
+      this.pickerOutside = null;
+    }
     this.launchPicker?.remove();
     this.board.onViewChange = null;
     this.chat?.destroy();
@@ -399,7 +403,14 @@ export class HUD {
   private hideLaunchPicker(): void {
     this.launchPicker.classList.remove("show");
     this.board.onViewChange = null;
+    if (this.pickerOutside) {
+      document.removeEventListener("pointerdown", this.pickerOutside, true);
+      this.pickerOutside = null;
+    }
   }
+
+  /** Active outside-click handler that cancels the open launch picker. */
+  private pickerOutside: ((e: PointerEvent) => void) | null = null;
 
   /** Pop the colony/trade-ship chooser right over the clicked launch point. The
    *  two ship icons appear on the map (not the center bar); it re-anchors itself
@@ -427,9 +438,6 @@ export class HUD {
     row.appendChild(mkBtn("colonyShip", "Colony Ship", BUILD_COSTS.colonyShip));
     row.appendChild(mkBtn("tradeShip", "Trade Ship", BUILD_COSTS.tradeShip));
     pick.appendChild(row);
-    const close = el(`<button class="mp-close" title="Cancel">✕</button>`);
-    close.addEventListener("click", () => { this.launchPickSite = null; this.hideLaunchPicker(); });
-    pick.appendChild(close);
 
     const reposition = (): void => {
       const p = this.board.pagePosOf(site);
@@ -440,6 +448,23 @@ export class HUD {
     reposition();
     this.board.onViewChange = reposition;
     pick.classList.add("show");
+
+    // Click anywhere outside the picker cancels it (no ✕ button needed). A click
+    // on another launch dot re-fires the board handler, which re-opens here, so
+    // cancel-then-reopen lands the picker on the new point. Registered on the
+    // next tick so the click that *opened* it doesn't immediately close it.
+    if (this.pickerOutside)
+      document.removeEventListener("pointerdown", this.pickerOutside, true);
+    const handler = (e: PointerEvent): void => {
+      if (this.launchPicker.contains(e.target as Node)) return;
+      this.launchPickSite = null;
+      this.hideLaunchPicker();
+    };
+    this.pickerOutside = handler;
+    setTimeout(() => {
+      if (this.pickerOutside === handler)
+        document.addEventListener("pointerdown", handler, true);
+    }, 0);
   }
 
   private render(state: GameState): void {

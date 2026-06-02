@@ -83,11 +83,25 @@ export class ChatBox {
 
     document.body.appendChild(this.toggle);
     document.body.appendChild(this.panel);
+
+    // Clicking anywhere outside the open panel (and not on the toggle) closes it.
+    this.outside = (e: PointerEvent) => {
+      if (!this.open) return;
+      const t = e.target as Node;
+      if (this.panel.contains(t) || this.toggle.contains(t)) return;
+      this.setOpen(false);
+    };
+    document.addEventListener("pointerdown", this.outside, true);
   }
+
+  /** Outside-click handler that closes the panel. */
+  private outside: ((e: PointerEvent) => void) | null = null;
 
   destroy(): void {
     this.replyTimers.forEach((t) => window.clearTimeout(t));
     this.replyTimers = [];
+    if (this.outside) document.removeEventListener("pointerdown", this.outside, true);
+    this.outside = null;
     this.toggle.remove();
     this.panel.remove();
     document.querySelectorAll(".heart-fx").forEach((n) => n.remove());
