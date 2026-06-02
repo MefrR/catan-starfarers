@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(git --version)",
+      "PowerShell($ErrorActionPreference='SilentlyContinue'; node --version; npm --version; \\(Get-Command node\\).Source; \\(Get-Command npm\\).Source)",
+      "PowerShell(winget install --id OpenJS.NodeJS.LTS -e --accept-source-agreements --accept-package-agreements --silent)",
+      "PowerShell($env:Path = \"C:\\\\Program Files\\\\nodejs;\" + $env:Path; npm install 2>&1 | Select-Object -Last 40)",
+      "PowerShell($env:Path = \"C:\\\\Program Files\\\\nodejs;\" + $env:Path; $env:PORT=\"3000\"; $p = Start-Process -FilePath \"node\" -ArgumentList \"--import\",\"tsx\",\"server/src/index.ts\" -PassThru -RedirectStandardOutput \"server_boot.log\" -RedirectStandardError \"server_boot.err.log\" -NoNewWindow; Start-Sleep -Seconds 4; Stop-Process -Id $p.Id -Force; \"----- STDOUT -----\"; Get-Content server_boot.log; \"----- STDERR -----\"; Get-Content server_boot.err.log)",
+      "PowerShell($bin = \"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\Microsoft\\\\WinGet\\\\Packages\\\\oschwartz10612.Poppler_Microsoft.Winget.Source_8wekyb3d8bbwe\\\\poppler-25.07.0\\\\Library\\\\bin\"; & \"$bin\\\\pdfinfo.exe\" \"C:\\\\Users\\\\Admin\\\\Downloads\\\\Catan Starfarers\\\\catan_starfarers_rulebook_eng_190823s_0_0.pdf\" | Select-String \"Pages\"; & \"$bin\\\\pdfinfo.exe\" \"C:\\\\Users\\\\Admin\\\\Downloads\\\\Catan Starfarers\\\\catan_starfarers_almanac_eng_190823s_0.pdf\" | Select-String \"Pages\")",
+      "PowerShell(Add-Type -AssemblyName System.Drawing; $src = \"C:\\\\Users\\\\Admin\\\\Downloads\\\\Catan Starfarers\\\\pdf_pages\\\\rule3hi-3.png\"; $img = [System.Drawing.Image]::FromFile\\($src\\); \"$\\($img.Width\\)x$\\($img.Height\\)\"; $img.Dispose\\(\\))",
+      "mcp__Claude_Preview__preview_start",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__Claude_in_Chrome__select_browser",
+      "mcp__Claude_in_Chrome__navigate",
+      "mcp__Claude_in_Chrome__browser_batch",
+      "mcp__Claude_in_Chrome__tabs_create_mcp",
+      "mcp__Claude_in_Chrome__read_page",
+      "mcp__Claude_in_Chrome__javascript_tool",
+      "mcp__Claude_in_Chrome__computer",
+      "Bash(npx tsc *)",
+      "PowerShell($cmds = 'node','npm','npx' | ForEach-Object { try { \"$_ => \" + \\(Get-Command $_ -ErrorAction Stop\\).Source } catch { \"$_ => MISSING\" } }; $cmds; \"PATH node dirs:\"; $env:Path -split ';' | Where-Object { $_ -match 'node' })",
+      "PowerShell($env:Path = \"C:\\\\Program Files\\\\nodejs;\" + $env:Path; cd \"C:\\\\Users\\\\Admin\\\\Downloads\\\\Catan Starfarers\"; npx tsc -b shared 2>&1 | Select-Object -First 40; \"EXIT=$LASTEXITCODE\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\)\")"
+    ]
+  }
+}

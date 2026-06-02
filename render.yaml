@@ -1,0 +1,25 @@
+# Render Blueprint — single-service deploy for Catan: Starfarers.
+#
+# One web service builds the whole monorepo (shared → client → server) and the
+# Express/Socket.IO server serves BOTH the built client (client/dist) and the
+# realtime API on one port. Render injects $PORT; the server already reads it.
+#
+# Auto-deploy: every push to the connected branch triggers a fresh build+deploy.
+# To use: push this repo to GitHub, then in Render -> "New +" -> "Blueprint",
+# point it at the repo. Render reads this file and provisions the service.
+services:
+  - type: web
+    name: starfarers
+    runtime: node
+    plan: free                     # bump to "starter" if the free instance sleeps too aggressively
+    branch: main
+    autoDeploy: true               # git push -> auto build + deploy
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Single-service: the online client connects back to its own origin, so
+      # VITE_ONLINE_URL is intentionally left unset. Only set it if you split
+      # the client onto a separate static host (then it must point here).

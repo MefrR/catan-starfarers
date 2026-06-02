@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+.env
+# extracted rulebook text (regenerated from PDFs)
+rulebook.txt
+almanac.txt
+# official Catan rulebooks — copyrighted, reference only, never publish
+*.pdf
