@@ -1081,8 +1081,18 @@ export class BoardRenderer {
         const shade = 0x2f7325;
         const lite = 0x8fd66f;
         g.circle(x, y, r * 0.95).fill({ color: skin }).stroke({ color: ink, width: 1.2 });
-        // Shaded lower-right crescent.
-        g.arc(x, y, r * 0.95, -Math.PI * 0.15, Math.PI * 0.85).fill({ color: shade, alpha: 0.5 });
+        // Shaded lower-right crescent. Start the subpath explicitly at the arc's
+        // first point: a bare arc().fill() begins its path at the world origin
+        // [0,0], so the chord fill would fan a green wedge across the board.
+        {
+          const sa = -Math.PI * 0.15;
+          const ea = Math.PI * 0.85;
+          const rr = r * 0.95;
+          g.moveTo(x + Math.cos(sa) * rr, y + Math.sin(sa) * rr)
+            .arc(x, y, rr, sa, ea)
+            .closePath()
+            .fill({ color: shade, alpha: 0.5 });
+        }
         // Surface bumps.
         for (const [bx, by, br] of [
           [-0.35, -0.3, 0.22],
