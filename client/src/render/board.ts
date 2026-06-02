@@ -89,6 +89,18 @@ export class BoardRenderer {
   private panY = 0;
   private static readonly MIN_ZOOM = 0.5;
   private static readonly MAX_ZOOM = 6;
+  // How far past the board's edges the view may pan before it's clamped — ~5cm of
+  // empty "overscroll" on any side, so the map can never be dragged off into the
+  // void where players would get lost. (96 CSS px/in ÷ 2.54 cm/in × 5 cm.)
+  private static readonly PAN_MARGIN = Math.round((96 / 2.54) * 5);
+  // Board content bounds in board-space (set each render) — drives pan clamping.
+  private contentBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+  // Auto-recenter: a double-tap, or 10s of no interaction, glides back to the
+  // fitted middle so a lost/zoomed-in view always returns to the whole map.
+  private idleTimer = 0;
+  private recenterAnim = 0;
+  private lastTapTime = 0;
+  private lastTapPos = { x: 0, y: 0 };
   // The zoom level the board geometry was last *drawn* at. Zoom is baked into the
   // draw scale (so text and strokes stay crisp); between a zoom gesture and the
   // crisp re-render, the container is scaled by zoom/renderedZoom for instant
@@ -199,6 +211,8 @@ export class BoardRenderer {
   }
 
   private applyViewTransform(): void {
+    // Keep the map from being dragged off into empty space before we commit pan.
+    this.clampPan();
     // Geometry is drawn baked at `renderedZoom`; the container only needs to make
     // up the difference to the live zoom (= 1 right after a render). Pan is in
     // screen pixels and is unaffected by this transient scale.
@@ -207,6 +221,70 @@ export class BoardRenderer {
     // FX uses fit-space coords, so it carries the full zoom (old model).
     this.fx.scale.set(this.zoom);
     this.fx.position.set(this.panX, this.panY);
+  }
+
+  /**
+   * Constrain pan so the board can never be pushed more than PAN_MARGIN (~5cm)
+   * of empty space past any screen edge. When the board is *smaller* than the
+   * viewport in an axis (the clamp range inverts), it's snapped to the centre of
+   * that axis instead — so at the fitted zoom the map simply stays put.
+   */
+  private clampPan(): void {
+    const b = this.contentBounds;
+    if (b.maxX === b.minX || b.maxY === b.minY) return; // bounds not set yet
+    const z = this.zoom;
+    const f = this.fit;
+    const sw = this.app.screen.width;
+    const sh = this.app.screen.height;
+    const M = BoardRenderer.PAN_MARGIN;
+    // Board edges on screen (pan excluded — it's the value we're solving for).
+    const bx0 = (f.ox + b.minX * f.scale) * z;
+    const bx1 = (f.ox + b.maxX * f.scale) * z;
+    const by0 = (f.oy + b.minY * f.scale) * z;
+    const by1 = (f.oy + b.maxY * f.scale) * z;
+    const loX = sw - M - bx1;
+    const hiX = M - bx0;
+    this.panX = loX > hiX ? (loX + hiX) / 2 : Math.max(loX, Math.min(hiX, this.panX));
+    const loY = sh - M - by1;
+    const hiY = M - by0;
+    this.panY = loY > hiY ? (loY + hiY) / 2 : Math.max(loY, Math.min(hiY, this.panY));
+  }
+
+  /**
+   * Glide the view back to the fitted middle (zoom 1, centred) over ~380ms.
+   * Fired by a double-tap or after 10s of no map interaction so a lost or
+   * zoomed-in player is always returned to the whole map.
+   */
+  private animateRecenter(): void {
+    if (this.zoom === 1 && this.panX === 0 && this.panY === 0) return; // already there
+    cancelAnimationFrame(this.recenterAnim);
+    const z0 = this.zoom;
+    const px0 = this.panX;
+    const py0 = this.panY;
+    const t0 = performance.now();
+    const dur = 380;
+    const ease = (t: number): number => 1 - Math.pow(1 - t, 3);
+    const step = (now: number): void => {
+      const t = Math.min(1, (now - t0) / dur);
+      const e = ease(t);
+      this.zoom = z0 + (1 - z0) * e;
+      this.panX = px0 + (0 - px0) * e;
+      this.panY = py0 + (0 - py0) * e;
+      this.applyViewTransform();
+      if (t < 1) {
+        this.recenterAnim = requestAnimationFrame(step);
+      } else {
+        this.recenterAnim = 0;
+        if (this.last) this.render(this.last); // bake crisp at zoom 1
+      }
+    };
+    this.recenterAnim = requestAnimationFrame(step);
+  }
+
+  /** (Re)start the 10s idle countdown that auto-recenters the map. */
+  private resetIdleTimer(): void {
+    window.clearTimeout(this.idleTimer);
+    this.idleTimer = window.setTimeout(() => this.animateRecenter(), 10000);
   }
 
   /**
@@ -255,7 +333,9 @@ export class BoardRenderer {
       "wheel",
       (e: WheelEvent) => {
         e.preventDefault();
+        cancelAnimationFrame(this.recenterAnim);
         this.zoomToward(e.clientX, e.clientY, e.deltaY < 0 ? 1.12 : 1 / 1.12);
+        this.resetIdleTimer();
       },
       { passive: false },
     );
@@ -267,6 +347,9 @@ export class BoardRenderer {
     let pinchMid = { x: 0, y: 0 };
 
     canvas.addEventListener("pointerdown", (e: PointerEvent) => {
+      cancelAnimationFrame(this.recenterAnim); // grabbing cancels an auto-recenter
+      this.recenterAnim = 0;
+      this.resetIdleTimer();
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       moved = false;
       if (pts.size === 2) {
@@ -281,6 +364,7 @@ export class BoardRenderer {
     window.addEventListener("pointermove", (e: PointerEvent) => {
       const prev = pts.get(e.pointerId);
       if (!prev) return;
+      this.resetIdleTimer(); // active dragging keeps the map put
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
       if (pts.size >= 2) {
@@ -320,12 +404,30 @@ export class BoardRenderer {
     });
 
     const endPointer = (e: PointerEvent): void => {
+      // A single finger/click lifted without dragging = a tap. Two taps in quick
+      // succession at roughly the same spot recenters the map to the middle.
+      const wasTap = !moved && pts.size === 1 && e.type === "pointerup";
       pts.delete(e.pointerId);
       if (pts.size < 2) pinchDist = 0;
       if (pts.size === 0) canvas.style.cursor = "";
+      if (wasTap) {
+        const now = performance.now();
+        const near =
+          Math.hypot(e.clientX - this.lastTapPos.x, e.clientY - this.lastTapPos.y) < 30;
+        if (now - this.lastTapTime < 350 && near) {
+          this.lastTapTime = 0;
+          this.animateRecenter();
+        } else {
+          this.lastTapTime = now;
+          this.lastTapPos = { x: e.clientX, y: e.clientY };
+        }
+      }
+      this.resetIdleTimer();
     };
     window.addEventListener("pointerup", endPointer);
     window.addEventListener("pointercancel", endPointer);
+    // Start the idle countdown immediately so an untouched map self-centres too.
+    this.resetIdleTimer();
   }
 
   /** Reset zoom/pan to the fitted default. */
@@ -1168,6 +1270,7 @@ export class BoardRenderer {
     const maxX = Math.max(...xs);
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
+    this.contentBounds = { minX, maxX, minY, maxY };
     const w = this.app.screen.width;
     const h = this.app.screen.height;
     const pad = 80;
