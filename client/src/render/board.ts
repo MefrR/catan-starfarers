@@ -466,12 +466,24 @@ export class BoardRenderer {
    * against the real viewport at every size (and on mobile address-bar shifts).
    */
   private syncSize(): void {
+    this.ensureSize();
+    if (this.last) this.render(this.last);
+  }
+
+  /**
+   * Match the renderer (and so `app.screen`) to the live window size *without*
+   * triggering a render. Called at the very top of `render()` so the fit is
+   * always computed against the real viewport — Pixi's `resizeTo: window` only
+   * applies on the next animation frame, so `app.screen` is otherwise stale
+   * right after any window/layout change, which is what shoved the map to one
+   * side until the window was maximized.
+   */
+  private ensureSize(): void {
     const w = window.innerWidth;
     const h = window.innerHeight;
     if (w > 0 && h > 0 && (this.app.screen.width !== w || this.app.screen.height !== h)) {
       this.app.renderer.resize(w, h);
     }
-    if (this.last) this.render(this.last);
   }
 
   /** Highlight a set of intersections (e.g. legal move destinations). */
@@ -494,6 +506,10 @@ export class BoardRenderer {
 
   render(state: GameState): void {
     this.last = state;
+    // Always fit against the live viewport: Pixi defers its resizeTo:window to
+    // the next frame, so without this the map can be laid out for a stale
+    // (larger) canvas and end up shoved off to one side.
+    this.ensureSize();
     this.root.removeChildren();
 
     const fit = this.computeTransform(state);
