@@ -395,19 +395,12 @@ function doProduction(state: GameState, rng: Rng): void {
     distributeProduction(state, sum, rng);
   }
 
-  // Active roller draws free reserve-pile cards based on current VP. On a 7 this
-  // happens only after the steal/discard resolves, so defer it while a steal is
-  // still pending; otherwise draw it right away.
-  const draws = reserveDrawForVP(roller.victoryPoints);
-  if (draws > 0) {
-    // Defer while a steal or any discard is still outstanding (a 7); the draw
-    // fires once the last of those resolves (in stealTarget / discard).
-    const deferred = state.phaseState.awaitingSteal || !!state.phaseState.pendingDiscards;
-    if (deferred) {
-      state.phaseState.pendingReserveDraw = { playerId: roller.id, count: draws };
-    } else {
-      drawReserveBonus(state, rng);
-    }
+  // On a normal roll the active player draws free reserve-pile cards based on VP
+  // (the catch-up bonus). A 7 has NO reserve bonus: its effect is the steal plus
+  // a single bank card for every other player.
+  if (sum !== 7) {
+    const draws = reserveDrawForVP(roller.victoryPoints);
+    if (draws > 0) drawReserveBonus(state, rng);
   }
 
   state.phaseState.phase = "tradeBuild";
@@ -435,6 +428,15 @@ function drawReserveBonus(state: GameState, rng: Rng): void {
   }
 }
 
+/** A planet numbered 2 also produces on 11, and a planet numbered 3 also on 12
+ *  (the rare 2/3/11/12 rolls are paired so those planets fire twice as often). */
+function producesOn(planetNumber: number | null, rolled: number): boolean {
+  if (planetNumber == null) return false;
+  if (planetNumber === 2) return rolled === 2 || rolled === 11;
+  if (planetNumber === 3) return rolled === 3 || rolled === 12;
+  return planetNumber === rolled;
+}
+
 function distributeProduction(state: GameState, rolled: number, rng: Rng): void {
   const planetById = new Map<string, { color: string; rolled: boolean }>();
   for (const sector of state.sectors) {
@@ -442,14 +444,16 @@ function distributeProduction(state: GameState, rolled: number, rng: Rng): void 
       if (planet.special !== "none") continue; // pirate base / ice planet block production
       planetById.set(planet.id, {
         color: planet.color,
-        rolled: planet.explored && planet.number === rolled,
+        rolled: planet.explored && producesOn(planet.number, rolled),
       });
     }
   }
 
   const playerById = new Map(state.players.map((p) => [p.id, p]));
   const producedAny = new Set<string>();
+  const shortfall = new Set<Resource>();
   const gains: string[] = [];
+  state.phaseState.productionShortfall = undefined;
   for (const b of state.buildings) {
     const inter = state.intersections[b.intersectionId];
     if (!inter) continue;
@@ -463,6 +467,7 @@ function distributeProduction(state: GameState, rolled: number, rng: Rng): void 
       const res = PLANET_RESOURCE[info.color as keyof typeof PLANET_RESOURCE];
       const bonus = greenFolk.has(res) ? 1 : 0;
       const got = payFromBank(state.supplyBank, owner.hand, res, yieldPer + bonus);
+      if (got < yieldPer) shortfall.add(res); // the bank ran dry on this resource
       if (got > 0) {
         // Of what was actually paid, the amount above the base yield is the
         // Green Folk bonus (P6h) — the HUD flies those from the friendship card.
@@ -512,6 +517,12 @@ function distributeProduction(state: GameState, rolled: number, rng: Rng): void 
 
   if (gains.length) log(state, `Production: ${gains.join(", ")}.`);
   else log(state, "Production: nobody produced on this number.");
+
+  // If the bank ran out of a resource that was owed this roll, tell everyone.
+  if (shortfall.size) {
+    state.phaseState.productionShortfall = [...shortfall];
+    for (const r of shortfall) log(state, `The bank is out of ${r} — that production was lost.`);
+  }
 }
 
 // --- Flight phase ---

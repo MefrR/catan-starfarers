@@ -5,7 +5,6 @@ import { generateBoard } from "./board.js";
 import { recomputeVp } from "./engine.js";
 import {
   PLAYER_PIECES,
-  RESOURCE_CARDS_PER_TYPE,
   RESERVE_PER_TYPE,
   DEFAULT_TARGET_VP,
 } from "./constants.js";
@@ -126,7 +125,9 @@ export function createGameState(
     ships: [],
     tradeStations: [],
     reservePile: bagOf(RESERVE_PER_TYPE),
-    supplyBank: bagOf(RESOURCE_CARDS_PER_TYPE - RESERVE_PER_TYPE),
+    // The supply bank holds 20 of each resource (100 cards total). Production can
+    // run a resource dry — handled in distributeProduction with a notice to all.
+    supplyBank: bagOf(20),
     encounterDeck: shuffle(Array.from({ length: 32 }, (_, i) => i + 1)),
     encounterDiscard: [],
     config: cfg,

@@ -851,7 +851,11 @@ export class BoardRenderer {
           const hot = planet.number === 6 || planet.number === 8;
           const bx = px;
           const by = py + rad * 0.86;
-          const br = rad * 0.52;
+          // 2 also produces on 11, and 3 also on 12 — show the pair on the token.
+          const numText =
+            planet.number === 2 ? "2/11" : planet.number === 3 ? "3/12" : String(planet.number);
+          const wide = numText.length > 2;
+          const br = rad * (wide ? 0.66 : 0.52);
           planetLayer.addChild(
             new Graphics()
               .circle(bx, by, br)
@@ -859,7 +863,7 @@ export class BoardRenderer {
               .stroke({ color: hot ? 0xff5a4d : 0x8aa0c8, width: 1.5, alpha: 0.9 }),
           );
           planetLayer.addChild(
-            this.label(String(planet.number), bx, by, br * 1.05, hot ? 0xff7a6d : 0xeaf0ff, true),
+            this.label(numText, bx, by, br * (wide ? 0.82 : 1.05), hot ? 0xff7a6d : 0xeaf0ff, true),
           );
         }
       }

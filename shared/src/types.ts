@@ -264,6 +264,9 @@ export interface GamePhaseState {
   /** Free space jumps granted (e.g. by an encounter): the player may move one ship
    *  to ANY open intersection on the map. Keyed by player id; decremented on use. */
   spaceJumps?: Record<PlayerId, number>;
+  /** Resources that production could NOT pay this roll because the bank ran dry —
+   *  the client shows an "out of X" notice to everyone. Cleared on the next roll. */
+  productionShortfall?: Resource[];
   /** After a 7: players who still owe a discard, and how many cards. */
   pendingDiscards?: Record<PlayerId, number>;
   /** After a 7 + discards: roller must pick a player to steal from. */

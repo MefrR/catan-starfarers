@@ -533,6 +533,12 @@ export class HUD {
       this.diceTimers.push(
         window.setTimeout(() => this.playResourceGains(state, me0), 950),
       );
+      // Bank ran out of a resource this roll — tell everyone (once per roll).
+      const short = ps.productionShortfall ?? [];
+      if (short.length) {
+        const list = short.map((r) => RESOURCE_LABEL[r]).join(", ");
+        this.diceTimers.push(window.setTimeout(() => this.centerNote(`Bank empty: no ${list} produced — not enough in the bank.`), 1100));
+      }
     }
     // Reserve-pile draws (the bonus 1–2 cards) animate the SPECIFIC resources
     // gained so the player can see exactly what they received. Gated by seq so
@@ -1618,7 +1624,16 @@ export class HUD {
       }
 
       case "production":
-        actions.appendChild(btn("🎲 Roll dice", () => this.act({ t: "rollDice" })));
+        {
+          // Disable on first tap so a fast double-tap (common on touch) can't
+          // fire a second rollDice after the phase already advanced — which
+          // surfaced a spurious "Not the production phase." error.
+          const rollBtn = btn("🎲 Roll dice", () => {
+            (rollBtn as HTMLButtonElement).disabled = true;
+            this.act({ t: "rollDice" });
+          });
+          actions.appendChild(rollBtn);
+        }
         break;
 
       case "tradeBuild": {
