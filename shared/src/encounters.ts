@@ -259,6 +259,84 @@ function pirateCombat(ctx: EncounterCtx, threshold: number, reward: () => void):
   }
 }
 
+/** Shake speed for a player: 2 balls + boosters + scientist bonus. */
+function shakeSpeed(p: PlayerState, rng: Rng): number {
+  const bag = [...MOTHERSHIP_BALLS];
+  for (let i = bag.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [bag[i], bag[j]] = [bag[j]!, bag[i]!];
+  }
+  return BALL_VALUE[bag[0]!] + BALL_VALUE[bag[1]!] + p.upgrades.booster + scientistBonus(p).speed;
+}
+
+/** The opponent `offset` seats away (skipping the subject; wraps; offset may be
+ *  negative for "to the left"). Falls back to the nearest other player. */
+function relativeOpponent(state: GameState, subject: PlayerState, offset: number): PlayerState | null {
+  const n = state.players.length;
+  if (n < 2) return null;
+  const me = state.players.findIndex((p) => p.id === subject.id);
+  for (let step = 0; step < n; step++) {
+    const idx = ((me + offset + step * Math.sign(offset || 1)) % n + n) % n;
+    if (idx !== me) return state.players[idx]!;
+  }
+  return state.players.find((p) => p.id !== subject.id) ?? null;
+}
+
+/** A duel: subject shakes vs a relative opponent on the given stat; subject wins
+ *  on a tie. Logs both rolls (the spectators see the result; the chooser sees the
+ *  outcome only after committing). */
+function duel(
+  ctx: EncounterCtx,
+  offset: number,
+  stat: "combat" | "speed",
+): boolean {
+  const { state, subject, rng, log } = ctx;
+  const opp = relativeOpponent(state, subject, offset);
+  const mine = stat === "combat" ? shakeCombat(subject, rng) : shakeSpeed(subject, rng);
+  const theirs = opp ? (stat === "combat" ? shakeCombat(opp, rng) : shakeSpeed(opp, rng)) : 0;
+  const label = stat === "combat" ? "strength" : "speed";
+  log(`${subject.name} ${label} ${mine} vs ${opp?.name ?? "the void"} ${theirs}.`);
+  return mine >= theirs;
+}
+
+/** Grant a free trade ship (returned to the player's supply to deploy). */
+function grantTradeShip(p: PlayerState, log: (s: string) => void): void {
+  p.supply.transportShips++;
+  log(`${p.name} receives a free trade ship in their supply.`);
+}
+
+/** Rob 1 random resource from every opponent into the subject's hand. */
+function robEachOpponent(state: GameState, subject: PlayerState, rng: Rng, log: (s: string) => void): void {
+  for (const p of state.players) {
+    if (p.id === subject.id) continue;
+    const pool: Resource[] = [];
+    for (const r of RESOURCES) for (let i = 0; i < p.hand[r]; i++) pool.push(r);
+    if (pool.length === 0) continue;
+    const r = pool[Math.floor(rng() * pool.length)]!;
+    p.hand[r]--;
+    subject.hand[r]++;
+  }
+  log(`${subject.name} plunders 1 resource from each opponent.`);
+}
+
+/** Space-jump reward: this engine already allows a free jump during flight, so
+ *  the reward grants a generous extra move budget to make a long jump this turn. */
+function spaceJumpReward(state: GameState, p: PlayerState, log: (s: string) => void): void {
+  const cur = state.phaseState.moveBudget ?? state.phaseState.shake?.speed ?? POST_ENCOUNTER_BASE_SPEED;
+  state.phaseState.moveBudget = cur + 6;
+  log(`${p.name} may make a space jump (extra movement this flight).`);
+}
+
+/** Remove one of the subject's mothership upgrades (engine-picked order). */
+function scrapUpgrade(p: PlayerState, log: (s: string) => void): void {
+  const order: UpgradeKind[] = ["freightPod", "cannon", "booster"];
+  const u = order.find((k) => p.upgrades[k] > 0);
+  if (u) {
+    p.upgrades[u]--;
+    log(`${p.name} loses a ${u} (ship damaged).`);
+  }
+}
+
 // --- card builders ------------------------------------------------------------
 
 /** Friendly merchant: offer 0-3 resources, get a scaled reward. */
@@ -330,59 +408,6 @@ function disguisedPirateCard(id: number): EncounterCard {
         gainFame(subject, 1);
         log(`${subject.name} seizes the pirate's cargo: +2 carbon, +1 fame.`);
       });
-    },
-  };
-}
-
-/** Pirate demands tribute: surrender (yes) or fight (no). */
-function pirateDemandCard(id: number, threshold: number): EncounterCard {
-  return {
-    id,
-    category: "pirate",
-    prompt: "yesno",
-    title: "Space Pirates",
-    text: "Pirates demand 2 of your resources. Do you surrender them?",
-    yesHint: "Surrender 2 resources — they leave peacefully",
-    noHint: `Fight! (combat ≥${threshold} → +2 carbon & +1 fame)`,
-    resolve: (ctx) => {
-      const { state, subject, log } = ctx;
-      if (ctx.choice === true) {
-        requestLoss(ctx, 2);
-        log(`${subject.name} surrenders 2 resources of their choice; the pirates leave peacefully.`);
-      } else {
-        pirateCombat(ctx, threshold, () => {
-          takeSpecific(state, subject, "carbon", 2);
-          gainFame(subject, 1);
-          log(`${subject.name} seizes the pirate's cargo: +2 carbon, +1 fame.`);
-        });
-      }
-    },
-  };
-}
-
-/** Distress call: help (yes) costs a resource for fame + upgrade, or refuse (no). */
-function distressCard(id: number): EncounterCard {
-  return {
-    id,
-    category: "distress",
-    prompt: "yesno",
-    title: "Distress Call",
-    text: "A stranded ship calls for help. Do you assist?",
-    yesHint: "Give 1 resource → +1 fame medal piece & a free upgrade",
-    noHint: "Ignore them → −1 fame medal piece",
-    resolve: (ctx) => {
-      const { subject, log } = ctx;
-      if (ctx.choice === true) {
-        requestLoss(ctx, 1);
-        gainFame(subject, 1);
-        const up = addFreeUpgrade(subject);
-        log(
-          `${subject.name} helps (gives 1 resource of their choice): +1 fame${up ? `, free ${up}` : ""}.`,
-        );
-      } else {
-        loseFame(subject, 1);
-        log(`${subject.name} ignores the distress call: -1 fame.`);
-      }
     },
   };
 }
@@ -482,31 +507,387 @@ function wearTearCard(id: number, threshold: number, councilFame: boolean): Enco
   };
 }
 
-/** Pure-bounty auto cards: fame / free upgrade / resources, no choice. */
-function bountyCard(id: number, kind: "fame" | "upgrade" | "resources"): EncounterCard {
-  const text =
-    kind === "fame"
-      ? "You are celebrated across the galaxy."
-      : kind === "upgrade"
-        ? "An ally gifts you new technology."
-        : "You salvage a derelict freighter.";
+/** Merchant prince: a stingy offer is punished, a generous one earns a ship. */
+function merchantPrinceCard(id: number): EncounterCard {
   return {
     id,
-    category: "bounty",
-    prompt: "confirm",
-    title: "Fortune",
-    text,
+    category: "merchant",
+    prompt: "number",
+    title: "A Merchant Prince",
+    text: "Offer 0-3 resources as a gift.",
+    choiceHints: [
+      "Offer nothing — he sabotages a ship & −1 fame",
+      "Give 1 → he's unimpressed, −1 fame",
+      "Give 2 → +1 resource & +1 fame medal piece",
+      "Give 3 → he gifts you a trade ship",
+    ],
     resolve: (ctx) => {
       const { state, subject, log } = ctx;
-      if (kind === "fame") {
+      const offer = offerWithinHand(ctx);
+      if (offer > 0) requestLoss(ctx, offer);
+      if (offer <= 0) {
+        loseFame(subject, 1);
+        damageOneShip(ctx);
+        log(`The prince is insulted: −1 fame and a ship is sabotaged.`);
+      } else if (offer === 1) {
+        loseFame(subject, 1);
+        log(`The prince is unimpressed: −1 fame.`);
+      } else if (offer === 2) {
+        takeChoice(state, subject, 1);
         gainFame(subject, 1);
-        log(`${subject.name} receives 1 fame medal piece.`);
-      } else if (kind === "upgrade") {
-        const up = addFreeUpgrade(subject);
-        log(up ? `${subject.name} installs a free ${up}.` : `${subject.name}'s upgrades are maxed.`);
+        log(`The prince is satisfied: +1 resource, +1 fame.`);
+      } else {
+        grantTradeShip(subject, log);
+        log(`The prince is delighted and gifts ${subject.name} a trade ship.`);
+      }
+    },
+  };
+}
+
+/** A grasping merchant: a small gift lets him shake down your rivals for you. */
+function merchantRaiderCard(id: number): EncounterCard {
+  return {
+    id,
+    category: "merchant",
+    prompt: "number",
+    title: "A Grasping Merchant",
+    text: "Offer 0-3 resources as a gift.",
+    choiceHints: [
+      "Offer nothing — a pity gift: +1 food, −1 fame",
+      "Give 1 → he robs each rival for you, but −2 fame",
+      "Give 2 → +1 resource & +1 fame medal piece",
+      "Give 3 → +2 resources & +1 fame medal piece",
+    ],
+    resolve: (ctx) => {
+      const { state, subject, rng, log } = ctx;
+      const offer = offerWithinHand(ctx);
+      if (offer > 0) requestLoss(ctx, offer);
+      if (offer <= 0) {
+        takeSpecific(state, subject, "food", 1);
+        loseFame(subject, 1);
+        log(`A pity gift: +1 food, −1 fame.`);
+      } else if (offer === 1) {
+        robEachOpponent(state, subject, rng, log);
+        loseFame(subject, 2);
+        log(`The galaxy frowns on the shakedown: −2 fame.`);
+      } else if (offer === 2) {
+        takeChoice(state, subject, 1);
+        gainFame(subject, 1);
+        log(`Satisfied: +1 resource, +1 fame.`);
       } else {
         takeChoice(state, subject, 2);
-        log(`${subject.name} salvages 2 resources.`);
+        gainFame(subject, 1);
+        log(`Delighted: +2 resources, +1 fame.`);
+      }
+    },
+  };
+}
+
+/** Pirate demands tribute: surrender (yes) or duel a relative opponent (no). */
+function pirateDuelDemandCard(
+  id: number,
+  offset: number,
+  opts: { surrenderFame?: number; winCarbon?: boolean } = {},
+): EncounterCard {
+  return {
+    id,
+    category: "pirate",
+    prompt: "yesno",
+    title: "Space Pirates",
+    text: "Pirates demand 2 of your resources. Do you surrender them?",
+    yesHint: `Surrender 2 resources${opts.surrenderFame ? ` (−${opts.surrenderFame} fame)` : ""}`,
+    noHint: "Fight! Shake vs a rival's strength",
+    resolve: (ctx) => {
+      const { state, subject, log } = ctx;
+      if (ctx.choice === true) {
+        requestLoss(ctx, 2);
+        if (opts.surrenderFame) loseFame(subject, opts.surrenderFame);
+        log(`${subject.name} surrenders 2 resources to the pirates.`);
+        return;
+      }
+      if (duel(ctx, offset, "combat")) {
+        if (opts.winCarbon) takeSpecific(state, subject, "carbon", 2);
+        else grantTradeShip(subject, log);
+        gainFame(subject, 1);
+        log(`Victory! ${subject.name} seizes the pirate's prize, +1 fame.`);
+      } else {
+        gainFame(subject, 1);
+        scrapUpgrade(subject, log);
+        log(`Defeat, but ${subject.name} earns 1 fame for their courage.`);
+      }
+    },
+  };
+}
+
+/** Pirate attacks: flee (yes) on boosters or fight (no) a relative opponent. */
+function pirateFleeCard(id: number, offset: number, win: "upgrade" | "ship"): EncounterCard {
+  return {
+    id,
+    category: "pirate",
+    prompt: "yesno",
+    title: "Pirate Ambush",
+    text: "A pirate attacks! Do you flee?",
+    yesHint: "Flee — escape if your boosters beat theirs (else fight)",
+    noHint: "Stand and fight — shake vs their strength",
+    resolve: (ctx) => {
+      const { state, subject, log } = ctx;
+      const opp = relativeOpponent(state, subject, offset);
+      if (ctx.choice === true) {
+        if (!opp || subject.upgrades.booster >= opp.upgrades.booster) {
+          log(`${subject.name} outruns the pirate and escapes.`);
+          return;
+        }
+        log(`${subject.name} is too slow to flee — forced to fight!`);
+      }
+      if (duel(ctx, offset, "combat")) {
+        if (win === "upgrade") {
+          addFreeUpgrade(subject);
+          gainFame(subject, 1);
+          log(`Victory! ${subject.name} salvages tech: a free upgrade, +1 fame.`);
+        } else {
+          grantTradeShip(subject, log);
+          log(`Victory! ${subject.name} captures the pirate ship.`);
+        }
+      } else {
+        if (win === "upgrade") scrapUpgrade(subject, log);
+        else damageOneShip(ctx);
+        log(`Defeat — ${subject.name}'s ship is damaged.`);
+      }
+    },
+  };
+}
+
+/** Pirate offers to rob your rivals for a bribe: pay 1 (yes), then a shake
+ *  decides the outcome; refuse (no) for an honesty fame. */
+function pirateBribeCard(id: number, refuseFame: number): EncounterCard {
+  return {
+    id,
+    category: "pirate",
+    prompt: "yesno",
+    title: "A Pirate's Bargain",
+    text: "A pirate offers to rob your rivals for 1 resource. Pay him?",
+    yesHint: "Pay 1 resource — then a risky shake decides the haul",
+    noHint: refuseFame ? "Refuse — +1 fame for your honesty" : "Refuse and fly on",
+    resolve: (ctx) => {
+      const { state, subject, rng, log } = ctx;
+      if (ctx.choice !== true) {
+        if (refuseFame) gainFame(subject, refuseFame);
+        log(`${subject.name} refuses the pirate's bargain.`);
+        return;
+      }
+      requestLoss(ctx, 1);
+      const roll = Math.floor(rng() * 5) + 1; // 1..5
+      if (roll <= 2) {
+        robEachOpponent(state, subject, rng, log);
+      } else if (roll <= 4) {
+        robEachOpponent(state, subject, rng, log);
+        loseFame(subject, 1);
+        log(`Word gets out: −1 fame.`);
+      } else {
+        loseFame(subject, 1);
+        log(`The pirate cheats ${subject.name} and vanishes: −1 fame.`);
+      }
+    },
+  };
+}
+
+/** Pirate "fair trade": accept (yes) to swap 1 for 2, then a shake risks the
+ *  galactic police; decline (no) for an honesty fame on some cards. */
+function pirateTradeCard(id: number, refuseFame: number): EncounterCard {
+  return {
+    id,
+    category: "pirate",
+    prompt: "yesno",
+    title: "Black-Market Trade",
+    text: "Pirates offer 2 resources for 1 of yours. Accept the trade?",
+    yesHint: "Trade 1 → 2, but the police might confiscate it",
+    noHint: refuseFame ? "Decline — +1 fame for your honesty" : "Decline and fly on",
+    resolve: (ctx) => {
+      const { state, subject, rng, log } = ctx;
+      if (ctx.choice !== true) {
+        if (refuseFame) gainFame(subject, refuseFame);
+        log(`${subject.name} declines the black-market trade.`);
+        return;
+      }
+      requestLoss(ctx, 1);
+      takeChoice(state, subject, 2);
+      const roll = Math.floor(rng() * 5) + 1; // 1..5
+      if (roll === 3) {
+        // Police confiscate the goods just received.
+        let conf = 2;
+        for (const r of RESOURCES) {
+          while (conf > 0 && subject.hand[r] > 0) { subject.hand[r]--; state.supplyBank[r]++; conf--; }
+        }
+        loseFame(subject, 1);
+        log(`Galactic police confiscate the goods: −1 fame.`);
+      } else if (roll >= 4) {
+        loseFame(subject, 1);
+        log(`${subject.name} is accused of trafficking: −1 fame.`);
+      } else {
+        if (refuseFame) gainFame(subject, refuseFame);
+        log(`The trade goes smoothly.`);
+      }
+    },
+  };
+}
+
+/** Rescue under fire: choose to fight (yes) a relative opponent, or flee (no). */
+function rescueDuelCard(
+  id: number,
+  offset: number,
+  win: "resources" | "goods" | "spaceJump" | "ship",
+  refuseFame: number,
+): EncounterCard {
+  return {
+    id,
+    category: "distress",
+    prompt: "yesno",
+    title: "Rescue Under Fire",
+    text: "A ship is besieged by pirates. Come to the rescue?",
+    yesHint: "Fight the pirates — shake vs their strength",
+    noHint: refuseFame ? "Refuse — −1 fame, your cowardice is known" : "Fly on",
+    resolve: (ctx) => {
+      const { state, subject, log } = ctx;
+      if (ctx.choice !== true) {
+        if (refuseFame) loseFame(subject, refuseFame);
+        log(`${subject.name} declines the rescue.`);
+        return;
+      }
+      if (duel(ctx, offset, "combat")) {
+        if (win === "resources") takeChoice(state, subject, 2);
+        else if (win === "goods") takeSpecific(state, subject, "goods", 2);
+        else if (win === "ship") grantTradeShip(subject, log);
+        else spaceJumpReward(state, subject, log);
+        gainFame(subject, 1);
+        log(`Victory! ${subject.name} saves the ship, +1 fame.`);
+      } else {
+        damageOneShip(ctx);
+        log(`Defeat — a ship is damaged.`);
+      }
+    },
+  };
+}
+
+/** Distress near a sun: race to help (yes) on speed, or refuse (no). */
+function distressSpeedCard(
+  id: number,
+  offset: number,
+  win: "upgrade" | "ship" | "rob",
+  refuseFame: number,
+): EncounterCard {
+  return {
+    id,
+    category: "distress",
+    prompt: "yesno",
+    title: "Distress Call",
+    text: "A ship is falling into a sun. Respond to the call?",
+    yesHint: "Race to help — shake vs a rival's speed",
+    noHint: refuseFame ? "Ignore it — −1 fame" : "Fly on",
+    resolve: (ctx) => {
+      const { state, subject, rng, log } = ctx;
+      if (ctx.choice !== true) {
+        if (refuseFame) loseFame(subject, refuseFame);
+        log(`${subject.name} ignores the distress call.`);
+        return;
+      }
+      if (duel(ctx, offset, "speed")) {
+        if (win === "upgrade") addFreeUpgrade(subject);
+        else if (win === "ship") grantTradeShip(subject, log);
+        else robEachOpponent(state, subject, rng, log);
+        gainFame(subject, 1);
+        log(`Rescue succeeds! +1 fame.`);
+      } else {
+        scrapUpgrade(subject, log);
+        log(`The rescue fails — a ship is damaged.`);
+      }
+    },
+  };
+}
+
+/** Wormhole: attempt a space jump (yes) on speed, or decline (no). */
+function wormholeCard(id: number, offset: number): EncounterCard {
+  return {
+    id,
+    category: "distress",
+    prompt: "yesno",
+    title: "A Wormhole",
+    text: "A wormhole shimmers ahead. Attempt a space jump?",
+    yesHint: "Attempt the jump — shake vs a rival's speed",
+    noHint: "Decline and fly on",
+    resolve: (ctx) => {
+      const { state, subject, log } = ctx;
+      if (ctx.choice !== true) {
+        log(`${subject.name} steers clear of the wormhole.`);
+        return;
+      }
+      if (duel(ctx, offset, "speed")) {
+        spaceJumpReward(state, subject, log);
+        log(`The jump succeeds!`);
+      } else {
+        damageOneShip(ctx);
+        log(`The jump destabilizes — a ship is damaged.`);
+      }
+    },
+  };
+}
+
+/** Travelers reward a space jump on a generous donation. */
+function travelerJumpCard(id: number): EncounterCard {
+  return {
+    id,
+    category: "traveler",
+    prompt: "number",
+    title: "Wandering Travelers",
+    text: "Donate 0-3 resources to the travelers.",
+    choiceHints: [
+      "Donate nothing — they curse you: scrap an upgrade, −1 fame",
+      "Give 1 → +1 fame medal piece",
+      "Give 2 → they grant a space jump",
+      "Give 3 → they grant a space jump",
+    ],
+    resolve: (ctx) => {
+      const { state, subject, log } = ctx;
+      const offer = offerWithinHand(ctx);
+      if (offer > 0) requestLoss(ctx, offer);
+      if (offer <= 0) {
+        scrapUpgrade(subject, log);
+        loseFame(subject, 1);
+        log(`The travelers curse ${subject.name}.`);
+      } else if (offer === 1) {
+        gainFame(subject, 1);
+        log(`The travelers bless ${subject.name}: +1 fame.`);
+      } else {
+        spaceJumpReward(state, subject, log);
+      }
+    },
+  };
+}
+
+/** Travelers gift a trade ship on a generous donation. */
+function travelerShipCard(id: number): EncounterCard {
+  return {
+    id,
+    category: "traveler",
+    prompt: "number",
+    title: "Wandering Travelers",
+    text: "Donate 0-3 resources to the travelers.",
+    choiceHints: [
+      "Donate nothing — they drift away",
+      "Give 1 → +1 fame medal piece",
+      "Give 2 → +1 fame medal piece",
+      "Give 3 → they gift you a trade ship",
+    ],
+    resolve: (ctx) => {
+      const { subject, log } = ctx;
+      const offer = offerWithinHand(ctx);
+      if (offer > 0) requestLoss(ctx, offer);
+      if (offer <= 0) {
+        log(`The travelers drift away.`);
+      } else if (offer <= 2) {
+        gainFame(subject, 1);
+        log(`The travelers are grateful: +1 fame.`);
+      } else {
+        grantTradeShip(subject, log);
       }
     },
   };
@@ -515,37 +896,51 @@ function bountyCard(id: number, kind: "fame" | "upgrade" | "resources"): Encount
 // --- the deck (32 cards) ------------------------------------------------------
 
 function buildDeck(): Record<number, EncounterCard> {
+  // Rebuilt to mirror the printed encounter deck (offsets: +1 = the player to
+  // your right, -1 = your left, ±2 = two seats over). Outcomes stay hidden from
+  // the chooser; spectators see the result.
   const cards: EncounterCard[] = [
+    // Merchants (friendly offers)
     merchantCard(1),
     merchantCard(2),
     merchantCard(3),
-    merchantCard(4),
-    merchantCard(5),
-    merchantCard(6),
+    merchantPrinceCard(4),
+    merchantPrinceCard(5),
+    merchantRaiderCard(6),
+    // Merchant that turns out to be a pirate
     disguisedPirateCard(7),
     disguisedPirateCard(8),
-    pirateDemandCard(9, 5),
-    pirateDemandCard(10, 6),
-    pirateDemandCard(11, 7),
-    pirateDemandCard(12, 7),
-    pirateDemandCard(13, 8),
-    pirateDemandCard(14, 8),
-    pirateDemandCard(15, 9),
-    pirateDemandCard(16, 10),
-    distressCard(17),
-    distressCard(18),
-    distressCard(19),
-    distressCard(20),
-    bountyCard(21, "fame"),
-    bountyCard(22, "fame"),
-    bountyCard(23, "upgrade"),
-    bountyCard(24, "upgrade"),
-    bountyCard(25, "resources"),
-    bountyCard(26, "resources"),
+    // Pirates demand tribute — surrender or duel a rival
+    pirateDuelDemandCard(9, 1, { winCarbon: true }),
+    pirateDuelDemandCard(10, 2, { surrenderFame: 1, winCarbon: true }),
+    pirateDuelDemandCard(11, 1, {}),
+    // Pirate ambush — flee on boosters or fight
+    pirateFleeCard(12, 1, "upgrade"),
+    pirateFleeCard(13, -1, "ship"),
+    pirateFleeCard(14, -2, "upgrade"),
+    // Pirate's bargain — bribe to rob your rivals
+    pirateBribeCard(15, 1),
+    pirateBribeCard(16, 0),
+    // Black-market trade — risk the galactic police
+    pirateTradeCard(17, 1),
+    pirateTradeCard(18, 0),
+    // Rescue a ship under fire (combat vs a rival)
+    rescueDuelCard(19, 1, "resources", 1),
+    rescueDuelCard(20, 2, "goods", 0),
+    rescueDuelCard(21, -1, "spaceJump", 1),
+    // Distress near a sun (speed race vs a rival)
+    distressSpeedCard(22, 1, "upgrade", 1),
+    distressSpeedCard(23, 2, "ship", 0),
+    distressSpeedCard(24, -1, "rob", 1),
+    // Wormholes — attempt a space jump
+    wormholeCard(25, -1),
+    wormholeCard(26, 1),
+    // Travelers
     travelerCard(27),
-    travelerCard(28),
-    travelerCard(29),
+    travelerJumpCard(28),
+    travelerShipCard(29),
     travelerCard(30),
+    // Wear & Tear (all players)
     wearTearCard(31, 8, false),
     wearTearCard(32, 6, true),
   ];

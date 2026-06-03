@@ -2273,17 +2273,19 @@ export class HUD {
       } else if (enc.awaiting === "confirm") {
         choices.appendChild(el(`<button class="enc-opt" disabled><span class="eo-n">Continue</span></button>`));
       } else if (enc.awaiting === "number") {
+        // Spectators see the OUTCOME of each offer (the "answer") — the chooser does not.
         choices.classList.add("col");
         for (const n of [0, 1, 2, 3]) {
-          const label = n === 0 ? "Offer nothing" : `Offer ${n}`;
+          const hint = card?.choiceHints?.[n] ?? (n === 0 ? "Offer nothing" : `Offer ${n}`);
           choices.appendChild(
-            el(`<button class="secondary enc-opt" disabled><span class="eo-n">${n}</span><span class="eo-hint">${label}</span></button>`),
+            el(`<button class="secondary enc-opt" disabled><span class="eo-n">${n}</span><span class="eo-hint">${escapeHtml(hint)}</span></button>`),
           );
         }
       } else {
+        // Spectators see what each answer does; the chooser sees only Yes / No.
         choices.classList.add("col");
-        choices.appendChild(el(`<button class="enc-opt" disabled><span class="eo-n">Yes</span></button>`));
-        choices.appendChild(el(`<button class="secondary enc-opt" disabled><span class="eo-n">No</span></button>`));
+        choices.appendChild(el(`<button class="enc-opt" disabled><span class="eo-n">Yes</span>${card?.yesHint ? `<span class="eo-hint">${escapeHtml(card.yesHint)}</span>` : ""}</button>`));
+        choices.appendChild(el(`<button class="secondary enc-opt" disabled><span class="eo-n">No</span>${card?.noHint ? `<span class="eo-hint">${escapeHtml(card.noHint)}</span>` : ""}</button>`));
       }
       cardEl.appendChild(choices);
     }
