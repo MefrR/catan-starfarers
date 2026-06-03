@@ -779,10 +779,32 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .discard-btn { padding: 8px 16px; }
 
 /* --- Centered encounter overlay, visible to all (#7) --- */
-.encounter-overlay {
+.encounter-overlay, .discard-overlay {
   position: fixed; inset: 0; z-index: 60;
   display: grid; place-items: center; pointer-events: none;
 }
+/* The discard prompt sits above everything — play can't continue until it's
+ * cleared, so it must never be hidden behind another panel. */
+.discard-overlay { z-index: 70; }
+.discard-card {
+  pointer-events: auto;
+  width: min(440px, 94vw);
+  max-height: 88vh; overflow-y: auto; box-sizing: border-box;
+  background: linear-gradient(160deg, #3a1622, #1e0a10);
+  border: 1px solid color-mix(in srgb, #ff6b6b 55%, transparent);
+  border-radius: 16px; padding: 20px 22px;
+  box-shadow: 0 28px 70px rgba(0,0,0,0.7), inset 0 0 40px rgba(255,107,107,0.1);
+  text-align: center;
+  transform: scale(0.7); opacity: 0;
+  transition: transform 0.3s cubic-bezier(0.2, 1.4, 0.4, 1), opacity 0.3s ease;
+}
+.discard-overlay.show .discard-card { transform: scale(1); opacity: 1; }
+.discard-card .enc-tag { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.discard-card .enc-title { font-size: 20px; font-weight: 800; color: #ff8a8a; margin: 6px 0; }
+.discard-card .enc-text { font-size: 13px; line-height: 1.5; color: var(--text); margin-bottom: 14px; }
+.discard-card .enc-give { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 8px; }
+.discard-card .enc-give-tally { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.discard-card .discard-confirm { min-width: 140px; }
 .encounter-card {
   pointer-events: auto;
   width: min(420px, 92vw);

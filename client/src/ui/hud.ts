@@ -139,6 +139,9 @@ export class HUD {
   private shownEncounter: { cardId: number; subjectId: string; awaiting: string } | null = null;
   /** How many players had confirmed an all-player card when the overlay last rebuilt. */
   private shownConfirmCount = -1;
+  /** Signature of the center discard prompt currently shown, so it only rebuilds
+   *  when the owed count or the current selection changes. */
+  private shownDiscardSig = "";
   /** Snapshot of each player's fame/medals/hand taken when an encounter opens. */
   private encSnapshot: Record<string, { fame: number; medals: number; hand: ResourceBag }> = {};
   /** Whether the center-screen game-over results overlay is already shown. */
@@ -198,7 +201,7 @@ export class HUD {
     this.root.replaceChildren();
     document
       .querySelectorAll(
-        ".gameover-overlay, .encounter-overlay, .shake-overlay, .dice-overlay, .result-toast, .fly-token, .marker-fly, .exit-confirm",
+        ".gameover-overlay, .encounter-overlay, .discard-overlay, .shake-overlay, .dice-overlay, .result-toast, .fly-token, .marker-fly, .exit-confirm",
       )
       .forEach((n) => n.remove());
   }
@@ -793,7 +796,72 @@ export class HUD {
     }
 
     this.syncEncounterOverlay(state, me);
+    this.syncDiscardOverlay(state, me);
     this.syncGameOverOverlay(state);
+  }
+
+  /**
+   * After a 7, EVERY over-limit player must discard before anyone can trade or end
+   * their turn (the engine blocks the whole table on `anyDiscardsPending`). In
+   * single-player the AI auto-discards, but online a non-active player can easily
+   * miss the bottom-bar prompt (especially with the action bar collapsed on
+   * mobile) — which silently freezes the game for everyone. So we surface the
+   * discard as an unmissable center-screen modal for whoever owes one. */
+  private syncDiscardOverlay(state: GameState, me: PlayerState): void {
+    const owed = state.phaseState.pendingDiscards?.[me.id] ?? 0;
+    if (owed <= 0) {
+      if (this.shownDiscardSig) {
+        document.querySelectorAll(".discard-overlay").forEach((n) => n.remove());
+        this.shownDiscardSig = "";
+      }
+      return;
+    }
+    const sig = `${owed}|${RESOURCES.map((r) => this.discardSel[r] ?? 0).join(",")}`;
+    if (sig === this.shownDiscardSig) return;
+    this.shownDiscardSig = sig;
+    document.querySelectorAll(".discard-overlay").forEach((n) => n.remove());
+
+    const picked = RESOURCES.reduce((s, r) => s + (this.discardSel[r] ?? 0), 0);
+    const overlay = el(`<div class="discard-overlay"><div class="discard-card"></div></div>`);
+    const card = overlay.querySelector(".discard-card") as HTMLElement;
+    card.appendChild(el(`<div class="enc-tag">Spacedock 7</div>`));
+    card.appendChild(el(`<div class="enc-title">Discard ${owed} card${owed === 1 ? "" : "s"}</div>`));
+    card.appendChild(
+      el(`<div class="enc-text">Your hold is over the limit — jettison cargo before play can continue.</div>`),
+    );
+    const picker = el(`<div class="enc-give"></div>`);
+    for (const r of RESOURCES) {
+      const have = me.hand[r];
+      const n = this.discardSel[r] ?? 0;
+      const cell = el(
+        `<div class="ptrade-cell res-cube ${n > 0 ? "on" : ""}" title="${RESOURCE_LABEL[r]}" style="--res:${RES_COLOR[r]}">
+           <span class="pc-glyph res-glyph">${resourceGlyphSvg(r)}</span>
+           <span class="pc-name">${RESOURCE_LABEL[r]}</span>
+           ${n > 0 ? `<span class="pc-badge">${n}</span>` : ""}
+           <div class="pc-stepper">
+             <button class="step minus" ${n <= 0 ? "disabled" : ""}>−</button>
+             <span class="pc-n">${n}/${have}</span>
+             <button class="step plus" ${n >= have || picked >= owed ? "disabled" : ""}>+</button>
+           </div>
+         </div>`,
+      );
+      const [minus, plus] = cell.querySelectorAll("button");
+      minus!.addEventListener("click", () => { this.discardSel[r] = Math.max(0, n - 1); this.rerender(); });
+      plus!.addEventListener("click", () => { this.discardSel[r] = n + 1; this.rerender(); });
+      picker.appendChild(cell);
+    }
+    card.appendChild(picker);
+    card.appendChild(el(`<div class="enc-give-tally">${picked} / ${owed} selected</div>`));
+    const btn = el(`<button class="discard-confirm" ${picked === owed ? "" : "disabled"}>Discard</button>`);
+    if (picked === owed) {
+      btn.addEventListener("click", () => {
+        this.act({ t: "discard", resources: { ...this.discardSel } });
+        this.discardSel = {};
+      });
+    }
+    card.appendChild(btn);
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add("show"));
   }
 
   /** Center-screen winner banner + final standings, shown the instant a player wins. */
