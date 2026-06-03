@@ -142,6 +142,10 @@ export class HUD {
   private turnDeadline = 0;
   private turnTimerStep = "";
   private turnTimerInterval = 0;
+  /** Whether the +10s trade bonus has already been granted in the current step,
+   *  so a turn's trading earns it only once (not once per click). Reset whenever
+   *  the timed step changes. */
+  private tradeBonusUsed = false;
   /** Encounter currently shown in the center overlay (cardId + subject + step). */
   private shownEncounter: { cardId: number; subjectId: string; awaiting: string } | null = null;
   /** How many players had confirmed an all-player card when the overlay last rebuilt. */
@@ -350,13 +354,17 @@ export class HUD {
       return;
     }
     // A successful bank/player trade buys the active player TURN_TRADE_BONUS extra
-    // seconds (the server validates async, so NetworkGame reports no sync error —
-    // we extend optimistically; a rejected trade just shows an error above).
+    // seconds — but only ONCE per build step, so repeated trades (or clicks) can't
+    // stack unlimited time. (The server validates async, so NetworkGame reports no
+    // sync error; we extend optimistically — a rejected trade just shows an error.)
     if (
       this.turnDeadline > 0 &&
+      this.turnTimerStep === "build" &&
+      !this.tradeBonusUsed &&
       (intent.t === "tradeWithSupply" || intent.t === "finalizeTrade") &&
       this.game.isHumanTurn()
     ) {
+      this.tradeBonusUsed = true;
       this.turnDeadline += TURN_TRADE_BONUS * 1000;
       this.centerNote(`+${TURN_TRADE_BONUS}s — trade bonus`);
     }
@@ -383,24 +391,34 @@ export class HUD {
   }
 
   /**
-   * R6: confirm before bailing out to the main menu. Shows a center modal with
-   * Exit / Stay; Exit reloads the page (which returns to the landing screen, the
-   * same path the game-over "New game" button uses).
+   * R6: confirm before bailing out to the main menu. In multiplayer the player can
+   * either CONTINUE later (we keep the saved session so reopening the site rejoins
+   * the same game) or fully QUIT (drop the seat + forget the session so the menu
+   * starts fresh). Single-player only quits.
    */
   private confirmExit(): void {
     document.querySelectorAll(".exit-confirm").forEach((n) => n.remove());
+    const mp = !!this.game.isMultiplayer;
     const modal = el(`
       <div class="exit-confirm">
         <div class="exit-box">
           <div class="exit-title">Leave the game?</div>
-          <div class="exit-msg">You'll return to the main menu and this game will be lost.</div>
+          <div class="exit-msg">${mp ? "Quit drops your seat and starts fresh. Leave &amp; continue keeps this game so you can rejoin it later." : "You'll return to the main menu and this game will be lost."}</div>
           <div class="exit-actions">
-            <button class="exit-yes">Exit to menu</button>
+            ${mp ? `<button class="exit-cont secondary">Leave &amp; continue later</button>` : ""}
+            <button class="exit-yes">${mp ? "Quit game" : "Exit to menu"}</button>
             <button class="secondary exit-no">Keep playing</button>
           </div>
         </div>
       </div>`);
-    modal.querySelector(".exit-yes")!.addEventListener("click", () => location.reload());
+    // Quit: forget the session (and leave the room) so we don't auto-rejoin.
+    modal.querySelector(".exit-yes")!.addEventListener("click", () => {
+      if (mp) { try { this.game.dispatch({ t: "leaveRoom" }); } catch { /* ignore */ } }
+      try { sessionStorage.removeItem("sf_session"); } catch { /* ignore */ }
+      location.reload();
+    });
+    // Leave & continue (multiplayer): keep the session so reopening rejoins.
+    modal.querySelector(".exit-cont")?.addEventListener("click", () => location.reload());
     const close = (): void => modal.remove();
     modal.querySelector(".exit-no")!.addEventListener("click", close);
     modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
@@ -583,6 +601,10 @@ export class HUD {
 
     const target = state.config.targetVictoryPoints;
     const scoreboard = el(`<div class="hud-panel scoreboard ${this.scoreCompact ? "compact" : ""}"></div>`);
+    // Tapping the tracker's own border/padding (the container itself) toggles it.
+    scoreboard.addEventListener("click", (e) => {
+      if (e.target === scoreboard) { this.scoreCompact = !this.scoreCompact; this.rerender(); }
+    });
     // R2: tap the title to compress the victory tracker — names hide, leaving just
     // each player's colour, VP and the medal/card/marker chips.
     // Compact uses a short title so the collapsed widget stays narrow and the
@@ -759,9 +781,12 @@ export class HUD {
       </div>`);
     // Turn timer chip (host-configured). Text is refreshed by an interval so it
     // ticks without a full HUD re-render.
-    const turnSecs = state.config.turnSeconds ?? 0;
-    if (turnSecs > 0 && this.isTurnTimed(ps.phase)) {
-      const remain = Math.max(0, Math.ceil((this.turnDeadline - Date.now()) / 1000));
+    const timedStep = this.myTimedStep(state);
+    if (timedStep) {
+      const remain =
+        timedStep.key === this.turnTimerStep
+          ? Math.max(0, Math.ceil((this.turnDeadline - Date.now()) / 1000))
+          : timedStep.seconds;
       banner.appendChild(el(`<span class="turn-timer ${remain <= 5 ? "low" : ""}">${fmtClock(remain)}</span>`));
     }
     bar.appendChild(banner);
@@ -792,15 +817,6 @@ export class HUD {
     exitBtn.addEventListener("click", () => this.confirmExit());
     screen.appendChild(exitBtn);
 
-    // Slim hot-zones running down the left and right screen edges so the Fleet
-    // panel and the victory tracker can be toggled by tapping anywhere along the
-    // edge — not only their top header (handy on touch / small screens).
-    const leftEdge = el(`<div class="edge-toggle left" title="Toggle the Fleet panel"><span class="et-grip">${this.sidebarCollapsed ? "›" : "‹"}</span></div>`);
-    leftEdge.addEventListener("click", () => { this.sidebarCollapsed = !this.sidebarCollapsed; this.rerender(); });
-    const rightEdge = el(`<div class="edge-toggle right" title="Toggle the victory tracker"><span class="et-grip">${this.scoreCompact ? "‹" : "›"}</span></div>`);
-    rightEdge.addEventListener("click", () => { this.scoreCompact = !this.scoreCompact; this.rerender(); });
-    screen.appendChild(leftEdge);
-    screen.appendChild(rightEdge);
 
     screen.appendChild(this.buildSidebar(state, me));
     screen.appendChild(scoreboard);
@@ -828,48 +844,60 @@ export class HUD {
     this.syncGameOverOverlay(state);
   }
 
-  /** Phases during which the timer runs (a player's actual turn). Encounters are
-   *  excluded — those need a real decision and are never auto-resolved. */
-  private isTurnTimed(phase: GameState["phaseState"]["phase"]): boolean {
-    return phase === "production" || phase === "tradeBuild" || phase === "flight";
-  }
-
-  /** A unique key for the current "step" within a turn, so the timer re-arms each
-   *  time the step changes: roll → build → shake → move. */
-  private turnStepKey(state: GameState): string {
+  /** The single timed action required of ME right now (or null). Each kind gets
+   *  its own allotment and, on expiry, its own auto-resolution. Obligations
+   *  (discard / all-player encounter confirm) apply even off-turn; phase steps
+   *  apply only on my turn. Returns null when the timer feature is off. */
+  private myTimedStep(state: GameState): { key: string; seconds: number; kind: string } | null {
     const ps = state.phaseState;
-    const sub = ps.phase === "flight" ? (ps.shake ? "move" : "shake") : "";
-    return `${ps.activePlayerIndex}|${ps.phase}|${sub}`;
-  }
-
-  /** Seconds allotted to the current step. The dice roll is ALWAYS 3s; every
-   *  other step (build / shake / move) gets the host-chosen limit. */
-  private turnStepSeconds(state: GameState): number {
     const chosen = state.config.turnSeconds ?? 0;
-    return state.phaseState.phase === "production" ? Math.min(3, chosen || 3) : chosen;
+    if (chosen <= 0) return null;
+    if (ps.phase === "gameOver" || ps.phase === "setup") return null;
+    const me = state.players.find((p) => p.id === this.game.humanId);
+    if (!me) return null;
+    // 1. Discard after a 7 — any over-limit player, on or off turn.
+    const owed = ps.pendingDiscards?.[me.id] ?? 0;
+    if (owed > 0) return { key: `disc|${owed}`, seconds: chosen, kind: "discard" };
+    // 2. An encounter decision that's mine to make (subject choice, or an
+    //    all-player card I haven't confirmed). Encounters get a flat 20s.
+    if (ps.phase === "encounter" && ps.encounter) {
+      const enc = ps.encounter;
+      if (enc.allPlayers) {
+        if (!(enc.confirmedBy ?? []).includes(me.id))
+          return { key: `enc|${enc.cardId}|all`, seconds: 20, kind: "encounter" };
+        return null;
+      }
+      if (enc.subjectId === me.id) return { key: `enc|${enc.cardId}|${enc.awaiting}`, seconds: 20, kind: "encounter" };
+      return null;
+    }
+    // 3. My active turn.
+    if (!this.game.isHumanTurn()) return null;
+    if (ps.awaitingSteal) return { key: "steal", seconds: chosen, kind: "steal" };
+    if (ps.pendingFriendship?.playerId === me.id) return null; // let the player choose
+    if (ps.phase === "production") return { key: "roll", seconds: Math.min(3, chosen || 3), kind: "roll" };
+    if (ps.phase === "tradeBuild") return { key: "build", seconds: chosen, kind: "build" };
+    if (ps.phase === "flight") return { key: ps.shake ? "move" : "shake", seconds: chosen, kind: ps.shake ? "move" : "shake" };
+    return null;
   }
 
   /**
-   * Drive the host-configured countdown, applied PER STEP. The deadline re-arms
-   * whenever the step changes; an interval ticks the on-screen clock and, on the
-   * ACTIVE player's own client, auto-advances to the NEXT step when time runs out
-   * (it never force-resolves a pending discard/steal/encounter). A successful
-   * trade extends the current build step (see act()).
+   * Drive the host-configured countdown for whatever action is currently mine.
+   * The deadline re-arms whenever the step changes; an interval ticks the clock
+   * and, on expiry, auto-resolves THIS step: the dice roll, build/shake/move, a
+   * random discard after a 7, an auto-steal from the richest opponent, or a
+   * random encounter choice. A successful trade extends the build step (act()).
    */
   private syncTurnTimer(state: GameState): void {
-    const ps = state.phaseState;
-    const secs = state.config.turnSeconds ?? 0;
-    const armed = secs > 0 && this.isTurnTimed(ps.phase);
-    if (!armed) {
+    const step = this.myTimedStep(state);
+    if (!step) {
       this.turnTimerStep = "";
       if (this.turnTimerInterval) { window.clearInterval(this.turnTimerInterval); this.turnTimerInterval = 0; }
       return;
     }
-    // (Re)arm whenever the step changes — each step gets its own full allotment.
-    const key = this.turnStepKey(state);
-    if (key !== this.turnTimerStep) {
-      this.turnTimerStep = key;
-      this.turnDeadline = Date.now() + this.turnStepSeconds(state) * 1000;
+    if (step.key !== this.turnTimerStep) {
+      this.turnTimerStep = step.key;
+      this.turnDeadline = Date.now() + step.seconds * 1000;
+      this.tradeBonusUsed = false; // each new step earns its trade bonus afresh
     }
     if (!this.turnTimerInterval) {
       this.turnTimerInterval = window.setInterval(() => this.tickTurnTimer(), 250);
@@ -878,32 +906,93 @@ export class HUD {
 
   private tickTurnTimer(): void {
     const state = this.game.getState();
-    const ps = state.phaseState;
-    const secs = state.config.turnSeconds ?? 0;
-    if (secs <= 0 || !this.isTurnTimed(ps.phase)) return;
+    const step = this.myTimedStep(state);
+    if (!step) return;
     const remain = Math.max(0, Math.ceil((this.turnDeadline - Date.now()) / 1000));
-    const chip = this.root.querySelector(".turn-timer");
-    if (chip) {
-      chip.textContent = fmtClock(remain);
-      chip.classList.toggle("low", remain <= 5);
+    for (const chip of [this.root.querySelector(".turn-timer"), document.querySelector(".discard-overlay .dc-timer"), document.querySelector(".encounter-overlay .enc-timer")]) {
+      if (chip) { chip.textContent = fmtClock(remain); (chip as HTMLElement).classList.toggle("low", remain <= 5); }
     }
     if (remain > 0) return;
-    // Time's up — only the active player's own client drives the auto-advance.
-    if (!this.game.isHumanTurn()) return;
-    // Don't force-resolve obligations; the player must handle those by hand.
+    const ps = state.phaseState;
     const me = state.players.find((p) => p.id === this.game.humanId);
     if (!me) return;
-    if ((ps.pendingDiscards?.[me.id] ?? 0) > 0) return;
-    if (ps.awaitingSteal || ps.pendingFriendship) return;
-    // Advance ONE step; the next step re-arms with its own time on the next sync.
     this.resetSelection();
-    if (ps.phase === "production") {
-      if (!ps.lastRoll) this.act({ t: "rollDice" });
-    } else if (ps.phase === "tradeBuild") {
-      this.act({ t: "endTradeBuild" });
-    } else if (ps.phase === "flight") {
-      if (!ps.shake) this.act({ t: "shakeMothership" });
-      else this.act({ t: "endTurn" });
+    switch (step.kind) {
+      case "discard": this.autoDiscardRandom(me, ps.pendingDiscards?.[me.id] ?? 0); break;
+      case "steal": this.autoStealRichest(state, me); break;
+      case "encounter": this.autoEncounterRandom(state, me); break;
+      case "roll": if (!ps.lastRoll) this.act({ t: "rollDice" }); break;
+      case "build": this.act({ t: "endTradeBuild" }); break;
+      case "shake": this.act({ t: "shakeMothership" }); break;
+      case "move": this.act({ t: "endTurn" }); break;
+    }
+  }
+
+  /** Timed-out discard: jettison `owed` cards picked at random from the hand. */
+  private autoDiscardRandom(me: PlayerState, owed: number): void {
+    if (owed <= 0) return;
+    const pool: Resource[] = [];
+    for (const r of RESOURCES) for (let i = 0; i < me.hand[r]; i++) pool.push(r);
+    const res: Partial<Record<Resource, number>> = {};
+    for (let i = 0; i < owed && pool.length; i++) {
+      const j = Math.floor(Math.random() * pool.length);
+      const r = pool.splice(j, 1)[0]!;
+      res[r] = (res[r] ?? 0) + 1;
+    }
+    this.discardSel = {};
+    this.act({ t: "discard", resources: res });
+  }
+
+  /** Timed-out steal: take from the opponent holding the most cards. */
+  private autoStealRichest(state: GameState, me: PlayerState): void {
+    const victims = state.players
+      .filter((p) => p.id !== me.id)
+      .map((p) => ({ id: p.id, n: RESOURCES.reduce((s, r) => s + p.hand[r], 0) }))
+      .sort((a, b) => b.n - a.n);
+    const target = victims[0];
+    if (target) this.act({ t: "stealTarget", targetId: target.id });
+  }
+
+  /** Timed-out encounter: make a random legal choice for the awaited prompt. */
+  private autoEncounterRandom(state: GameState, me: PlayerState): void {
+    const enc = state.phaseState.encounter;
+    if (!enc) return;
+    if (enc.allPlayers) {
+      // Wear & Tear: if over the upgrade limit, scrap a random owned upgrade.
+      const card = ENCOUNTER_CARDS[enc.cardId];
+      const threshold = card?.wearTearThreshold;
+      const total = me.upgrades.booster + me.upgrades.cannon + me.upgrades.freightPod;
+      if (threshold !== undefined && total > threshold) {
+        const owned: number[] = [];
+        if (me.upgrades.booster > 0) owned.push(0);
+        if (me.upgrades.cannon > 0) owned.push(1);
+        if (me.upgrades.freightPod > 0) owned.push(2);
+        const pick = owned[Math.floor(Math.random() * owned.length)] ?? 0;
+        this.act({ t: "encounterChoice", choice: pick });
+      } else {
+        this.act({ t: "encounterChoice", choice: 0 });
+      }
+      return;
+    }
+    if (enc.awaiting === "giveResources") {
+      let owed = enc.lossCount ?? 0;
+      const pool: Resource[] = [];
+      for (const r of RESOURCES) for (let i = 0; i < me.hand[r]; i++) pool.push(r);
+      const res: Partial<Record<Resource, number>> = {};
+      for (let i = 0; i < owed && pool.length; i++) {
+        const r = pool.splice(Math.floor(Math.random() * pool.length), 1)[0]!;
+        res[r] = (res[r] ?? 0) + 1;
+      }
+      this.act({ t: "encounterChoice", choice: 0, resources: res });
+    } else if (enc.awaiting === "selectShip") {
+      const mine = state.ships.filter((s) => s.owner === me.id);
+      this.act({ t: "encounterChoice", choice: Math.floor(Math.random() * Math.max(1, mine.length)) });
+    } else if (enc.awaiting === "confirm") {
+      this.act({ t: "encounterChoice", choice: 0 });
+    } else if (enc.awaiting === "number") {
+      this.act({ t: "encounterChoice", choice: Math.floor(Math.random() * 4) });
+    } else {
+      this.act({ t: "encounterChoice", choice: Math.random() < 0.5 });
     }
   }
 
@@ -936,6 +1025,11 @@ export class HUD {
     card.appendChild(
       el(`<div class="enc-text">Your hold is over the limit — jettison cargo before play can continue.</div>`),
     );
+    // Timer chip (only when the host enabled a turn timer): on expiry the engine
+    // auto-discards random cards. The interval refreshes this text.
+    if ((state.config.turnSeconds ?? 0) > 0) {
+      card.appendChild(el(`<div class="dc-timer turn-timer"></div>`));
+    }
     const picker = el(`<div class="enc-give"></div>`);
     for (const r of RESOURCES) {
       const have = me.hand[r];
@@ -1040,6 +1134,11 @@ export class HUD {
   private buildSidebar(state: GameState, me: PlayerState): HTMLElement {
     const ps = state.phaseState;
     const side = el(`<div class="hud-panel sidebar-left ${this.sidebarCollapsed ? "collapsed" : ""}"></div>`);
+    // Tapping the panel's own border/padding (its "edge" — i.e. the container
+    // itself, not a child control) toggles it collapsed/expanded.
+    side.addEventListener("click", (e) => {
+      if (e.target === side) { this.sidebarCollapsed = !this.sidebarCollapsed; this.rerender(); }
+    });
 
     // R1: tap the header to collapse the whole left sidebar to a slim button —
     // useful on narrow / mobile screens where it would otherwise cover the board.

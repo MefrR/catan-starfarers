@@ -33,6 +33,7 @@ class Net {
   private socket: Socket | null = null;
   private handlers = new Set<Handler>();
   private url = "";
+  private connectedOnce = false;
 
   /** Open (or reuse) the socket for the chosen mode. Safe to call repeatedly. */
   connect(mode: NetMode): string {
@@ -40,9 +41,30 @@ class Net {
     if (this.socket && this.url === url) return url;
     this.socket?.disconnect();
     this.url = url;
+    this.connectedOnce = false;
     this.socket = io(url, { transports: ["websocket", "polling"] });
     this.socket.on(SOCKET_EVENT.message, (msg: ServerMessage) => {
       for (const h of this.handlers) h(msg);
+    });
+    // On a RE-connect (e.g. a phone's network blips mid-game), the server gives us
+    // a brand-new socket id with no room mapping — every intent would then fail
+    // with "Not in a room." and freeze the table. Re-attach automatically using
+    // the saved session so play resumes seamlessly.
+    this.socket.on("connect", () => {
+      if (this.connectedOnce) {
+        try {
+          const raw = sessionStorage.getItem("sf_session");
+          if (raw) {
+            const s = JSON.parse(raw) as { roomCode: string; playerId: string };
+            if (s?.roomCode && s?.playerId) {
+              this.send({ t: "rejoin", roomCode: s.roomCode, playerId: s.playerId });
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      this.connectedOnce = true;
     });
     return url;
   }
