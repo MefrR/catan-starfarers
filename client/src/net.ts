@@ -34,6 +34,7 @@ class Net {
   private handlers = new Set<Handler>();
   private url = "";
   private connectedOnce = false;
+  private keepAlive = 0;
 
   /** Open (or reuse) the socket for the chosen mode. Safe to call repeatedly. */
   connect(mode: NetMode): string {
@@ -43,6 +44,13 @@ class Net {
     this.url = url;
     this.connectedOnce = false;
     this.socket = io(url, { transports: ["websocket", "polling"] });
+    // Keep-alive: a free hosting instance spins down after ~15 min of no inbound
+    // HTTP traffic (WebSocket frames may not count). While we're connected, ping
+    // /health every 4 min so the server stays warm for everyone in the room.
+    window.clearInterval(this.keepAlive);
+    this.keepAlive = window.setInterval(() => {
+      fetch(`${url}/health`, { cache: "no-store" }).catch(() => {});
+    }, 4 * 60 * 1000);
     this.socket.on(SOCKET_EVENT.message, (msg: ServerMessage) => {
       for (const h of this.handlers) h(msg);
     });

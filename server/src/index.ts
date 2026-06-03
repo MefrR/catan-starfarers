@@ -14,7 +14,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const httpServer = createServer(app);
-const io = new IOServer(httpServer, { cors: { origin: "*" } });
+const io = new IOServer(httpServer, {
+  cors: { origin: "*" },
+  // Be tolerant of mobile latency / a backgrounded tab pausing timers: wait
+  // longer for a missed heartbeat before declaring a client gone, so a brief
+  // network blip doesn't kick players mid-game (they also auto-rejoin).
+  pingInterval: 25000,
+  pingTimeout: 60000,
+});
 
 // In production, serve the built client. In dev, Vite serves it on its own port.
 // The bundle's location varies by build method, so probe a few candidate paths
