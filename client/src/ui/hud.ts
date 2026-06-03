@@ -82,6 +82,7 @@ type Mode =
   | "pickColony"
   | "selectShip"
   | "moveShip"
+  | "spaceJump"
   | "setupColony"
   | "setupUpgrade"
   | "launchShip"
@@ -1466,6 +1467,24 @@ export class HUD {
     }
 
     if (state.phaseState.phase === "flight" && state.phaseState.shake) {
+      // Space jump: pick one of your ships, then tap ANY open point on the map.
+      if (this.mode === "spaceJump") {
+        this.board.onShipClick = (id) => {
+          const s = state.ships.find((x) => x.id === id);
+          if (s && s.owner === me.id) { this.selectedShipId = id; this.rerender(); }
+        };
+        if (this.selectedShipId) {
+          this.board.setSelectedShip(this.selectedShipId);
+          this.board.onIntersectionClick = (id) => {
+            const sid = this.selectedShipId!;
+            this.selectedShipId = null;
+            this.mode = "idle";
+            this.board.setSelectedShip(null);
+            this.act({ t: "spaceJump", shipId: sid, toIntersectionId: id }, { center: true });
+          };
+        }
+        return;
+      }
       this.board.onShipClick = (id) => this.selectShip(state, me, id);
       if (this.mode === "moveShip" && this.selectedShipId) {
         this.board.setSelectedShip(this.selectedShipId);
@@ -1717,6 +1736,23 @@ export class HUD {
         }
         const speed = ps.moveBudget ?? ps.shake.speed;
         actions.appendChild(el(`<div class="waiting">Speed ${speed} · combat ${ps.shake.combat}</div>`));
+
+        // Space jump earned from an encounter: jump one ship to ANY open point.
+        const jumps = ps.spaceJumps?.[me.id] ?? 0;
+        if (jumps > 0) {
+          if (this.mode === "spaceJump") {
+            actions.appendChild(
+              el(`<div class="waiting">✦ Space jump: ${this.selectedShipId ? "tap any open point on the map" : "tap one of your ships"}.</div>`),
+            );
+            actions.appendChild(btn("Cancel jump", () => { this.resetSelection(); this.rerender(); }, { secondary: true }));
+          } else {
+            actions.appendChild(btn(`✦ Space Jump${jumps > 1 ? ` (${jumps})` : ""}`, () => {
+              this.resetSelection();
+              this.mode = "spaceJump";
+              this.rerender();
+            }));
+          }
+        }
 
         const ship = this.selectedShipId
           ? state.ships.find((s) => s.id === this.selectedShipId)

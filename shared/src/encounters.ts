@@ -319,12 +319,11 @@ function robEachOpponent(state: GameState, subject: PlayerState, rng: Rng, log: 
   log(`${subject.name} plunders 1 resource from each opponent.`);
 }
 
-/** Space-jump reward: this engine already allows a free jump during flight, so
- *  the reward grants a generous extra move budget to make a long jump this turn. */
+/** Space-jump reward: grant a free jump the player may use to move ONE of their
+ *  ships to any open intersection on the map this flight phase. */
 function spaceJumpReward(state: GameState, p: PlayerState, log: (s: string) => void): void {
-  const cur = state.phaseState.moveBudget ?? state.phaseState.shake?.speed ?? POST_ENCOUNTER_BASE_SPEED;
-  state.phaseState.moveBudget = cur + 6;
-  log(`${p.name} may make a space jump (extra movement this flight).`);
+  (state.phaseState.spaceJumps ??= {})[p.id] = (state.phaseState.spaceJumps[p.id] ?? 0) + 1;
+  log(`${p.name} earns a SPACE JUMP — move one ship to any open point on the map.`);
 }
 
 /** Remove one of the subject's mothership upgrades (engine-picked order). */

@@ -261,6 +261,9 @@ export interface GamePhaseState {
   /** A single ship immobilized for this flight phase (pirate-combat defeat — the
    *  owner chooses which). Other ships still move; cleared at end of turn. */
   frozenShipId?: string;
+  /** Free space jumps granted (e.g. by an encounter): the player may move one ship
+   *  to ANY open intersection on the map. Keyed by player id; decremented on use. */
+  spaceJumps?: Record<PlayerId, number>;
   /** After a 7: players who still owe a discard, and how many cards. */
   pendingDiscards?: Record<PlayerId, number>;
   /** After a 7 + discards: roller must pick a player to steal from. */

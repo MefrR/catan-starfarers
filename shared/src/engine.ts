@@ -1343,15 +1343,15 @@ export function applyIntent(
     case "spaceJump": {
       if (!isActive) return fail(input, "Not your turn.");
       if (ps.phase !== "flight") return fail(input, "Space jump during flight.");
+      if ((ps.spaceJumps?.[me.id] ?? 0) <= 0)
+        return fail(input, "You have no space jump available (earn one from an encounter).");
       const ship = state.ships.find((s) => s.id === intent.shipId);
       if (!ship || ship.owner !== me.id) return fail(input, "Not your ship.");
-      if (ps.frozenShipId === intent.shipId)
-        return fail(input, "That ship was damaged in an encounter and cannot move this turn.");
       if (!state.intersections[intent.toIntersectionId]) return fail(input, "Unknown destination.");
       if (isOccupied(state, intent.toIntersectionId)) return fail(input, "Destination occupied.");
       ship.intersectionId = intent.toIntersectionId;
-      ship.distanceMoved = shipSpeed(state);
       ship.movedThisTurn = true;
+      ps.spaceJumps![me.id]!--; // consume the granted jump
       revealAround(state, intent.toIntersectionId, rng);
       resolveAdjacentSpecials(state, me, intent.toIntersectionId, rng);
       recomputeVp(state);
