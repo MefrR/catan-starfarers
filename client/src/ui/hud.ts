@@ -794,9 +794,9 @@ export class HUD {
     // Slim hot-zones running down the left and right screen edges so the Fleet
     // panel and the victory tracker can be toggled by tapping anywhere along the
     // edge — not only their top header (handy on touch / small screens).
-    const leftEdge = el(`<div class="edge-toggle left" title="Toggle the Fleet panel"></div>`);
+    const leftEdge = el(`<div class="edge-toggle left" title="Toggle the Fleet panel"><span class="et-grip">${this.sidebarCollapsed ? "›" : "‹"}</span></div>`);
     leftEdge.addEventListener("click", () => { this.sidebarCollapsed = !this.sidebarCollapsed; this.rerender(); });
-    const rightEdge = el(`<div class="edge-toggle right" title="Toggle the victory tracker"></div>`);
+    const rightEdge = el(`<div class="edge-toggle right" title="Toggle the victory tracker"><span class="et-grip">${this.scoreCompact ? "‹" : "›"}</span></div>`);
     rightEdge.addEventListener("click", () => { this.scoreCompact = !this.scoreCompact; this.rerender(); });
     screen.appendChild(leftEdge);
     screen.appendChild(rightEdge);

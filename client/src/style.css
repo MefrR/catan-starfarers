@@ -725,16 +725,29 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Edge hot-zones: tap anywhere down the left/right screen edge to toggle the
  * Fleet panel / victory tracker (not just their headers). Kept narrow and below
  * the corner controls so they don't swallow board pans or the exit/chat buttons. */
+/* Press anywhere down this full-height edge band to toggle the panel; a visible
+ * grip handle (centered) makes it discoverable on desktop and touch alike. */
 .edge-toggle {
-  position: fixed; top: 132px; bottom: 150px; width: 20px; z-index: 6;
-  cursor: pointer; background: transparent;
+  position: fixed; top: 96px; bottom: 110px; width: 26px; z-index: 9;
+  cursor: pointer; display: flex; align-items: center;
+  -webkit-tap-highlight-color: transparent;
 }
-.edge-toggle.left { left: 0; }
-.edge-toggle.right { right: 0; }
-.edge-toggle:hover { background: linear-gradient(to var(--dir, right),
-  color-mix(in srgb, var(--accent) 30%, transparent), transparent); }
-.edge-toggle.left:hover { --dir: right; }
-.edge-toggle.right:hover { --dir: left; }
+.edge-toggle.left { left: 0; justify-content: flex-start; }
+.edge-toggle.right { right: 0; justify-content: flex-end; }
+/* The grip pill — always visible so players see the edge is interactive. */
+.edge-toggle .et-grip {
+  font-size: 16px; font-weight: 900; line-height: 1; color: var(--text);
+  width: 16px; height: 54px; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+  opacity: 0.75; transition: opacity 0.12s ease, background 0.12s ease;
+}
+.edge-toggle.left .et-grip { border-left: none; border-radius: 0 10px 10px 0; }
+.edge-toggle.right .et-grip { border-right: none; border-radius: 10px 0 0 10px; }
+.edge-toggle:hover .et-grip, .edge-toggle:active .et-grip {
+  opacity: 1; background: color-mix(in srgb, var(--accent) 45%, var(--panel));
+}
 
 /* --- Reference card: build costs + VP (collapsible) --- */
 .ref-toggle {
