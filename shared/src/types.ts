@@ -370,6 +370,13 @@ export interface GameConfig {
   fogMap?: boolean;
   /** How aggressively the AI opponents play. Defaults to "normal". */
   aiDifficulty?: AiDifficulty;
+  /** Optional per-turn time limit in seconds (host-chosen, 15–180 in 5s steps).
+   *  0 / undefined = no timer. A successful trade adds TURN_TRADE_BONUS seconds. */
+  turnSeconds?: number;
 }
+
+/** Time (seconds) added to the active player's turn timer after a successful
+ *  bank or player trade. */
+export const TURN_TRADE_BONUS = 10;
 
 export type AiDifficulty = "easy" | "normal" | "hard";

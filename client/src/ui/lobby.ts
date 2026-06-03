@@ -48,6 +48,7 @@ export class LobbyUI {
   private errorText = "";
   private rejoining = false;
   private fogMap = false;
+  private turnSeconds = 0; // host-chosen per-turn timer (0 = off)
   private onStart: StartHandler | undefined;
   private onBack: (() => void) | undefined;
   private onReset: (() => void) | undefined;
@@ -183,6 +184,7 @@ export class LobbyUI {
           <label>Your color</label>
           <div class="row" id="colors"></div>
           ${isHost ? `<label class="mt">Map style</label><div class="row" id="mapstyle"></div>` : ""}
+          ${isHost ? `<label class="mt">Turn timer</label><div class="row" id="turntimer"></div>` : ""}
           ${isHost ? `<button class="mt" id="start">Start game (${lobby.players.length} ${lobby.players.length === 1 ? "player" : "players"})</button>` : `<p class="subtitle mt">Waiting for the host to start…</p>`}
           <button class="mt secondary" id="leave">← Leave room</button>
           <div class="error">${this.errorText}</div>
@@ -217,12 +219,26 @@ export class LobbyUI {
         }
       };
       paintMap();
+
+      const timerRow = screen.querySelector("#turntimer")!;
+      const paintTimer = (): void => {
+        timerRow.replaceChildren();
+        const off = el(`<button class="secondary" style="flex:0 0 auto;${this.turnSeconds === 0 ? "outline:2px solid var(--accent);" : ""}">Off</button>`);
+        off.addEventListener("click", () => { this.turnSeconds = 0; paintTimer(); });
+        const minus = el(`<button class="secondary" style="flex:0 0 auto" ${this.turnSeconds <= 15 ? "disabled" : ""}>−5s</button>`);
+        minus.addEventListener("click", () => { this.turnSeconds = Math.max(15, this.turnSeconds - 5); paintTimer(); });
+        const val = el(`<button class="secondary" style="flex:1" disabled>${this.turnSeconds === 0 ? "No limit" : this.turnSeconds + "s per turn"}</button>`);
+        const plus = el(`<button class="secondary" style="flex:0 0 auto" ${this.turnSeconds >= 180 ? "disabled" : ""}>+5s</button>`);
+        plus.addEventListener("click", () => { this.turnSeconds = this.turnSeconds === 0 ? 15 : Math.min(180, this.turnSeconds + 5); paintTimer(); });
+        timerRow.append(off, minus, val, plus);
+      };
+      paintTimer();
     }
 
     screen.querySelector("#start")?.addEventListener("click", () => {
       net.send({
         t: "startGame",
-        config: { playerCount: lobby.players.length, fogMap: this.fogMap },
+        config: { playerCount: lobby.players.length, fogMap: this.fogMap, turnSeconds: this.turnSeconds },
       });
     });
 

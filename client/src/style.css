@@ -614,6 +614,17 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .turn-banner { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .turn-banner .phase { font-weight: 800; font-size: 14px; }
 .turn-banner .phase-name { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.turn-banner .turn-timer {
+  margin-top: 2px; font-variant-numeric: tabular-nums; font-weight: 800; font-size: 13px;
+  padding: 1px 9px; border-radius: 999px; color: var(--text);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.turn-banner .turn-timer.low {
+  color: #ffd7d7; background: rgba(255, 80, 80, 0.22);
+  border-color: rgba(255, 90, 90, 0.6); animation: timer-pulse 1s ease-in-out infinite;
+}
+@keyframes timer-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
 
 .actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .actions .waiting { color: var(--muted); font-size: 13px; font-style: italic; }

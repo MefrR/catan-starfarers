@@ -36,6 +36,7 @@ export class NewGameMenu {
   private opponents = 2; // 0 = play solo (no AI rivals)
   private fogMap = false;
   private aiDifficulty: AiDifficulty = "normal";
+  private turnSeconds = 0; // 0 = no turn timer
 
   constructor(
     mount: HTMLElement,
@@ -64,6 +65,8 @@ export class NewGameMenu {
           <div class="row" id="mapstyle"></div>
           <label class="mt">AI difficulty</label>
           <div class="row" id="difficulty"></div>
+          <label class="mt">Turn timer</label>
+          <div class="row" id="turntimer"></div>
           <button class="mt" id="launch">Launch game</button>
           ${this.onBack ? `<button class="mt secondary" id="back">← Back</button>` : ""}
         </div>
@@ -153,11 +156,28 @@ export class NewGameMenu {
     };
     paintDiff();
 
+    // Turn timer: Off, or 15–180s in 5s steps (− / value / +). Off ↔ 15s.
+    const timerRow = screen.querySelector("#turntimer")!;
+    const paintTimer = (): void => {
+      timerRow.replaceChildren();
+      const off = el(
+        `<button class="secondary" style="flex:0 0 auto;${this.turnSeconds === 0 ? "outline:2px solid var(--accent);" : ""}">Off</button>`,
+      );
+      off.addEventListener("click", () => { this.turnSeconds = 0; paintTimer(); });
+      const minus = el(`<button class="secondary" style="flex:0 0 auto" ${this.turnSeconds <= 15 ? "disabled" : ""}>−5s</button>`);
+      minus.addEventListener("click", () => { this.turnSeconds = Math.max(15, this.turnSeconds - 5); paintTimer(); });
+      const val = el(`<button class="secondary" style="flex:1" disabled>${this.turnSeconds === 0 ? "No limit" : this.turnSeconds + "s per turn"}</button>`);
+      const plus = el(`<button class="secondary" style="flex:0 0 auto" ${this.turnSeconds >= 180 ? "disabled" : ""}>+5s</button>`);
+      plus.addEventListener("click", () => { this.turnSeconds = this.turnSeconds === 0 ? 15 : Math.min(180, this.turnSeconds + 5); paintTimer(); });
+      timerRow.append(off, minus, val, plus);
+    };
+    paintTimer();
+
     screen.querySelector("#launch")!.addEventListener("click", () => {
       const name = (screen.querySelector("#name") as HTMLInputElement).value.trim() || "Commander";
       this.onLaunch({
         seats: this.buildSeats(name),
-        config: { fogMap: this.fogMap, aiDifficulty: this.aiDifficulty },
+        config: { fogMap: this.fogMap, aiDifficulty: this.aiDifficulty, turnSeconds: this.turnSeconds },
       });
     });
     screen.querySelector("#back")?.addEventListener("click", () => this.onBack?.());

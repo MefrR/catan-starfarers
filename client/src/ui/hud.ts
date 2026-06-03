@@ -6,6 +6,7 @@ import {
   MOTHERSHIP_BALLS,
   RESOURCES,
   RESOURCE_LABEL,
+  TURN_TRADE_BONUS,
   VP,
   catanianColonySites,
   colonyEstablishBlock,
@@ -135,6 +136,11 @@ export class HUD {
   /** True until the first render, so initial markers don't trigger the +2 VP fly. */
   private markersInitialized = false;
   private diceTimers: number[] = [];
+  /** Turn-timer state (host-configured per-turn limit). `turnDeadline` is an epoch
+   *  ms; `turnTimerIdx` is the active seat the current deadline belongs to. */
+  private turnDeadline = 0;
+  private turnTimerIdx = -1;
+  private turnTimerInterval = 0;
   /** Encounter currently shown in the center overlay (cardId + subject + step). */
   private shownEncounter: { cardId: number; subjectId: string; awaiting: string } | null = null;
   /** How many players had confirmed an all-player card when the overlay last rebuilt. */
@@ -189,6 +195,7 @@ export class HUD {
     if (this.keyHandler) window.removeEventListener("keydown", this.keyHandler);
     this.diceTimers.forEach((t) => window.clearTimeout(t));
     this.diceTimers = [];
+    if (this.turnTimerInterval) { window.clearInterval(this.turnTimerInterval); this.turnTimerInterval = 0; }
     this.costPop?.remove();
     if (this.pickerOutside) {
       document.removeEventListener("pointerdown", this.pickerOutside, true);
@@ -339,6 +346,18 @@ export class HUD {
       // else uses the quiet inline error line.
       if (opts?.center) this.centerNote(err);
       else this.flashError(err);
+      return;
+    }
+    // A successful bank/player trade buys the active player TURN_TRADE_BONUS extra
+    // seconds (the server validates async, so NetworkGame reports no sync error —
+    // we extend optimistically; a rejected trade just shows an error above).
+    if (
+      this.turnDeadline > 0 &&
+      (intent.t === "tradeWithSupply" || intent.t === "finalizeTrade") &&
+      this.game.isHumanTurn()
+    ) {
+      this.turnDeadline += TURN_TRADE_BONUS * 1000;
+      this.centerNote(`+${TURN_TRADE_BONUS}s — trade bonus`);
     }
   }
 
@@ -737,6 +756,13 @@ export class HUD {
         <span class="phase" style="color:${COLOR_HEX[active.color]}">${escapeHtml(active.name)}</span>
         <span class="phase-name">${PHASE_LABEL[ps.phase]}</span>
       </div>`);
+    // Turn timer chip (host-configured). Text is refreshed by an interval so it
+    // ticks without a full HUD re-render.
+    const turnSecs = state.config.turnSeconds ?? 0;
+    if (turnSecs > 0 && this.isTurnTimed(ps.phase)) {
+      const remain = Math.max(0, Math.ceil((this.turnDeadline - Date.now()) / 1000));
+      banner.appendChild(el(`<span class="turn-timer ${remain <= 10 ? "low" : ""}">${fmtClock(remain)}</span>`));
+    }
     bar.appendChild(banner);
 
     const actions = el(`<div class="actions"></div>`);
@@ -797,7 +823,69 @@ export class HUD {
 
     this.syncEncounterOverlay(state, me);
     this.syncDiscardOverlay(state, me);
+    this.syncTurnTimer(state);
     this.syncGameOverOverlay(state);
+  }
+
+  /** Phases during which the per-turn timer runs (a player's actual turn). */
+  private isTurnTimed(phase: GameState["phaseState"]["phase"]): boolean {
+    return phase === "production" || phase === "tradeBuild" || phase === "flight" || phase === "encounter";
+  }
+
+  /**
+   * Drive the host-configured per-turn countdown. The deadline (re)arms whenever
+   * the active seat changes; an interval ticks the on-screen clock and, on the
+   * ACTIVE player's own client, auto-advances the turn when time runs out (unless
+   * an obligation like a discard/steal/encounter is pending — those must be
+   * resolved by hand). A successful trade extends the deadline (see act()).
+   */
+  private syncTurnTimer(state: GameState): void {
+    const ps = state.phaseState;
+    const secs = state.config.turnSeconds ?? 0;
+    const armed = secs > 0 && this.isTurnTimed(ps.phase);
+    if (!armed) {
+      this.turnTimerIdx = -1;
+      if (this.turnTimerInterval) { window.clearInterval(this.turnTimerInterval); this.turnTimerInterval = 0; }
+      return;
+    }
+    // (Re)arm on a fresh turn (active seat changed).
+    if (ps.activePlayerIndex !== this.turnTimerIdx) {
+      this.turnTimerIdx = ps.activePlayerIndex;
+      this.turnDeadline = Date.now() + secs * 1000;
+    }
+    if (!this.turnTimerInterval) {
+      this.turnTimerInterval = window.setInterval(() => this.tickTurnTimer(), 250);
+    }
+  }
+
+  private tickTurnTimer(): void {
+    const state = this.game.getState();
+    const ps = state.phaseState;
+    const secs = state.config.turnSeconds ?? 0;
+    if (secs <= 0 || !this.isTurnTimed(ps.phase)) return;
+    const remain = Math.max(0, Math.ceil((this.turnDeadline - Date.now()) / 1000));
+    const chip = this.root.querySelector(".turn-timer");
+    if (chip) {
+      chip.textContent = fmtClock(remain);
+      chip.classList.toggle("low", remain <= 10);
+    }
+    if (remain > 0) return;
+    // Time's up — only the active player's own client drives the auto-advance.
+    if (!this.game.isHumanTurn()) return;
+    // Don't force-resolve obligations; the player must handle those by hand.
+    const me = state.players.find((p) => p.id === this.game.humanId);
+    if (!me) return;
+    if ((ps.pendingDiscards?.[me.id] ?? 0) > 0) return;
+    if (ps.awaitingSteal || ps.pendingFriendship || ps.phase === "encounter") return;
+    // Advance one phase step per tick until the turn passes.
+    this.resetSelection();
+    if (ps.phase === "production") {
+      if (!ps.lastRoll) this.act({ t: "rollDice" });
+    } else if (ps.phase === "tradeBuild") {
+      this.act({ t: "endTradeBuild" });
+    } else if (ps.phase === "flight") {
+      this.act({ t: "endTurn" });
+    }
   }
 
   /**
@@ -3103,4 +3191,10 @@ function escapeHtml(s: string): string {
     /[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
   );
+}
+
+/** Seconds → "m:ss" for the turn-timer chip. */
+function fmtClock(secs: number): string {
+  const s = Math.max(0, Math.floor(secs));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
