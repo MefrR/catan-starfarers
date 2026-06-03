@@ -68,7 +68,7 @@ export class ChatBox {
         <div class="chat-log"></div>
         <form class="chat-form">
           <input class="chat-input" type="text" maxlength="120" autocomplete="off"
-                 placeholder="Message…  (try a name then <3)" />
+                 placeholder="Message…" />
           <button class="chat-send" type="submit" title="Send">➤</button>
         </form>
       </div>`);
@@ -101,6 +101,19 @@ export class ChatBox {
       this.offNet = net.on((msg) => {
         if (msg.t !== "chat") return;
         const mine = msg.fromId === this.game.humanId;
+        // A "<name> <3" line is a heart aimed at a player: if it's addressed to
+        // ME, the hearts rain on MY screen. Everyone sees the chat line.
+        const heart = /^(.*?)\s*<3\s*$/.exec(msg.text);
+        if (heart) {
+          const target = heart[1]!.trim();
+          const myName = (this.me()?.name ?? "").toLowerCase();
+          const t = target.toLowerCase();
+          const forMe = t !== "" && (myName === t || myName.includes(t));
+          if (forMe) this.spawnHearts();
+          const label = target ? `❤ to <b>${escapeHtml(target)}</b>` : "❤";
+          this.append(msg.name, COLOR_HEX[msg.color] ?? "#ff6b9d", label, !mine);
+          return;
+        }
         this.append(msg.name, COLOR_HEX[msg.color] ?? "#cdd6f4", escapeHtml(msg.text), !mine);
       });
     }
@@ -149,7 +162,10 @@ export class ChatBox {
     const heart = /^(.*?)\s*<3\s*$/.exec(text);
     if (heart) {
       const name = heart[1]!.trim();
-      this.sendHearts(name);
+      // Multiplayer: relay it so the hearts rain on the NAMED player's screen
+      // (the incoming-chat handler spawns them for whoever it's addressed to).
+      if (this.game.isMultiplayer) net.send({ t: "chat", text });
+      else this.sendHearts(name);
       return;
     }
 
