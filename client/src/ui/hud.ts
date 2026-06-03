@@ -159,6 +159,10 @@ export class HUD {
     this.costPop = document.createElement("div");
     this.costPop.className = "build-cost-pop";
     document.body.appendChild(this.costPop);
+    // Surface multiplayer errors that the server rejects asynchronously (after
+    // dispatch already returned) — otherwise a blocked action looks like it just
+    // silently did nothing ("end turn is stuck", "I can't trade").
+    game.onError = (msg) => this.centerNote(msg);
     // F2/F4/F5: toggle-able chat box (dev-mode + heart codes live here).
     this.chat = new ChatBox(game);
     // On-map colony/trade-ship picker, anchored over the clicked launch point.
@@ -758,10 +762,35 @@ export class HUD {
     exitBtn.addEventListener("click", () => this.confirmExit());
     screen.appendChild(exitBtn);
 
+    // Slim hot-zones running down the left and right screen edges so the Fleet
+    // panel and the victory tracker can be toggled by tapping anywhere along the
+    // edge — not only their top header (handy on touch / small screens).
+    const leftEdge = el(`<div class="edge-toggle left" title="Toggle the Fleet panel"></div>`);
+    leftEdge.addEventListener("click", () => { this.sidebarCollapsed = !this.sidebarCollapsed; this.rerender(); });
+    const rightEdge = el(`<div class="edge-toggle right" title="Toggle the victory tracker"></div>`);
+    rightEdge.addEventListener("click", () => { this.scoreCompact = !this.scoreCompact; this.rerender(); });
+    screen.appendChild(leftEdge);
+    screen.appendChild(rightEdge);
+
     screen.appendChild(this.buildSidebar(state, me));
     screen.appendChild(scoreboard);
     screen.appendChild(bar);
+
+    // The HUD re-renders wholesale, which would reset the scroll position of any
+    // scrollable panel (e.g. expanding "Costs & victory points" snapped the Fleet
+    // sidebar back to the top). Snapshot scroll offsets and restore them after.
+    const scrollSel = [".sidebar-left", ".scoreboard", ".action-bar"];
+    const prevScroll = new Map<string, number>();
+    for (const sel of scrollSel) {
+      const e = this.root.querySelector(sel);
+      if (e) prevScroll.set(sel, e.scrollTop);
+    }
     this.root.replaceChildren(screen);
+    for (const sel of scrollSel) {
+      const top = prevScroll.get(sel);
+      const e = top ? this.root.querySelector(sel) : null;
+      if (e && top) e.scrollTop = top;
+    }
 
     this.syncEncounterOverlay(state, me);
     this.syncGameOverOverlay(state);

@@ -23,7 +23,8 @@
       "PowerShell($env:Path = \"C:\\\\Program Files\\\\nodejs;\" + $env:Path; cd \"C:\\\\Users\\\\Admin\\\\Downloads\\\\Catan Starfarers\"; npx tsc -b shared 2>&1 | Select-Object -First 40; \"EXIT=$LASTEXITCODE\")",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\)\")",
       "Bash(git commit -m ' *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(curl -s \"http://localhost:5180/src/render/board.ts\")"
     ]
   }
 }

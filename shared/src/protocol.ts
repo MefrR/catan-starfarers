@@ -24,6 +24,8 @@ export type ClientIntent =
   | { t: "setColor"; color: PlayerColor }
   | { t: "startGame"; config: Partial<GameConfig> }
   | { t: "playAgain" } // host only: after a game ends, return everyone to the lobby
+  | { t: "leaveRoom" } // leave the room entirely (Back button in the lobby)
+  | { t: "chat"; text: string } // real player-to-player chat, relayed to the room
   // --- Set-up phase (4-round Catanian Colonies placement) ---
   | { t: "setupRoll" } // roll both dice to determine the starting player
   | { t: "setupPlaceColony"; intersectionId: string } // rounds 1-3
@@ -65,6 +67,7 @@ export type ServerMessage =
   | { t: "lobby"; lobby: LobbyState; youId: string }
   | { t: "state"; state: GameState; youId: string }
   | { t: "error"; message: string }
+  | { t: "chat"; fromId: string; name: string; color: PlayerColor; text: string }
   | { t: "log"; line: string }
   | { t: "tradeOffer"; tradeId: string; fromId: string; give: Partial<Record<Resource, number>>; want: Partial<Record<Resource, number>> };
 

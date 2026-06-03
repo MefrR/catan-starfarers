@@ -98,6 +98,11 @@ io.on("connection", (socket) => {
         return;
       }
       room.handleIntent(ref.playerId, intent);
+      // A player who left the room is no longer mapped to it; reap empty lobbies.
+      if (intent.t === "leaveRoom") {
+        socketToRoom.delete(socket.id);
+        if (room.isEmpty && !room.hasStarted) rooms.delete(ref.roomCode);
+      }
     } catch (err) {
       console.error("intent error", err);
       socket.emit(SOCKET_EVENT.message, { t: "error", message: "Server error." });

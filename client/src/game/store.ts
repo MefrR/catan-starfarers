@@ -33,6 +33,10 @@ export interface GameDriver {
    *  LocalGame driver supports it; LAN games leave it undefined. */
   readonly devMode?: boolean;
   setDevMode?(on: boolean): void;
+  /** Multiplayer errors arrive asynchronously (the server rejects an intent after
+   *  dispatch() has already returned). The UI sets this so it can still surface
+   *  them — e.g. "Not your turn." or "Resolve discards first." */
+  onError?: (msg: string) => void;
 }
 
 /** AI move pacing (ms) so the human can watch opponents play. */

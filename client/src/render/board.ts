@@ -566,17 +566,18 @@ export class BoardRenderer {
         if (!inter) continue;
         const cx = this.fit.ox + inter.x * s;
         const cy = this.fit.oy + inter.y * s;
-        // Base radius is the old marker (s*0.13) enlarged 30%, then it breathes.
-        const base = s * 0.13 * 1.3;
-        const r = base * (1 + 0.16 * pulse);
+        // A compact marker that gently breathes (kept small so it doesn't smother
+        // the planet underneath).
+        const base = s * 0.085;
+        const r = base * (1 + 0.14 * pulse);
         // Soft outer glow that swells with the pulse.
-        g.circle(cx, cy, r + s * 0.16 * pulse).fill({
+        g.circle(cx, cy, r + s * 0.06 * pulse).fill({
           color: 0x57e389,
           alpha: 0.1 + 0.14 * pulse,
         });
-        g.circle(cx, cy, r + s * 0.08).stroke({
+        g.circle(cx, cy, r + s * 0.05).stroke({
           color: 0x57e389,
-          width: 2.5,
+          width: 2,
           alpha: 0.45 + 0.45 * pulse,
         });
         // Bright core ring.
@@ -878,9 +879,11 @@ export class BoardRenderer {
         alpha: isColonySite || isDock ? 0.9 : 0.5,
       });
       // Interactive hit area (generous) so the HUD can drive board selection.
+      // Pad with a constant ~0.6cm so finger taps near (not dead-on) the point
+      // still register on touch screens, even when the board is zoomed out.
       node.eventMode = "static";
       node.cursor = "pointer";
-      node.hitArea = new Circle(ix, iy, scale * 0.16);
+      node.hitArea = new Circle(ix, iy, scale * 0.16 + 22);
       const id = inter.id;
       node.on("pointertap", () => this.onIntersectionClick?.(id));
       // Hover description (colony sites / docking points are the meaningful ones).
@@ -988,7 +991,7 @@ export class BoardRenderer {
       this.drawShip(g, ship.kind, sx, sy, r, color);
       g.eventMode = "static";
       g.cursor = "pointer";
-      g.hitArea = new Circle(sx, sy, r * 1.4);
+      g.hitArea = new Circle(sx, sy, r * 1.4 + 22);
       const id = ship.id;
       g.on("pointertap", () => this.onShipClick?.(id));
       shipLayer.addChild(g);

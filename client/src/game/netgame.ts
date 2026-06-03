@@ -16,6 +16,8 @@ export class NetworkGame implements GameDriver {
   private state: GameState;
   private listeners = new Set<Listener>();
   private lastError: string | undefined;
+  /** Set by the HUD to surface async server rejections (see GameDriver). */
+  onError?: (msg: string) => void;
 
   constructor(initial: GameState, youId: string) {
     this.humanId = youId;
@@ -26,6 +28,8 @@ export class NetworkGame implements GameDriver {
         this.emit();
       } else if (msg.t === "error") {
         this.lastError = msg.message;
+        // The error arrives after dispatch() returned, so push it to the UI.
+        this.onError?.(msg.message);
       }
     });
   }

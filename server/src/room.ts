@@ -163,6 +163,31 @@ export class Room {
         this.broadcastState();
         return;
       }
+      case "chat": {
+        // Relay a chat line to everyone in the room (including the sender, so all
+        // clients render an identical log). Works in the lobby and mid-game.
+        const text = String(intent.text ?? "").slice(0, 200).trim();
+        if (!text) return;
+        this.broadcast({
+          t: "chat",
+          fromId: member.id,
+          name: member.name,
+          color: member.color,
+          text,
+        });
+        return;
+      }
+      case "leaveRoom": {
+        // Remove the member from the room and tell the rest. If the host leaves,
+        // promote the next remaining member so the room stays controllable.
+        this.members.delete(id);
+        if (member.isHost) {
+          const next = [...this.members.values()][0];
+          if (next) next.isHost = true;
+        }
+        this.broadcastLobby();
+        return;
+      }
       case "playAgain": {
         // Host returns the whole room to the lobby for a fresh game. Colors,
         // names, and host stay as they were; only the in-progress game is cleared.

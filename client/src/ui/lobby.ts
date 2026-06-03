@@ -184,6 +184,7 @@ export class LobbyUI {
           <div class="row" id="colors"></div>
           ${isHost ? `<label class="mt">Map style</label><div class="row" id="mapstyle"></div>` : ""}
           ${isHost ? `<button class="mt" id="start">Start game (${lobby.players.length} ${lobby.players.length === 1 ? "player" : "players"})</button>` : `<p class="subtitle mt">Waiting for the host to start…</p>`}
+          <button class="mt secondary" id="leave">← Leave room</button>
           <div class="error">${this.errorText}</div>
         </div>
       </div>
@@ -223,6 +224,16 @@ export class LobbyUI {
         t: "startGame",
         config: { playerCount: lobby.players.length, fogMap: this.fogMap },
       });
+    });
+
+    // Leave the room: drop our seat on the server, forget the saved session, and
+    // return to the connect screen (or the main menu if a Back handler was given).
+    screen.querySelector("#leave")?.addEventListener("click", () => {
+      net.send({ t: "leaveRoom" });
+      clearSession();
+      this.lobby = null;
+      if (this.onBack) this.onBack();
+      else this.renderConnect();
     });
 
     this.root.replaceChildren(screen);

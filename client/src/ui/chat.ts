@@ -1,4 +1,5 @@
 import type { GameDriver } from "../game/store.js";
+import { net } from "../net.js";
 
 const el = (html: string): HTMLElement => {
   const t = document.createElement("template");
@@ -92,16 +93,31 @@ export class ChatBox {
       this.setOpen(false);
     };
     document.addEventListener("pointerdown", this.outside, true);
+
+    // Multiplayer: relay real chat between players. The server echoes every line
+    // (including our own) so all clients render the same log; the unread dot only
+    // lights for lines from someone else while the panel is shut.
+    if (game.isMultiplayer) {
+      this.offNet = net.on((msg) => {
+        if (msg.t !== "chat") return;
+        const mine = msg.fromId === this.game.humanId;
+        this.append(msg.name, COLOR_HEX[msg.color] ?? "#cdd6f4", escapeHtml(msg.text), !mine);
+      });
+    }
   }
 
   /** Outside-click handler that closes the panel. */
   private outside: ((e: PointerEvent) => void) | null = null;
+  /** Unsubscribe from network chat (multiplayer only). */
+  private offNet: (() => void) | null = null;
 
   destroy(): void {
     this.replyTimers.forEach((t) => window.clearTimeout(t));
     this.replyTimers = [];
     if (this.outside) document.removeEventListener("pointerdown", this.outside, true);
     this.outside = null;
+    this.offNet?.();
+    this.offNet = null;
     this.toggle.remove();
     this.panel.remove();
     document.querySelectorAll(".heart-fx").forEach((n) => n.remove());
@@ -137,7 +153,14 @@ export class ChatBox {
       return;
     }
 
-    // Ordinary message from the human.
+    // Multiplayer: send the line to the server, which echoes it back to everyone
+    // (including us) — so we don't append locally and don't fire an AI reply.
+    if (this.game.isMultiplayer) {
+      net.send({ t: "chat", text });
+      return;
+    }
+
+    // Single-player: append locally and let a rival AI fire back.
     const me = this.me();
     this.append(me?.name ?? "You", me ? COLOR_HEX[me.color] ?? "#fff" : "#fff", text);
     this.maybeAiReply();

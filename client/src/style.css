@@ -24,6 +24,18 @@ html, body {
   color: var(--text);
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* Nothing on the board/HUD is meant to be selected; a long-press or drag on
+   * touch should never highlight text or pop the selection handles. */
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+}
+/* …but real text fields still need to be editable/selectable. */
+input, textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 #board {
@@ -699,6 +711,20 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .give-hint { font-size: 11px; color: var(--muted); font-style: italic; }
 .ptrade-mine-resp { font-size: 12px; color: var(--muted); font-style: italic; }
 
+/* Edge hot-zones: tap anywhere down the left/right screen edge to toggle the
+ * Fleet panel / victory tracker (not just their headers). Kept narrow and below
+ * the corner controls so they don't swallow board pans or the exit/chat buttons. */
+.edge-toggle {
+  position: fixed; top: 132px; bottom: 150px; width: 20px; z-index: 6;
+  cursor: pointer; background: transparent;
+}
+.edge-toggle.left { left: 0; }
+.edge-toggle.right { right: 0; }
+.edge-toggle:hover { background: linear-gradient(to var(--dir, right),
+  color-mix(in srgb, var(--accent) 30%, transparent), transparent); }
+.edge-toggle.left:hover { --dir: right; }
+.edge-toggle.right:hover { --dir: left; }
+
 /* --- Reference card: build costs + VP (collapsible) --- */
 .ref-toggle {
   width: 100%; text-align: left; padding: 7px 10px; font-size: 12px;
@@ -712,10 +738,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
   color: var(--muted); margin: 6px 0 2px;
 }
-.ref-row { display: flex; align-items: center; gap: 7px; font-size: 12px; padding: 2px 0; }
+.ref-row { display: flex; align-items: center; gap: 7px; font-size: 12px; padding: 2px 0; color: var(--text); }
 .ref-row .ref-ico { width: 16px; height: 16px; display: inline-flex; flex: 0 0 auto; }
 .ref-row .ref-ico svg { width: 100%; height: 100%; }
-.ref-name { flex: 1; }
+.ref-name { flex: 1; color: var(--text); }
 .ref-cost { display: inline-flex; gap: 2px; flex-wrap: wrap; justify-content: flex-end; }
 .ref-res { width: 13px; height: 13px; display: inline-flex; }
 .ref-res svg { width: 100%; height: 100%; }
