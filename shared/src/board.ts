@@ -381,6 +381,21 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
   }
   const homePlanetIds = new Set<string>();
 
+  // The Catanian home systems collectively start with a fixed resource spread
+  // (matching the original opening): 3 fuel, 2 food, 3 ore, 2 carbon, 2 goods.
+  // colors → resources: orange=fuel, green=food, red=ore, blue=carbon, multicolor=goods.
+  const homeColorPool = shuffle<PlanetColor>(
+    [
+      "orange", "orange", "orange",
+      "green", "green",
+      "red", "red", "red",
+      "blue", "blue",
+      "multicolor", "multicolor",
+    ],
+    rand,
+  );
+  let homeColorIdx = 0;
+
   // Build planetary-system sectors with 3 planet-hexes each.
   orderedSystems.forEach((sys, sysIdx) => {
     const palette = palettes[sysIdx % palettes.length]!;
@@ -389,7 +404,7 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
       const { x, y } = hexCenter(hq, hr);
       const planet: Planet = {
         id: `${sys.sectorId}_p${k}`,
-        color: palette[k]!,
+        color: isHome ? (homeColorPool[homeColorIdx++] ?? palette[k]!) : palette[k]!,
         x,
         y,
         number: isHome ? homeNumbers[sysIdx]![k]! : nextNumber(),
