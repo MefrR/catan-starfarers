@@ -64,6 +64,7 @@ export type ClientIntent =
       resources?: Partial<Record<Resource, number>>;
     }
   | { t: "spaceJump"; shipId: string; toIntersectionId: string }
+  | { t: "encounterShake" } // duel: the subject or the designated rival shakes
   | { t: "endTurn" };
 
 /** Server -> client messages. */

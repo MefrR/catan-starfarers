@@ -324,7 +324,15 @@ export interface EncounterState {
   /** Player resolving the encounter. */
   subjectId: PlayerId;
   /** Pending decision the subject must commit before reveal. */
-  awaiting: "number" | "yesno" | "resolve" | "combat" | "selectShip" | "giveResources" | "confirm";
+  awaiting: "number" | "yesno" | "resolve" | "combat" | "selectShip" | "giveResources" | "confirm" | "duel";
+  /** An interactive duel: the subject and a designated rival each shake their
+   *  mothership; the card outcome (resolveDuel) applies once both rolls are in. */
+  duel?: {
+    opponentId: PlayerId;
+    stat: "combat" | "speed";
+    subjectRoll?: number;
+    oppRoll?: number;
+  };
   /**
    * Follow-up decisions a card queues after its main outcome (resolved in order):
    * the subject picks which resources to surrender, and/or which ship a combat

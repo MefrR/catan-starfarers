@@ -154,6 +154,8 @@ export class HUD {
   /** Signature of the center discard prompt currently shown, so it only rebuilds
    *  when the owed count or the current selection changes. */
   private shownDiscardSig = "";
+  /** Signature of the current duel's rolls, so the overlay refreshes as shakes land. */
+  private shownDuelSig = "";
   /** Snapshot of each player's fame/medals/hand taken when an encounter opens. */
   private encSnapshot: Record<string, { fame: number; medals: number; hand: ResourceBag }> = {};
   /** Whether the center-screen game-over results overlay is already shown. */
@@ -876,6 +878,13 @@ export class HUD {
         const mine = !(enc.confirmedBy ?? []).includes(me.id);
         return { key: `enc|${enc.cardId}|all`, seconds: 20, kind: "encounter", mine };
       }
+      if (enc.awaiting === "duel" && enc.duel) {
+        // Either dueller's shake is "mine" if it's my seat and I haven't shaken.
+        const mine =
+          (enc.subjectId === me.id && enc.duel.subjectRoll == null) ||
+          (enc.duel.opponentId === me.id && enc.duel.oppRoll == null);
+        return { key: `enc|${enc.cardId}|duel|${enc.duel.subjectRoll ?? "x"}|${enc.duel.oppRoll ?? "x"}`, seconds: 20, kind: "encounter", mine };
+      }
       return { key: `enc|${enc.cardId}|${enc.awaiting}`, seconds: 20, kind: "encounter", mine: enc.subjectId === me.id };
     }
     // 3. The ACTIVE player's current step — shown to everyone; only they auto-act.
@@ -969,6 +978,8 @@ export class HUD {
   private autoEncounterRandom(state: GameState, me: PlayerState): void {
     const enc = state.phaseState.encounter;
     if (!enc) return;
+    // Duel timed out — auto-shake my mothership so the fight resolves.
+    if (enc.awaiting === "duel") { this.act({ t: "encounterShake" }); return; }
     if (enc.allPlayers) {
       // Wear & Tear: if over the upgrade limit, scrap a random owned upgrade.
       const card = ENCOUNTER_CARDS[enc.cardId];
@@ -2123,10 +2134,14 @@ export class HUD {
     const confirmChanged = enc?.allPlayers && confirmCount !== this.shownConfirmCount;
     // A card can switch its prompt mid-resolution (combat defeat → "selectShip").
     const stepChanged = enc && this.shownEncounter?.awaiting !== enc.awaiting;
-    if (enc && (isNew || confirmChanged || stepChanged)) {
+    // A duel rebuilds whenever either roll arrives (so the buttons / rolls update).
+    const duelSig = `${enc?.duel?.subjectRoll ?? "x"}|${enc?.duel?.oppRoll ?? "x"}`;
+    const duelChanged = enc?.awaiting === "duel" && duelSig !== this.shownDuelSig;
+    if (enc && (isNew || confirmChanged || stepChanged || duelChanged)) {
       if (isNew) this.snapshotPlayers(state);
       this.shownEncounter = { cardId: enc.cardId, subjectId: enc.subjectId, awaiting: enc.awaiting };
       this.shownConfirmCount = confirmCount;
+      this.shownDuelSig = duelSig;
       this.buildEncounterOverlay(state, enc.subjectId === me.id, me);
     }
 
@@ -2161,6 +2176,39 @@ export class HUD {
     cardEl.appendChild(el(`<div class="enc-tag">Encounter</div>`));
     cardEl.appendChild(el(`<div class="enc-title">${escapeHtml(card?.title ?? "Encounter")}</div>`));
     cardEl.appendChild(el(`<div class="enc-text">${escapeHtml(card?.text ?? "")}</div>`));
+
+    // Interactive duel: the subject and the designated rival each shake. Whoever
+    // hasn't shaken yet (and it's their seat) gets a Shake button; everyone sees
+    // both rolls as they come in.
+    if (enc.awaiting === "duel" && enc.duel) {
+      const opp = state.players.find((p) => p.id === enc.duel!.opponentId);
+      const statLabel = enc.duel.stat === "combat" ? "combat strength" : "speed";
+      cardEl.appendChild(el(`<div class="enc-subject">Duel — compare ${statLabel}</div>`));
+      const row = (p: PlayerState | undefined, roll: number | undefined, role: string): HTMLElement => {
+        const name = p ? escapeHtml(p.name) : "Rival";
+        const col = p ? COLOR_HEX[p.color] : "#fff";
+        return el(`<div class="enc-rost" style="color:${col};opacity:1">${role}: <b>${name}</b> ${roll != null ? `— shook <b>${roll}</b>` : "— …"}</div>`);
+      };
+      const roster = el(`<div class="enc-roster" style="flex-direction:column;gap:6px"></div>`);
+      roster.appendChild(row(subject, enc.duel.subjectRoll, "Pilot"));
+      roster.appendChild(row(opp, enc.duel.oppRoll, "Rival"));
+      cardEl.appendChild(roster);
+      const iAmSubject = enc.subjectId === me.id && enc.duel.subjectRoll == null;
+      const iAmOpp = enc.duel.opponentId === me.id && enc.duel.oppRoll == null;
+      const choices = el(`<div class="enc-choices"></div>`);
+      if (iAmSubject || iAmOpp) {
+        if (iAmOpp) cardEl.querySelector(".enc-text")!.textContent = "You act as the rival — shake your mothership!";
+        const b = el(`<button>🎲 Shake the mothership</button>`);
+        b.addEventListener("click", () => this.act({ t: "encounterShake" }));
+        choices.appendChild(b);
+      } else {
+        choices.appendChild(el(`<div class="enc-wait">Waiting for both motherships to shake…</div>`));
+      }
+      cardEl.appendChild(choices);
+      document.body.appendChild(overlay);
+      requestAnimationFrame(() => overlay.classList.add("show"));
+      return;
+    }
 
     if (enc.allPlayers) {
       // Wear & Tear: affects everyone — stays up until all players confirm.

@@ -40,7 +40,7 @@ import {
   availableFriendshipCards,
   claimedFriendshipCards,
 } from "./friendship.js";
-import { beginEncounter, resolveEncounter, confirmAllPlayerEncounter } from "./encounters.js";
+import { beginEncounter, resolveEncounter, confirmAllPlayerEncounter, encounterShake } from "./encounters.js";
 import type { ClientIntent } from "./protocol.js";
 
 export type Rng = () => number;
@@ -395,12 +395,17 @@ function doProduction(state: GameState, rng: Rng): void {
     distributeProduction(state, sum, rng);
   }
 
-  // On a normal roll the active player draws free reserve-pile cards based on VP
-  // (the catch-up bonus). A 7 has NO reserve bonus: its effect is the steal plus
-  // a single bank card for every other player.
-  if (sum !== 7) {
-    const draws = reserveDrawForVP(roller.victoryPoints);
-    if (draws > 0) drawReserveBonus(state, rng);
+  // The active roller draws free reserve-pile cards based on VP (the catch-up
+  // bonus) on EVERY roll, including a 7. On a 7 it's deferred until the steal /
+  // discards resolve, then fires (in stealTarget / discard).
+  const draws = reserveDrawForVP(roller.victoryPoints);
+  if (draws > 0) {
+    const deferred = state.phaseState.awaitingSteal || !!state.phaseState.pendingDiscards;
+    if (deferred) {
+      state.phaseState.pendingReserveDraw = { playerId: roller.id, count: draws };
+    } else {
+      drawReserveBonus(state, rng);
+    }
   }
 
   state.phaseState.phase = "tradeBuild";
@@ -1338,6 +1343,14 @@ export function applyIntent(
       }
       if (ps.encounter.subjectId !== playerId) return fail(input, "Not your encounter.");
       resolveEncounter(state, intent.choice, rng, intent.resources);
+      recomputeVp(state);
+      return { state };
+    }
+
+    case "encounterShake": {
+      if (ps.phase !== "encounter" || !ps.encounter || ps.encounter.awaiting !== "duel")
+        return fail(input, "No duel to shake for right now.");
+      if (!encounterShake(state, playerId, rng)) return fail(input, "It's not your shake.");
       recomputeVp(state);
       return { state };
     }

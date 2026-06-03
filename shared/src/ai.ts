@@ -117,6 +117,14 @@ export function aiObligation(state: GameState, seatId: string): ClientIntent | n
     return { t: "encounterChoice", choice: 0 };
   }
 
+  // Duel: if I'm the subject or the designated rival and haven't shaken yet,
+  // shake my mothership so the fight resolves (works off-turn for the rival).
+  if (ps.phase === "encounter" && ps.encounter?.awaiting === "duel" && ps.encounter.duel) {
+    const d = ps.encounter.duel;
+    if (ps.encounter.subjectId === seatId && d.subjectRoll == null) return { t: "encounterShake" };
+    if (d.opponentId === seatId && d.oppRoll == null) return { t: "encounterShake" };
+  }
+
   // Respond to a live broadcast trade offer (if I haven't already responded and
   // it isn't my own). `give`/`want` are from the PROPOSER's perspective: I would
   // receive `give` and pay `want`.

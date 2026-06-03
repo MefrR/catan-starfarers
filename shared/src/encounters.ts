@@ -24,7 +24,7 @@ import {
 
 type Rng = () => number;
 
-type Awaiting = "number" | "yesno" | "resolve" | "combat" | "selectShip" | "confirm";
+type Awaiting = "number" | "yesno" | "resolve" | "combat" | "selectShip" | "confirm" | "duel";
 
 export interface EncounterCard {
   id: number;
@@ -42,6 +42,9 @@ export interface EncounterCard {
   /** Wear & Tear: players holding MORE than this many upgrades scrap one (P6i). */
   wearTearThreshold?: number;
   resolve: (ctx: EncounterCtx) => void;
+  /** Cards with an interactive duel: applied once both motherships have shaken
+   *  (won = the subject's shake ≥ the rival's). */
+  resolveDuel?: (ctx: EncounterCtx, won: boolean) => void;
 }
 
 interface EncounterCtx {
@@ -282,21 +285,61 @@ function relativeOpponent(state: GameState, subject: PlayerState, offset: number
   return state.players.find((p) => p.id !== subject.id) ?? null;
 }
 
-/** A duel: subject shakes vs a relative opponent on the given stat; subject wins
- *  on a tie. Logs both rolls (the spectators see the result; the chooser sees the
- *  outcome only after committing). */
-function duel(
-  ctx: EncounterCtx,
-  offset: number,
-  stat: "combat" | "speed",
-): boolean {
+/** Begin an INTERACTIVE duel: the subject and a relative rival each shake their
+ *  mothership (the rival acts as the pirate/opponent). The card's `resolveDuel`
+ *  applies the outcome once both rolls are in. Returns nothing — the encounter
+ *  now awaits the shakes. If there's no rival (solo), resolve immediately. */
+function setupDuel(ctx: EncounterCtx, offset: number, stat: "combat" | "speed"): void {
   const { state, subject, rng, log } = ctx;
   const opp = relativeOpponent(state, subject, offset);
-  const mine = stat === "combat" ? shakeCombat(subject, rng) : shakeSpeed(subject, rng);
-  const theirs = opp ? (stat === "combat" ? shakeCombat(opp, rng) : shakeSpeed(opp, rng)) : 0;
-  const label = stat === "combat" ? "strength" : "speed";
-  log(`${subject.name} ${label} ${mine} vs ${opp?.name ?? "the void"} ${theirs}.`);
-  return mine >= theirs;
+  const enc = state.phaseState.encounter;
+  if (!enc) return;
+  if (!opp) {
+    // No rival to fight — the subject just shakes against a fixed threshold.
+    const mine = stat === "combat" ? shakeCombat(subject, rng) : shakeSpeed(subject, rng);
+    const card = ENCOUNTER_CARDS[enc.cardId];
+    card?.resolveDuel?.(ctx, mine >= 7);
+    return;
+  }
+  enc.duel = { opponentId: opp.id, stat };
+  enc.awaiting = "duel";
+  log(`${subject.name} faces off against ${opp.name} — both shake their motherships.`);
+}
+
+/**
+ * Record one player's duel shake. When both the subject and the rival have
+ * shaken, the higher result wins (subject wins ties) and the card's resolveDuel
+ * applies the outcome, then the encounter advances/closes. Returns true if the
+ * shake was accepted.
+ */
+export function encounterShake(state: GameState, playerId: PlayerId, rng: Rng): boolean {
+  const enc = state.phaseState.encounter;
+  if (!enc || enc.awaiting !== "duel" || !enc.duel) return false;
+  const subject = state.players.find((p) => p.id === enc.subjectId);
+  const opp = state.players.find((p) => p.id === enc.duel!.opponentId);
+  if (!subject || !opp) return false;
+  const shake = (p: PlayerState): number =>
+    enc.duel!.stat === "combat" ? shakeCombat(p, rng) : shakeSpeed(p, rng);
+  if (playerId === subject.id && enc.duel.subjectRoll == null) {
+    enc.duel.subjectRoll = shake(subject);
+    logTo(state, `${subject.name} shakes: ${enc.duel.subjectRoll}.`);
+  } else if (playerId === opp.id && enc.duel.oppRoll == null) {
+    enc.duel.oppRoll = shake(opp);
+    logTo(state, `${opp.name} (the rival) shakes: ${enc.duel.oppRoll}.`);
+  } else {
+    return false;
+  }
+  if (enc.duel.subjectRoll != null && enc.duel.oppRoll != null) {
+    const won = enc.duel.subjectRoll >= enc.duel.oppRoll;
+    const card = ENCOUNTER_CARDS[enc.cardId]!;
+    logTo(state, `${subject.name} ${enc.duel.subjectRoll} vs ${opp.name} ${enc.duel.oppRoll} — ${won ? "victory!" : "defeat."}`);
+    enc.duel = undefined;
+    enc.awaiting = "resolve";
+    card.resolveDuel?.({ state, subject, choice: won, rng, log: (l) => logTo(state, l) }, won);
+    if (advanceEncounterSteps(state)) return true;
+    closeEncounter(state, enc.cardId);
+  }
+  return true;
 }
 
 /** Grant a free trade ship (returned to the player's supply to deploy). */
@@ -597,22 +640,24 @@ function pirateDuelDemandCard(
     yesHint: `Surrender 2 resources${opts.surrenderFame ? ` (−${opts.surrenderFame} fame)` : ""}`,
     noHint: "Fight! Shake vs a rival's strength",
     resolve: (ctx) => {
-      const { state, subject, log } = ctx;
+      const { subject, log } = ctx;
       if (ctx.choice === true) {
         requestLoss(ctx, 2);
         if (opts.surrenderFame) loseFame(subject, opts.surrenderFame);
-        log(`${subject.name} surrenders 2 resources to the pirates.`);
+        log(`${subject.name} hands the pirates 2 resources and they leave.`);
         return;
       }
-      if (duel(ctx, offset, "combat")) {
-        if (opts.winCarbon) takeSpecific(state, subject, "carbon", 2);
-        else grantTradeShip(subject, log);
-        gainFame(subject, 1);
-        log(`Victory! ${subject.name} seizes the pirate's prize, +1 fame.`);
+      setupDuel(ctx, offset, "combat");
+    },
+    resolveDuel: (ctx, won) => {
+      const { state, subject, log } = ctx;
+      if (won) {
+        if (opts.winCarbon) { takeSpecific(state, subject, "carbon", 2); gainFame(subject, 1); log(`Victory! You blast the pirates and seize 2 carbon and 1 fame.`); }
+        else { grantTradeShip(subject, log); gainFame(subject, 1); log(`Victory! You capture the pirate ship — a free trade ship and 1 fame.`); }
       } else {
         gainFame(subject, 1);
         scrapUpgrade(subject, log);
-        log(`Defeat, but ${subject.name} earns 1 fame for their courage.`);
+        log(`Defeat — your ship is damaged (lose an upgrade), but you earn 1 fame for your courage.`);
       }
     },
   };
@@ -633,24 +678,22 @@ function pirateFleeCard(id: number, offset: number, win: "upgrade" | "ship"): En
       const opp = relativeOpponent(state, subject, offset);
       if (ctx.choice === true) {
         if (!opp || subject.upgrades.booster >= opp.upgrades.booster) {
-          log(`${subject.name} outruns the pirate and escapes.`);
+          log(`${subject.name} fires the boosters and outruns the pirate — escape!`);
           return;
         }
         log(`${subject.name} is too slow to flee — forced to fight!`);
       }
-      if (duel(ctx, offset, "combat")) {
-        if (win === "upgrade") {
-          addFreeUpgrade(subject);
-          gainFame(subject, 1);
-          log(`Victory! ${subject.name} salvages tech: a free upgrade, +1 fame.`);
-        } else {
-          grantTradeShip(subject, log);
-          log(`Victory! ${subject.name} captures the pirate ship.`);
-        }
+      setupDuel(ctx, offset, "combat");
+    },
+    resolveDuel: (ctx, won) => {
+      const { subject, log } = ctx;
+      if (won) {
+        if (win === "upgrade") { addFreeUpgrade(subject); gainFame(subject, 1); log(`Victory! You salvage alien tech — a free upgrade and 1 fame.`); }
+        else { grantTradeShip(subject, log); log(`Victory! You seize the pirate ship — a free trade ship.`); }
       } else {
         if (win === "upgrade") scrapUpgrade(subject, log);
         else damageOneShip(ctx);
-        log(`Defeat — ${subject.name}'s ship is damaged.`);
+        log(`Defeat — the pirate cripples your ship.`);
       }
     },
   };
@@ -746,22 +789,25 @@ function rescueDuelCard(
     yesHint: "Fight the pirates — shake vs their strength",
     noHint: refuseFame ? "Refuse — −1 fame, your cowardice is known" : "Fly on",
     resolve: (ctx) => {
-      const { state, subject, log } = ctx;
+      const { subject, log } = ctx;
       if (ctx.choice !== true) {
         if (refuseFame) loseFame(subject, refuseFame);
-        log(`${subject.name} declines the rescue.`);
+        log(`${subject.name} flies on — the galaxy notes the cowardice.`);
         return;
       }
-      if (duel(ctx, offset, "combat")) {
-        if (win === "resources") takeChoice(state, subject, 2);
-        else if (win === "goods") takeSpecific(state, subject, "goods", 2);
-        else if (win === "ship") grantTradeShip(subject, log);
-        else spaceJumpReward(state, subject, log);
+      setupDuel(ctx, offset, "combat");
+    },
+    resolveDuel: (ctx, won) => {
+      const { state, subject, log } = ctx;
+      if (won) {
+        if (win === "resources") { takeChoice(state, subject, 2); log(`Victory! You drive off the pirates and the grateful crew gives you 2 resources and 1 fame.`); }
+        else if (win === "goods") { takeSpecific(state, subject, "goods", 2); log(`Victory! You rescue a merchant — 2 goods and 1 fame.`); }
+        else if (win === "ship") { grantTradeShip(subject, log); log(`Victory! The rescued ship joins you — a free trade ship and 1 fame.`); }
+        else { spaceJumpReward(state, subject, log); log(`Victory! The rescued pilot opens a wormhole — a space jump and 1 fame.`); }
         gainFame(subject, 1);
-        log(`Victory! ${subject.name} saves the ship, +1 fame.`);
       } else {
         damageOneShip(ctx);
-        log(`Defeat — a ship is damaged.`);
+        log(`Defeat — the pirates damage one of your ships.`);
       }
     },
   };
@@ -783,21 +829,24 @@ function distressSpeedCard(
     yesHint: "Race to help — shake vs a rival's speed",
     noHint: refuseFame ? "Ignore it — −1 fame" : "Fly on",
     resolve: (ctx) => {
-      const { state, subject, rng, log } = ctx;
+      const { subject, log } = ctx;
       if (ctx.choice !== true) {
         if (refuseFame) loseFame(subject, refuseFame);
-        log(`${subject.name} ignores the distress call.`);
+        log(`${subject.name} ignores the distress call — the ship falls into the sun.`);
         return;
       }
-      if (duel(ctx, offset, "speed")) {
-        if (win === "upgrade") addFreeUpgrade(subject);
-        else if (win === "ship") grantTradeShip(subject, log);
-        else robEachOpponent(state, subject, rng, log);
+      setupDuel(ctx, offset, "speed");
+    },
+    resolveDuel: (ctx, won) => {
+      const { state, subject, rng, log } = ctx;
+      if (won) {
+        if (win === "upgrade") { addFreeUpgrade(subject); log(`You reach the ship in time and rescue a scientist — a free upgrade and 1 fame.`); }
+        else if (win === "ship") { grantTradeShip(subject, log); log(`You rescue a merchant in time — a free trade ship and 1 fame.`); }
+        else { robEachOpponent(state, subject, rng, log); log(`You rescue a benefactor who rewards you — 1 resource from each rival and 1 fame.`); }
         gainFame(subject, 1);
-        log(`Rescue succeeds! +1 fame.`);
       } else {
         scrapUpgrade(subject, log);
-        log(`The rescue fails — a ship is damaged.`);
+        log(`Too slow — the rescue fails and your ship is damaged.`);
       }
     },
   };
@@ -814,17 +863,21 @@ function wormholeCard(id: number, offset: number): EncounterCard {
     yesHint: "Attempt the jump — shake vs a rival's speed",
     noHint: "Decline and fly on",
     resolve: (ctx) => {
-      const { state, subject, log } = ctx;
+      const { subject, log } = ctx;
       if (ctx.choice !== true) {
-        log(`${subject.name} steers clear of the wormhole.`);
+        log(`${subject.name} steers clear of the wormhole and flies on.`);
         return;
       }
-      if (duel(ctx, offset, "speed")) {
+      setupDuel(ctx, offset, "speed");
+    },
+    resolveDuel: (ctx, won) => {
+      const { state, subject, log } = ctx;
+      if (won) {
         spaceJumpReward(state, subject, log);
-        log(`The jump succeeds!`);
+        log(`You ride the wormhole — a space jump!`);
       } else {
         damageOneShip(ctx);
-        log(`The jump destabilizes — a ship is damaged.`);
+        log(`The wormhole destabilizes and damages one of your ships.`);
       }
     },
   };
