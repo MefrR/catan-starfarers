@@ -360,7 +360,7 @@ export class HUD {
     // sync error; we extend optimistically — a rejected trade just shows an error.)
     if (
       this.turnDeadline > 0 &&
-      this.turnTimerStep === "build" &&
+      this.turnTimerStep.startsWith("build") &&
       !this.tradeBonusUsed &&
       (intent.t === "tradeWithSupply" || intent.t === "finalizeTrade") &&
       this.game.isHumanTurn()
@@ -516,6 +516,10 @@ export class HUD {
   private render(state: GameState): void {
     const ps = state.phaseState;
     const active = state.players[ps.activePlayerIndex]!;
+    // While picking a ship to fly / jump, suppress map tooltips — info popups
+    // distract from choosing where to travel.
+    this.board.tooltipsSuppressed =
+      this.mode === "moveShip" || this.mode === "selectShip" || this.mode === "spaceJump";
 
     // Trigger the center-screen dice animation once per new roll.
     const rc = ps.rollCount ?? 0;
@@ -845,39 +849,39 @@ export class HUD {
     this.syncGameOverOverlay(state);
   }
 
-  /** The single timed action required of ME right now (or null). Each kind gets
-   *  its own allotment and, on expiry, its own auto-resolution. Obligations
-   *  (discard / all-player encounter confirm) apply even off-turn; phase steps
-   *  apply only on my turn. Returns null when the timer feature is off. */
-  private myTimedStep(state: GameState): { key: string; seconds: number; kind: string } | null {
+  /** The timed step currently on the clock — shown to EVERY player. `mine` marks
+   *  whether the local player is the one who must act (only they auto-resolve on
+   *  expiry); others just watch the same countdown. Null when the timer is off. */
+  private myTimedStep(state: GameState): { key: string; seconds: number; kind: string; mine: boolean } | null {
     const ps = state.phaseState;
     const chosen = state.config.turnSeconds ?? 0;
     if (chosen <= 0) return null;
     if (ps.phase === "gameOver" || ps.phase === "setup") return null;
     const me = state.players.find((p) => p.id === this.game.humanId);
     if (!me) return null;
-    // 1. Discard after a 7 — any over-limit player, on or off turn.
+    // 1. My own discard after a 7 takes priority on my screen.
     const owed = ps.pendingDiscards?.[me.id] ?? 0;
-    if (owed > 0) return { key: `disc|${owed}`, seconds: chosen, kind: "discard" };
-    // 2. An encounter decision that's mine to make (subject choice, or an
-    //    all-player card I haven't confirmed). Encounters get a flat 20s.
+    if (owed > 0) return { key: `disc|${me.id}|${owed}`, seconds: chosen, kind: "discard", mine: true };
+    // 2. Encounter (flat 20s) — the subject (or each unconfirmed player on an
+    //    all-player card) acts; everyone else watches the same clock.
     if (ps.phase === "encounter" && ps.encounter) {
       const enc = ps.encounter;
       if (enc.allPlayers) {
-        if (!(enc.confirmedBy ?? []).includes(me.id))
-          return { key: `enc|${enc.cardId}|all`, seconds: 20, kind: "encounter" };
-        return null;
+        const mine = !(enc.confirmedBy ?? []).includes(me.id);
+        return { key: `enc|${enc.cardId}|all`, seconds: 20, kind: "encounter", mine };
       }
-      if (enc.subjectId === me.id) return { key: `enc|${enc.cardId}|${enc.awaiting}`, seconds: 20, kind: "encounter" };
-      return null;
+      return { key: `enc|${enc.cardId}|${enc.awaiting}`, seconds: 20, kind: "encounter", mine: enc.subjectId === me.id };
     }
-    // 3. My active turn.
-    if (!this.game.isHumanTurn()) return null;
-    if (ps.awaitingSteal) return { key: "steal", seconds: chosen, kind: "steal" };
-    if (ps.pendingFriendship?.playerId === me.id) return null; // let the player choose
-    if (ps.phase === "production") return { key: "roll", seconds: Math.min(3, chosen || 3), kind: "roll" };
-    if (ps.phase === "tradeBuild") return { key: "build", seconds: chosen, kind: "build" };
-    if (ps.phase === "flight") return { key: ps.shake ? "move" : "shake", seconds: chosen, kind: ps.shake ? "move" : "shake" };
+    // 3. The ACTIVE player's current step — shown to everyone; only they auto-act.
+    const active = state.players[ps.activePlayerIndex];
+    if (!active) return null;
+    const mine = active.id === me.id;
+    const i = ps.activePlayerIndex;
+    if (ps.awaitingSteal) return { key: `steal|${i}`, seconds: chosen, kind: "steal", mine };
+    if (ps.pendingFriendship) return null; // a friendship choice isn't auto-timed
+    if (ps.phase === "production") return { key: `roll|${i}`, seconds: Math.min(3, chosen || 3), kind: "roll", mine };
+    if (ps.phase === "tradeBuild") return { key: `build|${i}`, seconds: chosen, kind: "build", mine };
+    if (ps.phase === "flight") return { key: `${ps.shake ? "move" : "shake"}|${i}`, seconds: chosen, kind: ps.shake ? "move" : "shake", mine };
     return null;
   }
 
@@ -914,6 +918,7 @@ export class HUD {
       if (chip) { chip.textContent = fmtClock(remain); (chip as HTMLElement).classList.toggle("low", remain <= 5); }
     }
     if (remain > 0) return;
+    if (!step.mine) return; // only the responsible player auto-resolves; others just watch
     const ps = state.phaseState;
     const me = state.players.find((p) => p.id === this.game.humanId);
     if (!me) return;
@@ -1201,9 +1206,7 @@ export class HUD {
     sh.appendChild(ballsEl);
     if (ps.shake) {
       const speed = ps.moveBudget ?? ps.shake.speed;
-      sh.appendChild(
-        el(`<div class="shake-result">Speed <b>${speed}</b> · Combat <b>${ps.shake.combat}</b></div>`),
-      );
+      sh.appendChild(el(`<div class="shake-result">Speed <b>${speed}</b></div>`));
     } else {
       sh.appendChild(el(`<div class="shake-hint">Shake in flight to draw 2 balls</div>`));
     }
@@ -1735,7 +1738,7 @@ export class HUD {
           break;
         }
         const speed = ps.moveBudget ?? ps.shake.speed;
-        actions.appendChild(el(`<div class="waiting">Speed ${speed} · combat ${ps.shake.combat}</div>`));
+        actions.appendChild(el(`<div class="waiting">Speed ${speed}</div>`));
 
         // Space jump earned from an encounter: jump one ship to ANY open point.
         const jumps = ps.spaceJumps?.[me.id] ?? 0;

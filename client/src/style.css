@@ -831,12 +831,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   transition: transform 0.3s cubic-bezier(0.2, 1.4, 0.4, 1), opacity 0.3s ease;
 }
 .encounter-overlay.show .encounter-card { transform: scale(1); opacity: 1; }
-.encounter-card .enc-tag { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
-.encounter-card .enc-title { font-size: 20px; font-weight: 800; color: var(--accent); margin: 6px 0; }
-.encounter-card .enc-text { font-size: 14px; line-height: 1.55; color: var(--text); margin-bottom: 14px; }
-.encounter-card .enc-subject { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+/* All encounter text is bright/white for legibility against the dark card. */
+.encounter-card, .encounter-card * { color: #ffffff; }
+.encounter-card .enc-tag { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #cfe3ff; }
+.encounter-card .enc-title { font-size: 20px; font-weight: 800; color: #ffffff; margin: 6px 0; }
+.encounter-card .enc-text { font-size: 14px; line-height: 1.55; color: #ffffff; margin-bottom: 14px; }
+.encounter-card .enc-subject { font-size: 12px; color: #e6edff; margin-bottom: 12px; }
 .encounter-card .enc-choices { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-.encounter-card .enc-wait { font-size: 13px; color: var(--muted); font-style: italic; }
+.encounter-card .enc-wait { font-size: 13px; color: #e6edff; font-style: italic; }
 .encounter-card .enc-roster { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px; }
 .encounter-card .enc-rost { font-size: 12px; opacity: 0.6; }
 .encounter-card .enc-rost.done { opacity: 1; font-weight: 600; }

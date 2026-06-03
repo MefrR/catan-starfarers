@@ -163,16 +163,19 @@ export class BoardRenderer {
     this.tooltipEl.style.top = `${y}px`;
   }
 
+  /** When set, hover/tap tooltips are suppressed entirely (e.g. while the player
+   *  is choosing a ship to fly — info popups would distract from picking a path). */
+  tooltipsSuppressed = false;
+
   private showTip(text: string, touch: boolean): void {
+    if (this.tooltipsSuppressed) return;
     this.tipTouch = touch;
     this.tooltipEl.innerHTML = text;
     this.tooltipEl.classList.add("show");
     this.positionTooltip();
     window.clearTimeout(this.tipTimer);
-    if (touch) {
-      // Touch fires no "pointerout" — guarantee the tip clears itself.
-      this.tipTimer = window.setTimeout(() => this.hideTip(), 2600);
-    }
+    // Always self-dismiss after 2s so a hover popup never lingers on screen.
+    this.tipTimer = window.setTimeout(() => this.hideTip(), 2000);
   }
 
   private hideTip(): void {
