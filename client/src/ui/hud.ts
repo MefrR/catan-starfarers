@@ -210,6 +210,7 @@ export class HUD {
       this.pickerOutside = null;
     }
     this.launchPicker?.remove();
+    this.dismissMapConfirm();
     this.board.onViewChange = null;
     this.chat?.destroy();
     this.chat = null;
@@ -455,6 +456,36 @@ export class HUD {
       document.removeEventListener("pointerdown", this.pickerOutside, true);
       this.pickerOutside = null;
     }
+    this.dismissMapConfirm();
+  }
+
+  /** Transient on-map Yes/No confirm anchored over a tapped point (used to
+   *  confirm a ship move before committing). */
+  private moveConfirmEl: HTMLElement | null = null;
+  private dismissMapConfirm(): void {
+    this.moveConfirmEl?.remove();
+    this.moveConfirmEl = null;
+  }
+  private mapConfirm(intersectionId: string, onYes: () => void): void {
+    this.dismissMapConfirm();
+    const pop = el(
+      `<div class="map-picker map-confirm show"><div class="mp-row">
+         <button class="mp-yes" title="Move here">✓</button>
+         <button class="mp-no" title="Cancel">✕</button>
+       </div></div>`,
+    );
+    const place = (): void => {
+      const p = this.board.pagePosOf(intersectionId);
+      if (!p) return;
+      pop.style.left = `${p.x}px`;
+      pop.style.top = `${p.y}px`;
+    };
+    pop.querySelector(".mp-yes")!.addEventListener("click", () => { this.dismissMapConfirm(); onYes(); });
+    pop.querySelector(".mp-no")!.addEventListener("click", () => this.dismissMapConfirm());
+    document.body.appendChild(pop);
+    this.moveConfirmEl = pop;
+    place();
+    this.board.onViewChange = place;
   }
 
   /** Active outside-click handler that cancels the open launch picker. */
@@ -1511,17 +1542,17 @@ export class HUD {
         this.board.setHighlights([...this.moveTargets.keys()]);
         this.board.onIntersectionClick = (id) => {
           const path = this.moveTargets.get(id);
-          if (path) {
-            const sid = this.selectedShipId!;
-            // Clear the selection BEFORE dispatching so the re-render the
-            // dispatch triggers re-wires the board for plain ship selection —
-            // letting the player immediately pick and move ANOTHER ship.
+          if (!path) return;
+          const sid = this.selectedShipId!;
+          // Confirm the move with a small Yes/No popup over the tapped point
+          // (like the colony/trade-ship picker) so a stray tap doesn't move.
+          this.mapConfirm(id, () => {
             this.selectedShipId = null;
             this.moveTargets.clear();
             this.mode = "idle";
             this.board.setSelectedShip(null);
             this.act({ t: "moveShip", shipId: sid, path });
-          }
+          });
         };
       } else {
         this.board.clearHighlights();

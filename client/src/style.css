@@ -515,6 +515,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .map-picker .mp-ship:disabled { opacity: 0.4; cursor: not-allowed; }
 .map-picker .mp-ship svg { width: 34px; height: 34px; }
 .map-picker .mp-lbl { font-size: 10.5px; font-weight: 600; white-space: nowrap; }
+/* Yes/No move confirm */
+.map-confirm .mp-yes, .map-confirm .mp-no {
+  width: 40px; height: 40px; border-radius: 10px; font-size: 18px; font-weight: 900;
+  cursor: pointer; color: var(--text);
+  border: 1px solid rgba(255,255,255,0.18);
+}
+.map-confirm .mp-yes { background: rgba(110,231,168,0.22); border-color: rgba(110,231,168,0.5); }
+.map-confirm .mp-yes:hover { background: rgba(110,231,168,0.4); }
+.map-confirm .mp-no { background: rgba(255,255,255,0.06); }
+.map-confirm .mp-no:hover { background: rgba(255,120,120,0.25); }
 
 .build-cost-pop {
   position: fixed; z-index: 80; pointer-events: none;
