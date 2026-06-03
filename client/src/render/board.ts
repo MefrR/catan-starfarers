@@ -24,10 +24,10 @@ const OWNER_FILL: Record<PlayerColor, number> = {
 
 /** Per-civ outpost colour + display name (mirrors the printed OUTPOSTS art). */
 const CIV_STYLE: Record<string, { color: number; name: string; ability: string }> = {
-  greenFolk: { color: 0x57e389, name: "The Green Folk", ability: "Production Increase — extra resources" },
-  scientists: { color: 0x6fb3ff, name: "The Scientists", ability: "Improved Upgrades — virtual boosters/cannons" },
-  diplomats: { color: 0xffd23f, name: "The Diplomats", ability: "Reduced tribute, fame for sale & relief" },
-  merchants: { color: 0xc98bff, name: "The Merchants", ability: "Trade Advantage — better trade ratios" },
+  greenFolk: { color: 0x57e389, name: "The Green Folk", ability: "Gives you extra resources from your planets" },
+  scientists: { color: 0x6fb3ff, name: "The Scientists", ability: "Gives you extra boosters & cannons" },
+  diplomats: { color: 0xffd23f, name: "The Diplomats", ability: "Gives you lots of abilities" },
+  merchants: { color: 0xc98bff, name: "The Merchants", ability: "Gives you more trade options" },
   travelers: { color: 0xff8a5d, name: "The Travelers", ability: "Encounter-only allies" },
 };
 
