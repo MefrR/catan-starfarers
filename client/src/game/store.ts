@@ -7,7 +7,7 @@ import {
   type ClientIntent,
   type SetupMember,
 } from "@starfarers/shared";
-import { aiObligation, aiTurnAction } from "./ai.js";
+import { aiObligation, aiTurnAction } from "@starfarers/shared";
 
 type Listener = (state: GameState) => void;
 

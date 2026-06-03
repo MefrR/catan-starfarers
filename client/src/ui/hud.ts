@@ -136,10 +136,11 @@ export class HUD {
   /** True until the first render, so initial markers don't trigger the +2 VP fly. */
   private markersInitialized = false;
   private diceTimers: number[] = [];
-  /** Turn-timer state (host-configured per-turn limit). `turnDeadline` is an epoch
-   *  ms; `turnTimerIdx` is the active seat the current deadline belongs to. */
+  /** Turn-timer state (host-configured limit, applied PER step). `turnDeadline` is
+   *  an epoch ms; `turnTimerStep` identifies the step the deadline belongs to so a
+   *  new step (roll → build → shake → move) re-arms with a fresh allotment. */
   private turnDeadline = 0;
-  private turnTimerIdx = -1;
+  private turnTimerStep = "";
   private turnTimerInterval = 0;
   /** Encounter currently shown in the center overlay (cardId + subject + step). */
   private shownEncounter: { cardId: number; subjectId: string; awaiting: string } | null = null;
@@ -761,7 +762,7 @@ export class HUD {
     const turnSecs = state.config.turnSeconds ?? 0;
     if (turnSecs > 0 && this.isTurnTimed(ps.phase)) {
       const remain = Math.max(0, Math.ceil((this.turnDeadline - Date.now()) / 1000));
-      banner.appendChild(el(`<span class="turn-timer ${remain <= 10 ? "low" : ""}">${fmtClock(remain)}</span>`));
+      banner.appendChild(el(`<span class="turn-timer ${remain <= 5 ? "low" : ""}">${fmtClock(remain)}</span>`));
     }
     bar.appendChild(banner);
 
@@ -827,31 +828,48 @@ export class HUD {
     this.syncGameOverOverlay(state);
   }
 
-  /** Phases during which the per-turn timer runs (a player's actual turn). */
+  /** Phases during which the timer runs (a player's actual turn). Encounters are
+   *  excluded — those need a real decision and are never auto-resolved. */
   private isTurnTimed(phase: GameState["phaseState"]["phase"]): boolean {
-    return phase === "production" || phase === "tradeBuild" || phase === "flight" || phase === "encounter";
+    return phase === "production" || phase === "tradeBuild" || phase === "flight";
+  }
+
+  /** A unique key for the current "step" within a turn, so the timer re-arms each
+   *  time the step changes: roll → build → shake → move. */
+  private turnStepKey(state: GameState): string {
+    const ps = state.phaseState;
+    const sub = ps.phase === "flight" ? (ps.shake ? "move" : "shake") : "";
+    return `${ps.activePlayerIndex}|${ps.phase}|${sub}`;
+  }
+
+  /** Seconds allotted to the current step. The dice roll is ALWAYS 3s; every
+   *  other step (build / shake / move) gets the host-chosen limit. */
+  private turnStepSeconds(state: GameState): number {
+    const chosen = state.config.turnSeconds ?? 0;
+    return state.phaseState.phase === "production" ? Math.min(3, chosen || 3) : chosen;
   }
 
   /**
-   * Drive the host-configured per-turn countdown. The deadline (re)arms whenever
-   * the active seat changes; an interval ticks the on-screen clock and, on the
-   * ACTIVE player's own client, auto-advances the turn when time runs out (unless
-   * an obligation like a discard/steal/encounter is pending — those must be
-   * resolved by hand). A successful trade extends the deadline (see act()).
+   * Drive the host-configured countdown, applied PER STEP. The deadline re-arms
+   * whenever the step changes; an interval ticks the on-screen clock and, on the
+   * ACTIVE player's own client, auto-advances to the NEXT step when time runs out
+   * (it never force-resolves a pending discard/steal/encounter). A successful
+   * trade extends the current build step (see act()).
    */
   private syncTurnTimer(state: GameState): void {
     const ps = state.phaseState;
     const secs = state.config.turnSeconds ?? 0;
     const armed = secs > 0 && this.isTurnTimed(ps.phase);
     if (!armed) {
-      this.turnTimerIdx = -1;
+      this.turnTimerStep = "";
       if (this.turnTimerInterval) { window.clearInterval(this.turnTimerInterval); this.turnTimerInterval = 0; }
       return;
     }
-    // (Re)arm on a fresh turn (active seat changed).
-    if (ps.activePlayerIndex !== this.turnTimerIdx) {
-      this.turnTimerIdx = ps.activePlayerIndex;
-      this.turnDeadline = Date.now() + secs * 1000;
+    // (Re)arm whenever the step changes — each step gets its own full allotment.
+    const key = this.turnStepKey(state);
+    if (key !== this.turnTimerStep) {
+      this.turnTimerStep = key;
+      this.turnDeadline = Date.now() + this.turnStepSeconds(state) * 1000;
     }
     if (!this.turnTimerInterval) {
       this.turnTimerInterval = window.setInterval(() => this.tickTurnTimer(), 250);
@@ -867,7 +885,7 @@ export class HUD {
     const chip = this.root.querySelector(".turn-timer");
     if (chip) {
       chip.textContent = fmtClock(remain);
-      chip.classList.toggle("low", remain <= 10);
+      chip.classList.toggle("low", remain <= 5);
     }
     if (remain > 0) return;
     // Time's up — only the active player's own client drives the auto-advance.
@@ -876,15 +894,16 @@ export class HUD {
     const me = state.players.find((p) => p.id === this.game.humanId);
     if (!me) return;
     if ((ps.pendingDiscards?.[me.id] ?? 0) > 0) return;
-    if (ps.awaitingSteal || ps.pendingFriendship || ps.phase === "encounter") return;
-    // Advance one phase step per tick until the turn passes.
+    if (ps.awaitingSteal || ps.pendingFriendship) return;
+    // Advance ONE step; the next step re-arms with its own time on the next sync.
     this.resetSelection();
     if (ps.phase === "production") {
       if (!ps.lastRoll) this.act({ t: "rollDice" });
     } else if (ps.phase === "tradeBuild") {
       this.act({ t: "endTradeBuild" });
     } else if (ps.phase === "flight") {
-      this.act({ t: "endTurn" });
+      if (!ps.shake) this.act({ t: "shakeMothership" });
+      else this.act({ t: "endTurn" });
     }
   }
 

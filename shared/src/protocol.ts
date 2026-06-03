@@ -7,6 +7,8 @@ export interface LobbyPlayer {
   color: PlayerColor;
   connected: boolean;
   isHost: boolean;
+  /** True for an AI seat the host added (no socket; played by the server). */
+  isAI?: boolean;
 }
 
 export interface LobbyState {
@@ -26,6 +28,8 @@ export type ClientIntent =
   | { t: "playAgain" } // host only: after a game ends, return everyone to the lobby
   | { t: "leaveRoom" } // leave the room entirely (Back button in the lobby)
   | { t: "chat"; text: string } // real player-to-player chat, relayed to the room
+  | { t: "addAi" } // host only: add an AI opponent seat
+  | { t: "removeAi"; id: string } // host only: remove an AI opponent seat
   // --- Set-up phase (4-round Catanian Colonies placement) ---
   | { t: "setupRoll" } // roll both dice to determine the starting player
   | { t: "setupPlaceColony"; intersectionId: string } // rounds 1-3

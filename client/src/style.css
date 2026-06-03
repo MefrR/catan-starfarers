@@ -153,6 +153,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .dot.black { background: var(--black); color: var(--black); }
 .badge { font-size: 11px; color: var(--muted); margin-left: auto; }
 .offline { opacity: 0.45; }
+.players li .ai-remove {
+  margin-left: 8px; width: 22px; height: 22px; padding: 0; flex: 0 0 auto;
+  border-radius: 50%; background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.16); color: var(--text);
+  font-size: 12px; line-height: 1; cursor: pointer;
+}
+.players li .ai-remove:hover { background: rgba(255,120,120,0.22); }
 
 /* Single-player color picker: swatch + name, highlighted when selected. */
 .color-pick {

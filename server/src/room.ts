@@ -10,7 +10,7 @@ import {
   DEFAULT_TARGET_VP,
   SOCKET_EVENT,
 } from "@starfarers/shared";
-import { createGameState, applyIntent } from "@starfarers/shared";
+import { createGameState, applyIntent, aiObligation, aiTurnAction } from "@starfarers/shared";
 
 interface Member {
   id: string;
@@ -19,7 +19,12 @@ interface Member {
   color: LobbyPlayer["color"];
   isHost: boolean;
   connected: boolean;
+  isAI?: boolean;
 }
+
+/** Pacing for server-driven AI seats (ms) so humans can follow along. */
+const AI_DELAY = 800;
+const AI_NAMES = ["Nova", "Orion", "Vega", "Lyra", "Atlas", "Cygnus"];
 
 export class Room {
   readonly code: string;
@@ -31,13 +36,17 @@ export class Room {
     targetVictoryPoints: DEFAULT_TARGET_VP,
   };
   private game: GameState | null = null;
+  /** Member ids that are AI seats (played by the server). */
+  private aiIds = new Set<string>();
+  private aiSeq = 0;
 
   constructor(code: string) {
     this.code = code;
   }
 
+  /** A room is "empty" once no HUMAN is connected — AI seats don't keep it alive. */
   get isEmpty(): boolean {
-    return [...this.members.values()].every((m) => !m.connected);
+    return [...this.members.values()].every((m) => m.isAI || !m.connected);
   }
 
   get hasStarted(): boolean {
@@ -101,6 +110,7 @@ export class Room {
         color: m.color,
         connected: m.connected,
         isHost: m.isHost,
+        isAI: m.isAI,
       })),
     };
   }
@@ -150,6 +160,7 @@ export class Room {
         }
         this.config = { ...this.config, ...intent.config };
         this.started = true;
+        this.aiIds = new Set([...this.members.values()].filter((m) => m.isAI).map((m) => m.id));
         this.game = createGameState(
           [...this.members.values()].map((m) => ({
             id: m.id,
@@ -161,6 +172,43 @@ export class Room {
         );
         this.broadcastLobby();
         this.broadcastState();
+        // If the first setup actor is an AI, get the bots rolling.
+        this.driveAi();
+        return;
+      }
+      case "addAi": {
+        if (!member.isHost) {
+          this.send(id, { t: "error", message: "Only the host can add AI players." });
+          return;
+        }
+        if (this.started) return;
+        if (this.members.size >= 4) {
+          this.send(id, { t: "error", message: "The table is full (4 players max)." });
+          return;
+        }
+        const color = this.nextColor();
+        const n = [...this.members.values()].filter((m) => m.isAI).length;
+        const aiId = `ai-${this.aiSeq++}`;
+        this.members.set(aiId, {
+          id: aiId,
+          name: `${AI_NAMES[n % AI_NAMES.length]} (AI)`,
+          socket: null,
+          color,
+          isHost: false,
+          connected: true,
+          isAI: true,
+        });
+        this.broadcastLobby();
+        return;
+      }
+      case "removeAi": {
+        if (!member.isHost) {
+          this.send(id, { t: "error", message: "Only the host can remove AI players." });
+          return;
+        }
+        const target = this.members.get(intent.id);
+        if (target?.isAI) this.members.delete(intent.id);
+        this.broadcastLobby();
         return;
       }
       case "chat": {
@@ -214,8 +262,81 @@ export class Room {
         }
         this.game = result.state;
         this.broadcastState();
+        // A human move may have created AI obligations (e.g. a 7 forcing discards)
+        // or handed the turn to a bot — let the AI seats respond / play on.
+        this.driveAi();
         return;
       }
     }
+  }
+
+  // --- Server-side AI seats ---------------------------------------------------
+
+  /** Resolve any obligations AI seats owe right now (discards on a 7, trade
+   *  responses), then, if the active seat is an AI, schedule its turn. */
+  private driveAi(): void {
+    if (!this.started || !this.game || this.aiIds.size === 0) return;
+    if (this.pumpAiObligations()) this.broadcastState();
+    this.scheduleAi();
+  }
+
+  /** Apply every AI obligation available this instant (off-turn too). Returns
+   *  true if anything changed. */
+  private pumpAiObligations(): boolean {
+    let changed = false;
+    for (let guard = 0; guard < 64; guard++) {
+      let acted = false;
+      for (const aiId of this.aiIds) {
+        if (!this.game) break;
+        const intent = aiObligation(this.game, aiId);
+        if (!intent) continue;
+        const res = applyIntent(this.game, aiId, intent);
+        if (!res.error) {
+          this.game = res.state;
+          acted = true;
+          changed = true;
+        }
+      }
+      if (!acted) break;
+    }
+    return changed;
+  }
+
+  /** If the active seat is an AI (and the game is live), step it after a delay. */
+  private scheduleAi(): void {
+    if (!this.game || this.game.phaseState.phase === "gameOver") return;
+    const active = this.game.players[this.game.phaseState.activePlayerIndex];
+    if (!active || !this.aiIds.has(active.id)) return;
+    const seatId = active.id;
+    setTimeout(() => this.stepAi(seatId), AI_DELAY);
+  }
+
+  private stepAi(seatId: string): void {
+    if (!this.started || !this.game) return;
+    const active = this.game.players[this.game.phaseState.activePlayerIndex];
+    if (!active || active.id !== seatId) return; // turn already advanced
+    const intent = aiTurnAction(this.game, seatId);
+    if (!intent) {
+      // Waiting on something (e.g. a human discard) — retry shortly.
+      setTimeout(() => this.stepAi(seatId), AI_DELAY);
+      return;
+    }
+    let res = applyIntent(this.game, seatId, intent);
+    if (res.error) {
+      // Never let a bot spin on a perpetually-invalid intent: force phase progress.
+      const phase = this.game.phaseState.phase;
+      const fallback: ClientIntent | null =
+        phase === "tradeBuild" ? { t: "endTradeBuild" } : phase === "flight" ? { t: "endTurn" } : null;
+      if (fallback) {
+        const fres = applyIntent(this.game, seatId, fallback);
+        if (!fres.error) res = fres;
+      }
+    }
+    if (!res.error) {
+      this.game = res.state;
+      this.pumpAiObligations();
+      this.broadcastState();
+    }
+    this.scheduleAi();
   }
 }

@@ -176,11 +176,13 @@ export class LobbyUI {
               <li class="${p.connected ? "" : "offline"}">
                 <span class="dot ${p.color}"></span>
                 <span>${escapeHtml(p.name)}</span>
-                <span class="badge">${p.isHost ? "HOST" : ""}${p.id === this.youId ? " · you" : ""}</span>
+                <span class="badge">${p.isAI ? "AI" : p.isHost ? "HOST" : ""}${p.id === this.youId ? " · you" : ""}</span>
+                ${isHost && p.isAI ? `<button class="ai-remove" data-id="${p.id}" title="Remove this AI">✕</button>` : ""}
               </li>`,
               )
               .join("")}
           </ul>
+          ${isHost && lobby.players.length < 4 ? `<button class="mt secondary" id="addai">+ Add AI opponent</button>` : ""}
           <label>Your color</label>
           <div class="row" id="colors"></div>
           ${isHost ? `<label class="mt">Map style</label><div class="row" id="mapstyle"></div>` : ""}
@@ -234,6 +236,13 @@ export class LobbyUI {
       };
       paintTimer();
     }
+
+    screen.querySelector("#addai")?.addEventListener("click", () => net.send({ t: "addAi" }));
+    screen.querySelectorAll(".ai-remove").forEach((b) =>
+      b.addEventListener("click", () =>
+        net.send({ t: "removeAi", id: (b as HTMLElement).dataset.id! }),
+      ),
+    );
 
     screen.querySelector("#start")?.addEventListener("click", () => {
       net.send({

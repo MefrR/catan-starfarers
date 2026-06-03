@@ -1,18 +1,16 @@
+import { BUILD_COSTS, MAX_UPGRADES } from "./constants.js";
 import {
-  BUILD_COSTS,
-  MAX_UPGRADES,
   RESOURCES,
-  catanianColonySites,
-  shipLaunchSites,
   type AiDifficulty,
-  type ClientIntent,
   type GameState,
   type Planet,
   type PlayerState,
-  tradeRatioFor,
   type Resource,
   type ResourceBag,
-} from "@starfarers/shared";
+} from "./types.js";
+import type { ClientIntent } from "./protocol.js";
+import { catanianColonySites, shipLaunchSites } from "./engine.js";
+import { tradeRatioFor } from "./friendship.js";
 
 // Greedy single-player opponent. It plays to accrue VP so games actually reach
 // the target: expand colonies, upgrade spaceports, grab useful upgrades, fly

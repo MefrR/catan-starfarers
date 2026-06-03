@@ -6,3 +6,4 @@ export * from "./friendship.js";
 export * from "./encounters.js";
 export * from "./setup.js";
 export * from "./engine.js";
+export * from "./ai.js";
