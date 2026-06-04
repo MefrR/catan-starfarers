@@ -137,6 +137,11 @@ export class BoardRenderer {
       this.mouse = { x: e.clientX, y: e.clientY };
       if (this.tooltipEl.classList.contains("show")) this.positionTooltip();
     });
+    // Any tap/click that isn't on the board canvas (e.g. a HUD button with a
+    // colony site behind it) immediately clears a lingering map tooltip.
+    window.addEventListener("pointerdown", (e) => {
+      if (e.target !== this.app.canvas) this.hideTip();
+    }, true);
     this.installViewControls();
   }
 

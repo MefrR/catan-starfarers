@@ -156,6 +156,9 @@ export class HUD {
   private shownDiscardSig = "";
   /** Signature of the current duel's rolls, so the overlay refreshes as shakes land. */
   private shownDuelSig = "";
+  /** Log length when the current encounter opened, so on resolution we can show
+   *  the exact narration lines the card produced (its descriptive outcome). */
+  private encLogMark = 0;
   /** Snapshot of each player's fame/medals/hand taken when an encounter opens. */
   private encSnapshot: Record<string, { fame: number; medals: number; hand: ResourceBag }> = {};
   /** Whether the center-screen game-over results overlay is already shown. */
@@ -337,12 +340,20 @@ export class HUD {
     if (ps.pendingTrade && ps.pendingTrade.fromId === meId) this.act({ t: "cancelTrade" });
     this.resetSelection();
     this.act({ t: "endTradeBuild" });
-    // Now in flight (unless the phase change errored): shake right away.
+    // In single-player the dispatch is synchronous so we're already in flight and
+    // can shake now. In multiplayer it's a server round-trip, so the state is
+    // still tradeBuild here — arm an auto-shake that fires once flight arrives
+    // (handled in render) so it stays a single tap.
     const after = this.game.getState().phaseState;
     if (after.phase === "flight" && !after.shake && !after.encounter) {
       this.act({ t: "shakeMothership" });
+    } else {
+      this.autoShakePending = true;
     }
   }
+
+  /** Set by endBuildAndShake in multiplayer: shake as soon as flight begins. */
+  private autoShakePending = false;
 
   private act(
     intent: Parameters<GameDriver["dispatch"]>[0],
@@ -554,6 +565,17 @@ export class HUD {
     this.board.tooltipsSuppressed =
       this.mode === "moveShip" || this.mode === "selectShip" || this.mode === "spaceJump";
 
+    // Multiplayer "End build → Shake": the endTradeBuild round-tripped to the
+    // server; now that flight has arrived, fire the shake (one tap overall).
+    if (this.autoShakePending) {
+      if (this.game.isHumanTurn() && ps.phase === "flight" && !ps.shake && !ps.encounter) {
+        this.autoShakePending = false;
+        this.act({ t: "shakeMothership" });
+      } else if (ps.phase !== "tradeBuild" && ps.phase !== "flight") {
+        this.autoShakePending = false; // turn moved on — drop it
+      }
+    }
+
     // Trigger the center-screen dice animation once per new roll.
     const rc = ps.rollCount ?? 0;
     if (rc > this.lastAnimatedRoll && ps.lastRoll) {
@@ -740,12 +762,12 @@ export class HUD {
       // stack whose visible left edges count out how many you hold. The front
       // card carries the glyph/label; the badge still shows the exact number
       // (so a single card is readable too). Zero cards = fully greyed-out card.
-      const MAX_EDGES = 7;
+      const MAX_EDGES = 4;
       const edges = Math.min(Math.max(n - 1, 0), MAX_EDGES);
-      const gutter = edges * 6;
+      const gutter = edges * 4;
       const edgeHtml = Array.from(
         { length: edges },
-        (_v, i) => `<span class="res-edge" style="left:-${(edges - i) * 6}px"></span>`,
+        (_v, i) => `<span class="res-edge" style="left:-${(edges - i) * 4}px"></span>`,
       ).join("");
       const card = el(`
         <div class="res-card ${n === 0 ? "empty" : ""} ${discardMode ? "selectable" : ""} ${tradeMode ? "selectable trade" : ""} ${sel > 0 ? "discard-sel" : ""} ${tradeMode && give > 0 ? "trade-sel" : ""}" data-res="${r}" title="${RESOURCE_LABEL[r]} ×${n}" style="--res:${RES_COLOR[r]};margin-left:${gutter}px">
@@ -2169,7 +2191,7 @@ export class HUD {
     const duelSig = `${enc?.duel?.subjectRoll ?? "x"}|${enc?.duel?.oppRoll ?? "x"}`;
     const duelChanged = enc?.awaiting === "duel" && duelSig !== this.shownDuelSig;
     if (enc && (isNew || confirmChanged || stepChanged || duelChanged)) {
-      if (isNew) this.snapshotPlayers(state);
+      if (isNew) { this.snapshotPlayers(state); this.encLogMark = state.log.length; }
       this.shownEncounter = { cardId: enc.cardId, subjectId: enc.subjectId, awaiting: enc.awaiting };
       this.shownConfirmCount = confirmCount;
       this.shownDuelSig = duelSig;
@@ -2450,7 +2472,17 @@ export class HUD {
     if (fameDelta < 0) parts.push(`${fameDelta} fame (${fameDelta * 0.5} VP)`);
     for (const g of gained) parts.push(`+${g.d} ${RESOURCE_LABEL[g.r]}`);
     for (const l of lost) parts.push(`${l.d} ${RESOURCE_LABEL[l.r]}`);
-    const label = parts.length ? parts.join("  ·  ") : "No change";
+
+    // Prefer the card's own narration (the descriptive sentences it logged while
+    // resolving) so the player reads WHAT happened — e.g. "You capture the pirate
+    // ship — a free trade ship and 1 fame." — not just "+1 fuel". Fall back to the
+    // resource/fame deltas, then to a neutral line.
+    const narration = state.log
+      .slice(this.encLogMark)
+      .filter((l) => !/^Encounter:/.test(l) && !/ shakes: /.test(l))
+      .slice(-2)
+      .join("  ");
+    const label = narration || (parts.length ? parts.join("  ·  ") : "Nothing happened.");
 
     // Center toast.
     const toast = el(`<div class="result-toast"><span class="rt-glyph">${glyph}</span><span>${escapeHtml(label)}</span></div>`);
@@ -2500,8 +2532,8 @@ export class HUD {
 
     // Untracked timers (see flyToken): a result toast must always clean itself up
     // even if a dice roll clears diceTimers in the meantime.
-    window.setTimeout(() => toast.classList.remove("show"), 1900);
-    window.setTimeout(() => toast.remove(), 2250);
+    window.setTimeout(() => toast.classList.remove("show"), 3400);
+    window.setTimeout(() => toast.remove(), 3750);
   }
 
   private fillFriendshipChoice(actions: HTMLElement, civ: AlienCiv, options: string[]): void {

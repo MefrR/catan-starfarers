@@ -56,20 +56,30 @@ input, textarea {
 .screen {
   position: fixed;
   inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 24px;
+  /* Flex + safe-centering + scroll so a tall menu on a short phone never clips
+   * its buttons off-screen — it just scrolls. */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: safe center;
+  padding: 16px;
   z-index: 2;
+  overflow-y: auto;
 }
 
 .card {
-  width: min(440px, 92vw);
+  width: min(440px, 94vw);
+  margin: auto;
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 18px;
-  padding: 28px;
+  padding: 24px;
   backdrop-filter: blur(14px);
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255,255,255,0.02) inset;
+}
+@media (max-width: 480px), (max-height: 640px) {
+  .card { padding: 16px; }
+  .title { font-size: 24px; }
 }
 
 .title {
@@ -584,7 +594,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .actionbar button .b-left.none {
   color: #ff9a9a; border-color: color-mix(in srgb, var(--danger) 55%, transparent);
 }
-.hand { display: flex; gap: 8px; }
+.hand { display: flex; gap: 8px; max-width: 100%; flex-wrap: wrap; justify-content: center; }
 .res-card {
   position: relative;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
@@ -609,8 +619,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
    card's left side, so the stack height counts out your quantity at a glance. */
 .res-edge {
   position: absolute;
-  top: 6px; bottom: 6px;
-  width: 11px;
+  top: 0; bottom: 0;
+  width: 9px;
   z-index: -1;
   border-radius: 7px 3px 3px 7px;
   background: linear-gradient(160deg, rgba(255,255,255,0.05), rgba(0,0,0,0.5));
@@ -883,12 +893,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   position: fixed; left: 50%; top: 38%; transform: translate(-50%, -50%) scale(0.6);
   z-index: 61; pointer-events: none;
   display: flex; align-items: center; gap: 10px;
-  max-width: 92vw; box-sizing: border-box;
+  max-width: min(460px, 92vw); box-sizing: border-box;
   padding: 12px 20px; border-radius: 14px;
   background: linear-gradient(160deg, #1b2748, #0a0f1e);
   border: 1px solid color-mix(in srgb, var(--good) 60%, transparent);
   box-shadow: 0 20px 50px rgba(0,0,0,0.6);
-  font-size: 18px; font-weight: 800; color: var(--text);
+  font-size: 15px; font-weight: 700; line-height: 1.45; color: var(--text);
+  text-align: center; white-space: normal;
   opacity: 0; transition: transform 0.35s cubic-bezier(0.2,1.4,0.4,1), opacity 0.35s ease;
 }
 .result-toast.show { transform: translate(-50%, -50%) scale(1); opacity: 1; }
