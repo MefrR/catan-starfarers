@@ -267,7 +267,14 @@ export class ChatBox {
 
   private toggleDev(): void {
     if (!this.game.setDevMode) {
-      this.system("Dev mode is only available in single-player.");
+      // Online: no continuous top-up toggle, but grant a one-shot resource stack
+      // so testing still has unlimited-ish supply.
+      if (this.game.dev) {
+        this.game.dev.resources();
+        this.system("🛠️ Granted a big resource &amp; supply stack (online test grant).");
+      } else {
+        this.system("Dev mode is only available in single-player.");
+      }
       return;
     }
     const now = !this.game.devMode;

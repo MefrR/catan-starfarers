@@ -1,16 +1,11 @@
 import {
   createGameState,
   applyIntent,
-  recomputeVp,
-  ENCOUNTER_CARDS,
-  FRIENDSHIP_CARDS,
   RESOURCES,
-  MAX_UPGRADES,
   type GameState,
   type GameConfig,
   type ClientIntent,
   type SetupMember,
-  type AlienCiv,
 } from "@starfarers/shared";
 import { aiObligation, aiTurnAction } from "@starfarers/shared";
 
@@ -30,6 +25,8 @@ export interface DevTools {
   vp(n: number): void;
   /** Reveal the whole map (explore every planet + outpost). */
   reveal(): void;
+  /** One-shot grant of a big resource + supply stack (online "warp9"). */
+  resources(): void;
 }
 
 export interface Seat {
@@ -121,71 +118,17 @@ export class LocalGame {
     this.emit();
   }
 
-  /** Single-player testing hooks, surfaced to the chat-box dev codes. */
+  /** Single-player testing hooks, surfaced to the chat-box dev codes. Routed
+   *  through the engine's "dev" intent so SP and online share one code path. */
   get dev(): DevTools {
-    const me = (): GameState["players"][number] | undefined =>
-      this.state.players.find((p) => p.id === this.humanId);
     return {
-      encounter: (cardId: number) => {
-        const card = ENCOUNTER_CARDS[cardId];
-        if (!card) return;
-        const ps = this.state.phaseState;
-        ps.phase = "encounter";
-        ps.shake = ps.shake ?? { speed: 5, combat: 5, balls: ["red", "blue"], encounter: true };
-        ps.moveBudget = ps.moveBudget ?? ps.shake.speed;
-        ps.encounter = {
-          cardId,
-          subjectId: this.humanId,
-          awaiting: card.prompt,
-          ...(card.allPlayers ? { allPlayers: true, confirmedBy: [] } : {}),
-        };
-        this.emit();
-        this.pumpObligations(); // let AI confirm all-player cards / shake duels
-        this.emit();
-      },
-      upgrades: () => {
-        const p = me();
-        if (!p) return;
-        p.upgrades.booster = MAX_UPGRADES.booster;
-        p.upgrades.cannon = MAX_UPGRADES.cannon;
-        p.upgrades.freightPod = MAX_UPGRADES.freightPod;
-        this.emit();
-      },
-      friendship: () => {
-        const p = me();
-        if (!p) return;
-        const civs: AlienCiv[] = ["greenFolk", "scientists", "diplomats", "merchants"];
-        for (const civ of civs) {
-          const card = FRIENDSHIP_CARDS.find((c) => c.civ === civ && !p.friendshipCards.includes(c.id));
-          if (card) p.friendshipCards.push(card.id);
-        }
-        recomputeVp(this.state);
-        this.emit();
-      },
-      spaceJump: () => {
-        const p = me();
-        if (!p) return;
-        (this.state.phaseState.spaceJumps ??= {})[this.humanId] =
-          (this.state.phaseState.spaceJumps[this.humanId] ?? 0) + 1;
-        this.emit();
-      },
-      vp: (n: number) => {
-        const p = me();
-        if (!p) return;
-        p.victoryMedals = (p.victoryMedals ?? 0) + Math.max(0, Math.floor(n));
-        recomputeVp(this.state);
-        this.emit();
-      },
-      reveal: () => {
-        for (const sec of this.state.sectors) {
-          sec.discovered = true;
-          for (const planet of sec.planets) {
-            planet.explored = true;
-            if (planet.number == null && planet.special === "none") planet.number = 8;
-          }
-        }
-        this.emit();
-      },
+      encounter: (cardId: number) => void this.dispatch({ t: "dev", action: "encounter", n: cardId }),
+      upgrades: () => void this.dispatch({ t: "dev", action: "upgrades" }),
+      friendship: () => void this.dispatch({ t: "dev", action: "friendship" }),
+      spaceJump: () => void this.dispatch({ t: "dev", action: "jump" }),
+      vp: (n: number) => void this.dispatch({ t: "dev", action: "vp", n }),
+      reveal: () => void this.dispatch({ t: "dev", action: "reveal" }),
+      resources: () => void this.dispatch({ t: "dev", action: "resources" }),
     };
   }
 

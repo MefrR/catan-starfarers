@@ -1099,6 +1099,11 @@ export function resolveEncounter(
   const subject = state.players.find((p) => p.id === enc.subjectId)!;
   card.resolve({ state, subject, choice, rng, log: (line) => logTo(state, line) });
 
+  // The card may have set up an interactive duel (subject vs a rival, each
+  // shaking their mothership). If so, keep the encounter open — both seats need
+  // the "Shake the mothership" button — instead of closing it out from under them.
+  if (state.phaseState.encounter?.awaiting === "duel") return;
+
   if (advanceEncounterSteps(state)) return; // waiting on a queued decision
 
   // After an encounter the base speed is 3, but boosters (and the Scientist

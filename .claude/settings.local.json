@@ -31,7 +31,12 @@
       "Bash(node -e \"const p=require\\('./server/package.json'\\); console.log\\(JSON.stringify\\({scripts:p.scripts,main:p.main},null,2\\)\\)\")",
       "Bash(cd \"/c/Users/Admin/Downloads/Catan Starfarers\" && cat shared/src/index.ts 2>/dev/null | head -60)",
       "Bash(cd \"/c/Users/Admin/Downloads/Catan Starfarers\" && grep -n \"from \\\\\"@starfarers/shared\\\\\"\" client/src/ui/hud.ts | head -3; echo \"---\"; grep -n \"this.diceTimers.forEach\" client/src/ui/hud.ts | head -2)",
-      "Bash(cd \"/c/Users/Admin/Downloads/Catan Starfarers\" && grep -n \"\\\\.turn-banner\" client/src/style.css | head)"
+      "Bash(cd \"/c/Users/Admin/Downloads/Catan Starfarers\" && grep -n \"\\\\.turn-banner\" client/src/style.css | head)",
+      "Bash(xargs -n1 basename)",
+      "Bash(cd \"/c/Users/Admin/Downloads/Catan Starfarers\" && tail -30 /tmp/sf_server.log)",
+      "Bash(cd \"/c/Users/Admin/Downloads\" && ls -la \"encounter cards\" 2>/dev/null | head -50; echo \"---count---\"; ls \"encounter cards\"/*.jpg 2>/dev/null | wc -l)",
+      "Bash(cd \"/c/Users/Admin/Downloads/Catan Starfarers\" && sed -i 's/grantTradeShip\\(state, subject, log\\)/grantTradeShip\\(subject, log\\)/g' shared/src/encounters.ts && grep -c \"grantTradeShip\\(subject, log\\)\" shared/src/encounters.ts)",
+      "Bash(cd \"/c/Users/Admin/Downloads/Catan Starfarers\" && sed -n '/export function reserveDrawForVP/,/^}/p' shared/src/*.ts)"
     ]
   }
 }

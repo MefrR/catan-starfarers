@@ -21,6 +21,7 @@ import {
   type ShipKind,
   type UpgradeKind,
   type TurnPhase,
+  type AlienCiv,
 } from "./types.js";
 import {
   BUILD_COSTS,
@@ -39,9 +40,16 @@ import {
   hasCard,
   availableFriendshipCards,
   claimedFriendshipCards,
+  FRIENDSHIP_CARDS,
 } from "./friendship.js";
-import { beginEncounter, resolveEncounter, confirmAllPlayerEncounter, encounterShake } from "./encounters.js";
-import type { ClientIntent } from "./protocol.js";
+import {
+  beginEncounter,
+  resolveEncounter,
+  confirmAllPlayerEncounter,
+  encounterShake,
+  ENCOUNTER_CARDS,
+} from "./encounters.js";
+import type { ClientIntent, DevAction } from "./protocol.js";
 
 export type Rng = () => number;
 
@@ -949,6 +957,84 @@ function awardFriendshipMarker(
  * handled here. Returns a new state; on validation failure returns the original
  * state plus an error string.
  */
+/**
+ * TEMPORARY testing/dev hooks, applied to `state` for `playerId`. Routed through
+ * the engine so the same chat codes work in single-player AND online multiplayer
+ * (the server applies them to its authoritative state and broadcasts). Remove this
+ * function and the "dev" intent before any public release.
+ */
+export function applyDevAction(
+  state: GameState,
+  playerId: string,
+  action: DevAction,
+  n: number | undefined,
+): void {
+  const me = state.players.find((p) => p.id === playerId);
+  if (!me) return;
+  const ps = state.phaseState;
+  switch (action) {
+    case "encounter": {
+      const cardId = n ?? 1;
+      const card = ENCOUNTER_CARDS[cardId];
+      if (!card) return;
+      ps.phase = "encounter";
+      ps.shake = ps.shake ?? { speed: 5, combat: 5, balls: ["red", "blue"], encounter: true };
+      ps.moveBudget = ps.moveBudget ?? ps.shake.speed;
+      ps.encounter = {
+        cardId,
+        subjectId: playerId,
+        awaiting: card.prompt,
+        ...(card.allPlayers ? { allPlayers: true, confirmedBy: [] } : {}),
+      };
+      break;
+    }
+    case "upgrades": {
+      me.upgrades.booster = MAX_UPGRADES.booster;
+      me.upgrades.cannon = MAX_UPGRADES.cannon;
+      me.upgrades.freightPod = MAX_UPGRADES.freightPod;
+      break;
+    }
+    case "friendship": {
+      const civs: AlienCiv[] = ["greenFolk", "scientists", "diplomats", "merchants"];
+      for (const civ of civs) {
+        const card = FRIENDSHIP_CARDS.find((c) => c.civ === civ && !me.friendshipCards.includes(c.id));
+        if (card) me.friendshipCards.push(card.id);
+      }
+      break;
+    }
+    case "jump": {
+      (ps.spaceJumps ??= {})[playerId] = (ps.spaceJumps[playerId] ?? 0) + 1;
+      break;
+    }
+    case "vp": {
+      me.victoryMedals = (me.victoryMedals ?? 0) + Math.max(0, Math.floor(n ?? 1));
+      break;
+    }
+    case "reveal": {
+      for (const sec of state.sectors) {
+        sec.discovered = true;
+        for (const planet of sec.planets) {
+          planet.explored = true;
+          if (planet.number == null && planet.special === "none") planet.number = 8;
+        }
+      }
+      break;
+    }
+    case "resources": {
+      // One-shot "warp9" grant for online testing: top up hand + personal supply
+      // and clear any pending discard the player owes.
+      for (const r of RESOURCES) me.hand[r] = Math.max(me.hand[r], 25);
+      me.supply.colonies = Math.max(me.supply.colonies, 20);
+      me.supply.tradeStations = Math.max(me.supply.tradeStations, 20);
+      me.supply.transportShips = Math.max(me.supply.transportShips, 20);
+      me.supply.shipyards = Math.max(me.supply.shipyards, 20);
+      if (ps.pendingDiscards && ps.pendingDiscards[playerId]) ps.pendingDiscards[playerId] = 0;
+      break;
+    }
+  }
+  recomputeVp(state);
+}
+
 export function applyIntent(
   input: GameState,
   playerId: string,
@@ -1352,6 +1438,12 @@ export function applyIntent(
         return fail(input, "No duel to shake for right now.");
       if (!encounterShake(state, playerId, rng)) return fail(input, "It's not your shake.");
       recomputeVp(state);
+      return { state };
+    }
+
+    case "dev": {
+      // TEMPORARY testing hook — works for any player, on or off turn. Remove later.
+      applyDevAction(state, playerId, intent.action, intent.n);
       return { state };
     }
 

@@ -65,7 +65,13 @@ export type ClientIntent =
     }
   | { t: "spaceJump"; shipId: string; toIntersectionId: string }
   | { t: "encounterShake" } // duel: the subject or the designated rival shakes
+  // TEMPORARY: testing/dev hooks routed through the engine so they also work in
+  // multiplayer (force an encounter, grant upgrades, etc.). Remove before release.
+  | { t: "dev"; action: DevAction; n?: number }
   | { t: "endTurn" };
+
+/** TEMPORARY dev/testing actions (single-player chat codes, also enabled online). */
+export type DevAction = "encounter" | "upgrades" | "friendship" | "jump" | "vp" | "reveal" | "resources";
 
 /** Server -> client messages. */
 export type ServerMessage =

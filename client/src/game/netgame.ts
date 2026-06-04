@@ -1,5 +1,5 @@
 import type { ClientIntent, GameState } from "@starfarers/shared";
-import type { GameDriver } from "./store.js";
+import type { GameDriver, DevTools } from "./store.js";
 import { net } from "../net.js";
 
 type Listener = (state: GameState) => void;
@@ -61,5 +61,19 @@ export class NetworkGame implements GameDriver {
     this.lastError = undefined;
     net.send(intent);
     return this.lastError;
+  }
+
+  /** TEMPORARY: dev/testing chat codes enabled online too. The server applies the
+   *  "dev" intent to its authoritative state and broadcasts. Remove before release. */
+  get dev(): DevTools {
+    return {
+      encounter: (cardId: number) => net.send({ t: "dev", action: "encounter", n: cardId }),
+      upgrades: () => net.send({ t: "dev", action: "upgrades" }),
+      friendship: () => net.send({ t: "dev", action: "friendship" }),
+      spaceJump: () => net.send({ t: "dev", action: "jump" }),
+      vp: (n: number) => net.send({ t: "dev", action: "vp", n }),
+      reveal: () => net.send({ t: "dev", action: "reveal" }),
+      resources: () => net.send({ t: "dev", action: "resources" }),
+    };
   }
 }
