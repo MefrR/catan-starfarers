@@ -1226,28 +1226,50 @@ export class HUD {
         const medals = p.victoryMedals; // pirate/ice conquest medals (+1 VP each)
         const fame = p.fameMedalPieces; // ½ VP each (every 2 pieces = 1 VP)
         const isWin = p.id === ps.winner;
-        // Every VP source with its point value, so the row sums exactly to the total.
-        const parts = [
-          `${colonies} colon${colonies === 1 ? "y" : "ies"} (+${colonies})`,
-          `${ports} spaceport${ports === 1 ? "" : "s"} (+${ports * 2})`,
-          `${stations} trade station${stations === 1 ? "" : "s"} (+${stations})`,
-          `${markers} friendship marker${markers === 1 ? "" : "s"} (+${markers * 2})`,
-          `${medals} conquest medal${medals === 1 ? "" : "s"} (+${medals})`,
-          `${fame} fame piece${fame === 1 ? "" : "s"} (+${Math.floor(fame / 2)})`,
-        ];
-        const breakdown = `${parts.join("  +  ")}  =  ${p.victoryPoints} VP`;
-        // Show conquest medals / fame only when held, to keep the row readable.
-        const detail =
-          `${colonies}🪐 · ${ports}🛰 · ${stations}🤝 · ${markers}★` +
-          (medals > 0 ? ` · ${medals}🏅` : "") +
-          (fame > 0 ? ` · ${fame}🎖½` : "");
+        const pc = COLOR_HEX[p.color];
+
+        // Every VP source the player holds, with its icon and EXACT point value,
+        // so the breakdown always sums precisely to the total shown.
+        const vpSrc: { ico: string; n: number; label: string; vp: number; sub: string; c: string }[] = [
+          { ico: colonyIco(), n: colonies, label: "Colonies", vp: colonies, sub: "1 VP each", c: pc },
+          { ico: spaceportIco(), n: ports, label: "Spaceports", vp: ports * 2, sub: "2 VP each", c: pc },
+          { ico: shipIco("tradeShip"), n: stations, label: "Trade stations", vp: stations, sub: "1 VP each", c: pc },
+          { ico: markerGlyphSvg(), n: markers, label: "Friendship markers", vp: markers * 2, sub: "2 VP each", c: "#7ad0ff" },
+          { ico: medalGlyphSvg(), n: medals, label: "Conquest medals", vp: medals, sub: "pirate / ice · 1 VP each", c: "#57e389" },
+          { ico: fameGlyphSvg(), n: fame, label: "Fame medal pieces", vp: Math.floor(fame / 2), sub: "½ VP each", c: "#ffd23f" },
+        ].filter((s) => s.n > 0);
+        const srcRows = vpSrc
+          .map(
+            (s) => `
+            <div class="go-src">
+              <span class="go-src-ico" style="color:${s.c}">${s.ico}</span>
+              <span class="go-src-n">×${s.n}</span>
+              <span class="go-src-lbl">${s.label}<span class="go-src-sub">${s.sub}</span></span>
+              <span class="go-src-vp">+${s.vp}</span>
+            </div>`,
+          )
+          .join("");
+
+        // Non-VP "things they got" — mothership upgrades — as a muted footnote.
+        const ups: string[] = [];
+        const up = (k: "booster" | "cannon" | "freightPod", lbl: string): void => {
+          if (p.upgrades[k] > 0) ups.push(`<span class="go-up" title="${p.upgrades[k]} ${lbl}">${upgradeIco(k)}<b>${p.upgrades[k]}</b></span>`);
+        };
+        up("booster", "boosters"); up("cannon", "cannons"); up("freightPod", "freight pods");
+        const upsRow = ups.length
+          ? `<div class="go-extras"><span class="go-extras-lbl">Mothership upgrades</span><span class="go-up-list">${ups.join("")}</span></div>`
+          : "";
+
         return `
-          <div class="go-row ${isWin ? "win" : ""}" title="${escapeHtml(breakdown)}">
-            <span class="go-rank">${i + 1}</span>
-            <span class="dot ${p.color}"></span>
-            <span class="go-name">${escapeHtml(p.name)}</span>
-            <span class="go-detail">${detail}</span>
-            <span class="go-vp" style="color:${COLOR_HEX[p.color]}" title="${escapeHtml(breakdown)}">${p.victoryPoints}</span>
+          <div class="go-row ${isWin ? "win" : ""}">
+            <div class="go-row-head">
+              <span class="go-rank">${i + 1}</span>
+              <span class="dot ${p.color}"></span>
+              <span class="go-name" style="color:${pc}">${escapeHtml(p.name)}</span>
+              <span class="go-vp" style="color:${pc}">${p.victoryPoints}<span class="go-vp-lbl">VP</span></span>
+            </div>
+            <div class="go-break">${srcRows}</div>
+            ${upsRow}
           </div>`;
       })
       .join("");
