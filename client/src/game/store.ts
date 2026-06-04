@@ -1,15 +1,36 @@
 import {
   createGameState,
   applyIntent,
+  recomputeVp,
+  ENCOUNTER_CARDS,
+  FRIENDSHIP_CARDS,
   RESOURCES,
+  MAX_UPGRADES,
   type GameState,
   type GameConfig,
   type ClientIntent,
   type SetupMember,
+  type AlienCiv,
 } from "@starfarers/shared";
 import { aiObligation, aiTurnAction } from "@starfarers/shared";
 
 type Listener = (state: GameState) => void;
+
+/** Single-player testing hooks (LocalGame only — never wired in multiplayer). */
+export interface DevTools {
+  /** Force a specific encounter card (1-32) on the human right now. */
+  encounter(cardId: number): void;
+  /** Max out the human's mothership upgrades. */
+  upgrades(): void;
+  /** Grant the human one friendship card of every civ. */
+  friendship(): void;
+  /** Grant the human a free space jump. */
+  spaceJump(): void;
+  /** Add N victory points to the human (capped near the win). */
+  vp(n: number): void;
+  /** Reveal the whole map (explore every planet + outpost). */
+  reveal(): void;
+}
 
 export interface Seat {
   member: SetupMember;
@@ -33,6 +54,8 @@ export interface GameDriver {
    *  LocalGame driver supports it; LAN games leave it undefined. */
   readonly devMode?: boolean;
   setDevMode?(on: boolean): void;
+  /** Single-player testing hooks (undefined in multiplayer). */
+  readonly dev?: DevTools;
   /** Multiplayer errors arrive asynchronously (the server rejects an intent after
    *  dispatch() has already returned). The UI sets this so it can still surface
    *  them — e.g. "Not your turn." or "Resolve discards first." */
@@ -96,6 +119,74 @@ export class LocalGame {
     this._devMode = on;
     if (on) this.topUpDev();
     this.emit();
+  }
+
+  /** Single-player testing hooks, surfaced to the chat-box dev codes. */
+  get dev(): DevTools {
+    const me = (): GameState["players"][number] | undefined =>
+      this.state.players.find((p) => p.id === this.humanId);
+    return {
+      encounter: (cardId: number) => {
+        const card = ENCOUNTER_CARDS[cardId];
+        if (!card) return;
+        const ps = this.state.phaseState;
+        ps.phase = "encounter";
+        ps.shake = ps.shake ?? { speed: 5, combat: 5, balls: ["red", "blue"], encounter: true };
+        ps.moveBudget = ps.moveBudget ?? ps.shake.speed;
+        ps.encounter = {
+          cardId,
+          subjectId: this.humanId,
+          awaiting: card.prompt,
+          ...(card.allPlayers ? { allPlayers: true, confirmedBy: [] } : {}),
+        };
+        this.emit();
+        this.pumpObligations(); // let AI confirm all-player cards / shake duels
+        this.emit();
+      },
+      upgrades: () => {
+        const p = me();
+        if (!p) return;
+        p.upgrades.booster = MAX_UPGRADES.booster;
+        p.upgrades.cannon = MAX_UPGRADES.cannon;
+        p.upgrades.freightPod = MAX_UPGRADES.freightPod;
+        this.emit();
+      },
+      friendship: () => {
+        const p = me();
+        if (!p) return;
+        const civs: AlienCiv[] = ["greenFolk", "scientists", "diplomats", "merchants"];
+        for (const civ of civs) {
+          const card = FRIENDSHIP_CARDS.find((c) => c.civ === civ && !p.friendshipCards.includes(c.id));
+          if (card) p.friendshipCards.push(card.id);
+        }
+        recomputeVp(this.state);
+        this.emit();
+      },
+      spaceJump: () => {
+        const p = me();
+        if (!p) return;
+        (this.state.phaseState.spaceJumps ??= {})[this.humanId] =
+          (this.state.phaseState.spaceJumps[this.humanId] ?? 0) + 1;
+        this.emit();
+      },
+      vp: (n: number) => {
+        const p = me();
+        if (!p) return;
+        p.victoryMedals = (p.victoryMedals ?? 0) + Math.max(0, Math.floor(n));
+        recomputeVp(this.state);
+        this.emit();
+      },
+      reveal: () => {
+        for (const sec of this.state.sectors) {
+          sec.discovered = true;
+          for (const planet of sec.planets) {
+            planet.explored = true;
+            if (planet.number == null && planet.special === "none") planet.number = 8;
+          }
+        }
+        this.emit();
+      },
+    };
   }
 
   /** Keep the human flush with resources + personal supply, and never force the

@@ -101,16 +101,15 @@ export class ChatBox {
       this.offNet = net.on((msg) => {
         if (msg.t !== "chat") return;
         const mine = msg.fromId === this.game.humanId;
-        // A "<name> <3" line is a heart aimed at a player: if it's addressed to
-        // ME, the hearts rain on MY screen. Everyone sees the chat line.
-        const heart = /^(.*?)\s*<3\s*$/.exec(msg.text);
-        if (heart) {
-          const target = heart[1]!.trim();
+        // A fling ("name <3", "ass to name", "shit to name") aimed at a player:
+        // if it's addressed to ME, the emoji rains on MY screen. All see the line.
+        const fling = parseFling(msg.text);
+        if (fling) {
           const myName = (this.me()?.name ?? "").toLowerCase();
-          const t = target.toLowerCase();
+          const t = fling.target.toLowerCase();
           const forMe = t !== "" && (myName === t || myName.includes(t));
-          if (forMe) this.spawnHearts();
-          const label = target ? `❤ to <b>${escapeHtml(target)}</b>` : "❤";
+          if (forMe) this.spawnEmoji(fling.emoji);
+          const label = fling.target ? `${fling.emoji} to <b>${escapeHtml(fling.target)}</b>` : fling.emoji;
           this.append(msg.name, COLOR_HEX[msg.color] ?? "#ff6b9d", label, !mine);
           return;
         }
@@ -152,20 +151,24 @@ export class ChatBox {
     if (!text) return;
     this.input.value = "";
 
-    // Dev-mode code.
+    // Dev-mode toggle.
     if (text.toLowerCase() === DEV_CODE || text.toLowerCase() === "/dev") {
       this.toggleDev();
       return;
     }
 
-    // Heart code: "<name> <3"  (or a bare "<3").
-    const heart = /^(.*?)\s*<3\s*$/.exec(text);
-    if (heart) {
-      const name = heart[1]!.trim();
-      // Multiplayer: relay it so the hearts rain on the NAMED player's screen
-      // (the incoming-chat handler spawns them for whoever it's addressed to).
+    // Dev/testing slash-commands (single-player only).
+    if (text.startsWith("/")) {
+      if (this.runDevCommand(text)) return;
+    }
+
+    // Fling reaction: "<name> <3", "ass to <name>", "shit to <name>".
+    const fling = parseFling(text);
+    if (fling) {
+      // Multiplayer: relay so the emoji rains on the NAMED player's screen (the
+      // incoming handler spawns it for whoever it's addressed to). SP: local.
       if (this.game.isMultiplayer) net.send({ t: "chat", text });
-      else this.sendHearts(name);
+      else this.flingLocal(fling);
       return;
     }
 
@@ -182,6 +185,86 @@ export class ChatBox {
     this.maybeAiReply();
   }
 
+  /** Show a fling locally (single-player): rain the emoji + log who it's "to". */
+  private flingLocal(f: { emoji: string; target: string }): void {
+    this.spawnEmoji(f.emoji);
+    const who = f.target ? `<b>${escapeHtml(f.target)}</b>` : "everyone";
+    this.append(this.me()?.name ?? "You", "#ff6b9d", `${f.emoji} to ${who}`);
+  }
+
+  /**
+   * Dev/testing chat codes (single-player). Returns true if the text was a dev
+   * command (handled), false otherwise. `this.game.dev` is undefined online.
+   */
+  private runDevCommand(text: string): boolean {
+    const [cmd, arg] = text.slice(1).trim().split(/\s+/, 2);
+    const c = (cmd ?? "").toLowerCase();
+    const known = ["help", "encounter", "enc", "upgrades", "friendship", "outpost", "jump", "vp", "reveal", "win"];
+    if (!known.includes(c)) return false;
+
+    if (c === "help") {
+      this.system(
+        "🛠️ <b>Dev codes</b> (single-player):<br>" +
+          "<b>warp9</b> — unlimited resources &amp; supply<br>" +
+          "<b>/encounter</b> — trigger the next encounter (1→32); <b>/encounter 12</b> — a specific card<br>" +
+          "<b>/upgrades</b> — max boosters/cannons/pods<br>" +
+          "<b>/friendship</b> (or /outpost) — grant one card of every civ<br>" +
+          "<b>/jump</b> — grant a space jump<br>" +
+          "<b>/vp 3</b> — add 3 victory points (<b>/win</b> = +14)<br>" +
+          "<b>/reveal</b> — uncover the whole map<br>" +
+          "Flings: <b>name &lt;3</b>, <b>ass to name</b>, <b>shit to name</b>",
+      );
+      return true;
+    }
+
+    const dev = this.game.dev;
+    if (!dev) {
+      this.system("Dev codes are single-player only.");
+      return true;
+    }
+    switch (c) {
+      case "encounter":
+      case "enc": {
+        const n = arg ? Math.max(1, Math.min(32, parseInt(arg, 10) || 1)) : ((this.devEncN % 32) + 1);
+        if (!arg) this.devEncN++;
+        dev.encounter(n);
+        this.system(`🛠️ Forced encounter card #${n}.`);
+        return true;
+      }
+      case "upgrades":
+        dev.upgrades();
+        this.system("🛠️ Mothership upgrades maxed.");
+        return true;
+      case "friendship":
+      case "outpost":
+        dev.friendship();
+        this.system("🛠️ Granted one friendship card of every civ.");
+        return true;
+      case "jump":
+        dev.spaceJump();
+        this.system("🛠️ Space jump granted — fly during your flight phase.");
+        return true;
+      case "vp": {
+        const n = Math.max(1, parseInt(arg ?? "1", 10) || 1);
+        dev.vp(n);
+        this.system(`🛠️ +${n} VP.`);
+        return true;
+      }
+      case "win":
+        dev.vp(14);
+        this.system("🛠️ +14 VP — one good turn from winning.");
+        return true;
+      case "reveal":
+        dev.reveal();
+        this.system("🛠️ Whole map revealed.");
+        return true;
+    }
+    return false;
+  }
+
+  /** Sequential counter for /encounter so each call shows the next card. */
+  private devEncN = 0;
+
   private toggleDev(): void {
     if (!this.game.setDevMode) {
       this.system("Dev mode is only available in single-player.");
@@ -195,22 +278,6 @@ export class ChatBox {
       );
     } else {
       this.system(`Dev mode off.`);
-    }
-  }
-
-  private sendHearts(name: string): void {
-    this.spawnHearts();
-    const target = this.findPlayer(name);
-    if (name === "" ) {
-      this.system(`💗 sent some love into the void.`);
-    } else if (target) {
-      this.append(
-        this.me()?.name ?? "You",
-        target.color in COLOR_HEX ? COLOR_HEX[target.color]! : "#ff6b9d",
-        `❤ to <b>${escapeHtml(target.name)}</b>`,
-      );
-    } else {
-      this.append(this.me()?.name ?? "You", "#ff6b9d", `❤ to <b>${escapeHtml(name)}</b>`);
     }
   }
 
@@ -231,13 +298,6 @@ export class ChatBox {
     return this.game.getState().players.find((p) => p.id === this.game.humanId);
   }
 
-  private findPlayer(name: string) {
-    const n = name.toLowerCase();
-    return this.game
-      .getState()
-      .players.find((p) => p.name.toLowerCase() === n || p.name.toLowerCase().includes(n));
-  }
-
   private append(from: string, color: string, html: string, incoming = false): void {
     const row = el(
       `<div class="chat-msg"><span class="cm-from" style="color:${color}">${escapeHtml(from)}</span><span class="cm-text">${html}</span></div>`,
@@ -254,13 +314,14 @@ export class ChatBox {
     this.log.scrollTop = this.log.scrollHeight;
   }
 
-  /** Big animated hearts floating up across the whole screen (F5). */
-  private spawnHearts(): void {
+  /** Rain a big emoji up across the whole screen (hearts / fling reactions). */
+  private spawnEmoji(emoji: string): void {
     const fx = el(`<div class="heart-fx"></div>`);
     document.body.appendChild(fx);
     const N = 18;
     for (let i = 0; i < N; i++) {
-      const h = el(`<span class="heart">❤</span>`);
+      const h = el(`<span class="heart"></span>`);
+      h.textContent = emoji;
       const left = Math.random() * 100;
       const size = 28 + Math.random() * 56;
       const dur = 2.2 + Math.random() * 1.6;
@@ -275,6 +336,18 @@ export class ChatBox {
     }
     window.setTimeout(() => fx.remove(), 4200);
   }
+}
+
+/** Parse a "fling" chat line into an emoji + target name, or null.
+ *  - "<name> <3"      → ❤
+ *  - "ass to <name>"  → 🍑
+ *  - "shit to <name>" → 💩 */
+function parseFling(text: string): { emoji: string; target: string } | null {
+  const heart = /^(.*?)\s*<3\s*$/.exec(text);
+  if (heart) return { emoji: "❤", target: heart[1]!.trim() };
+  const m = /^(ass|shit)\s+to\s+(.+)$/i.exec(text);
+  if (m) return { emoji: m[1]!.toLowerCase() === "ass" ? "🍑" : "💩", target: m[2]!.trim() };
+  return null;
 }
 
 function escapeHtml(s: string): string {
