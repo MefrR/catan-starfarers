@@ -94,7 +94,7 @@ const UPGRADE_USES: Record<"booster" | "cannon" | "freightPod", string> = {
   booster:
     "<b>Boosters — speed</b><br>• +1 flight speed each, so your ships travel farther every flight.<br>• Add to your roll in speed-based encounters (races, fleeing pirates).",
   cannon:
-    "<b>Cannons — combat</b><br>• +1 combat strength each.<br>• Win pirate-combat encounters.<br>• Defeat a <b>pirate base</b> next to your ship (combat ≥ its number) and claim it as a <b>+1 VP</b> fame medal.",
+    "<b>Cannons — combat</b><br>• +1 combat strength each.<br>• Win pirate-combat encounters.<br>• Defeat a <b>pirate base</b> next to your ship (cannons ≥ its number) and claim it as a <b>+1 VP</b> fame medal.",
   freightPod:
     "<b>Freight pods — cargo &amp; expansion</b><br>• Build a <b>trade station</b> at an outpost (you need at least as many pods as stations already docked there).<br>• <b>Terraform an ice planet</b> next to your ship (pods ≥ its number) into a <b>+1 VP</b> fame medal.",
 };
@@ -1222,14 +1222,32 @@ export class HUD {
         const colonies = state.buildings.filter((b) => b.owner === p.id && b.kind === "colony").length;
         const ports = state.buildings.filter((b) => b.owner === p.id && b.kind === "spaceport").length;
         const stations = state.tradeStations.filter((t) => t.owner === p.id).length;
+        const markers = p.friendshipMarkers.length;
+        const medals = p.victoryMedals; // pirate/ice conquest medals (+1 VP each)
+        const fame = p.fameMedalPieces; // ½ VP each (every 2 pieces = 1 VP)
         const isWin = p.id === ps.winner;
+        // Every VP source with its point value, so the row sums exactly to the total.
+        const parts = [
+          `${colonies} colon${colonies === 1 ? "y" : "ies"} (+${colonies})`,
+          `${ports} spaceport${ports === 1 ? "" : "s"} (+${ports * 2})`,
+          `${stations} trade station${stations === 1 ? "" : "s"} (+${stations})`,
+          `${markers} friendship marker${markers === 1 ? "" : "s"} (+${markers * 2})`,
+          `${medals} conquest medal${medals === 1 ? "" : "s"} (+${medals})`,
+          `${fame} fame piece${fame === 1 ? "" : "s"} (+${Math.floor(fame / 2)})`,
+        ];
+        const breakdown = `${parts.join("  +  ")}  =  ${p.victoryPoints} VP`;
+        // Show conquest medals / fame only when held, to keep the row readable.
+        const detail =
+          `${colonies}🪐 · ${ports}🛰 · ${stations}🤝 · ${markers}★` +
+          (medals > 0 ? ` · ${medals}🏅` : "") +
+          (fame > 0 ? ` · ${fame}🎖½` : "");
         return `
-          <div class="go-row ${isWin ? "win" : ""}">
+          <div class="go-row ${isWin ? "win" : ""}" title="${escapeHtml(breakdown)}">
             <span class="go-rank">${i + 1}</span>
             <span class="dot ${p.color}"></span>
             <span class="go-name">${escapeHtml(p.name)}</span>
-            <span class="go-detail">${colonies}🪐 · ${ports}🛰 · ${stations}🤝 · ${p.friendshipMarkers.length}★</span>
-            <span class="go-vp" style="color:${COLOR_HEX[p.color]}">${p.victoryPoints}</span>
+            <span class="go-detail">${detail}</span>
+            <span class="go-vp" style="color:${COLOR_HEX[p.color]}" title="${escapeHtml(breakdown)}">${p.victoryPoints}</span>
           </div>`;
       })
       .join("");

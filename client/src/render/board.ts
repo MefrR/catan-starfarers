@@ -823,7 +823,7 @@ export class BoardRenderer {
         if (!planet.explored) {
           tip = `<b>Unexplored planet</b><br>Fly a ship adjacent to reveal it`;
         } else if (planet.special === "pirateBase") {
-          tip = `<b>Pirate Base</b><br>Beat it with combat ≥ ${planet.specialValue} to win a fame medal (+1 VP)`;
+          tip = `<b>Pirate Base</b><br>Beat it with ${planet.specialValue}+ cannons to win a fame medal (+1 VP)`;
         } else if (planet.special === "icePlanet") {
           tip = `<b>Ice Planet</b><br>Terraform with ≥ ${planet.specialValue} freight pods for a fame medal (+1 VP)`;
         } else {
