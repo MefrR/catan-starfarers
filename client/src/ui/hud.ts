@@ -88,6 +88,27 @@ type Mode =
   | "launchShip"
   | "setupShip";
 
+/** What each mothership upgrade is FOR — shown as rich hover info on the Fleet
+ *  panel and on the build buttons (every use spelled out, per request). */
+const UPGRADE_USES: Record<"booster" | "cannon" | "freightPod", string> = {
+  booster:
+    "<b>Boosters — speed</b><br>• +1 flight speed each, so your ships travel farther every flight.<br>• Add to your roll in speed-based encounters (races, fleeing pirates).",
+  cannon:
+    "<b>Cannons — combat</b><br>• +1 combat strength each.<br>• Win pirate-combat encounters.<br>• Defeat a <b>pirate base</b> next to your ship (combat ≥ its number) and claim it as a <b>+1 VP</b> fame medal.",
+  freightPod:
+    "<b>Freight pods — cargo &amp; expansion</b><br>• Build a <b>trade station</b> at an outpost (you need at least as many pods as stations already docked there).<br>• <b>Terraform an ice planet</b> next to your ship (pods ≥ its number) into a <b>+1 VP</b> fame medal.",
+};
+
+/** What each ship / spaceport is FOR — rich hover info on the build buttons. */
+const BUILD_USES: Record<"colonyShip" | "tradeShip" | "spaceport", string> = {
+  colonyShip:
+    "<b>Colony ship</b><br>Fly it out and establish a <b>colony</b> on an open point touching two planets (<b>+1 VP</b>, and you collect from those planets on production).",
+  tradeShip:
+    "<b>Trade ship</b><br>Fly it to an outpost and dock to open a <b>trade station</b> (<b>+1 VP</b>, a friendship card, and the <b>+2 VP</b> marker if you hold the most stations there).",
+  spaceport:
+    "<b>Spaceport</b><br>Upgrades one of your colonies for <b>+1 extra VP</b> and lets you launch new ships from the open points beside it.",
+};
+
 export class HUD {
   private root: HTMLElement;
   private game: GameDriver;
@@ -111,8 +132,12 @@ export class HUD {
   private cWant: Partial<Record<Resource, number>> = {};
   /** Whether the bottom-bar trade tray is expanded (opened by clicking a card). */
   private tradeOpen = false;
-  /** Whether the Building Costs / VP reference card is expanded. */
+  /** Whether the Costs & VP reference popover (the "i" tool) is open. */
   private showRef = false;
+  /** HUD-tools toggle: show rich hover info (descriptions/tooltips). Persisted. */
+  private hoverInfoOn = true;
+  /** HUD-tools toggle: idle 60s auto-recenter of the map. Persisted. */
+  private autoRecenterOn = true;
   private discardSel: Partial<Record<Resource, number>> = {};
   /** Last roll counter we played a dice animation for. */
   private lastAnimatedRoll = 0;
@@ -189,6 +214,13 @@ export class HUD {
     this.launchPicker = document.createElement("div");
     this.launchPicker.className = "map-picker";
     document.body.appendChild(this.launchPicker);
+
+    // Restore the player's HUD-tools preferences (hover info + auto-recenter).
+    try {
+      this.hoverInfoOn = localStorage.getItem("sf_hoverInfo") !== "0";
+      this.autoRecenterOn = localStorage.getItem("sf_autoRecenter") !== "0";
+    } catch { /* localStorage unavailable — keep defaults */ }
+    this.board.setAutoRecenter(this.autoRecenterOn);
   }
 
   /** Floating colony/trade-ship chooser shown over the clicked green launch
@@ -254,9 +286,11 @@ export class HUD {
       const head = ready
         ? `<div class="bc-head ready">✓ All resources ready</div>`
         : `<div class="bc-head short">Missing resources (red)</div>`;
-      return `${head}<div class="bc-cells">${cells}</div>${extra ? `<div class="bc-extra">${escapeHtml(extra)}</div>` : ""}`;
+      // `extra` is our own trusted HTML (build "uses" descriptions / blocker text).
+      return `${head}<div class="bc-cells">${cells}</div>${extra ? `<div class="bc-extra">${extra}</div>` : ""}`;
     };
     const show = (e: PointerEvent): void => {
+      if (!this.hoverInfoOn) return; // hover info toggled off in the HUD tools
       this.costPop.innerHTML = build();
       this.costPop.classList.add("show");
       this.positionCostPop(e.clientX, e.clientY);
@@ -278,6 +312,24 @@ export class HUD {
     if (y < 8) y = my + 18;
     this.costPop.style.left = `${x}px`;
     this.costPop.style.top = `${y}px`;
+  }
+
+  /** Attach a rich hover/tap info popover (arbitrary HTML) to an element. Reuses
+   *  the floating popover element and is gated on the hover-info toggle, so the
+   *  player can switch all of this off from the HUD tools. */
+  private attachInfo(elm: HTMLElement, html: string): void {
+    const show = (e: PointerEvent): void => {
+      if (!this.hoverInfoOn) return;
+      this.costPop.innerHTML = `<div class="info-tip">${html}</div>`;
+      this.costPop.classList.add("show");
+      this.positionCostPop(e.clientX, e.clientY);
+    };
+    elm.addEventListener("pointerover", show);
+    elm.addEventListener("pointermove", (e) => {
+      if (this.costPop.classList.contains("show")) this.positionCostPop(e.clientX, e.clientY);
+    });
+    elm.addEventListener("pointerout", () => this.costPop.classList.remove("show"));
+    elm.addEventListener("pointerdown", show);
   }
 
   /**
@@ -565,8 +617,10 @@ export class HUD {
     const ps = state.phaseState;
     const active = state.players[ps.activePlayerIndex]!;
     // While picking a ship to fly / jump, suppress map tooltips — info popups
-    // distract from choosing where to travel.
+    // distract from choosing where to travel. The hover-info toggle (HUD tools)
+    // also suppresses them globally when the player turns hover info off.
     this.board.tooltipsSuppressed =
+      !this.hoverInfoOn ||
       this.mode === "moveShip" || this.mode === "selectShip" || this.mode === "spaceJump";
 
     // Multiplayer "End build → Shake": the endTradeBuild round-tripped to the
@@ -876,6 +930,9 @@ export class HUD {
       actions.appendChild(el(`<div class="waiting">Encounter in progress…</div>`));
     } else if (!myTurn) {
       actions.appendChild(el(`<div class="waiting">Waiting for ${escapeHtml(active.name)}…</div>`));
+      // The build options stay visible (grayed) so you can read what each does
+      // while you wait; they activate on your turn.
+      this.fillDisabledBuildPalette(actions, me);
     } else {
       this.fillHumanActions(actions, state, me);
     }
@@ -887,6 +944,8 @@ export class HUD {
     exitBtn.addEventListener("click", () => this.confirmExit());
     screen.appendChild(exitBtn);
 
+    // Floating tools: ⓘ costs/VP reference, 👁 hover-info toggle, ⌖ auto-recenter.
+    screen.appendChild(this.buildToolsCluster());
 
     screen.appendChild(this.buildSidebar(state, me));
     screen.appendChild(scoreboard);
@@ -1238,9 +1297,17 @@ export class HUD {
             <span class="ms-lbl">${label}</span>
             <span class="ms-val">${val}</span>
           </div>`);
-    stats.appendChild(stat(upgradeIco("booster"), "Boosters", me.upgrades.booster, "#ef8a2b"));
-    stats.appendChild(stat(upgradeIco("cannon"), "Cannons", me.upgrades.cannon, "#6fb3ff"));
-    stats.appendChild(stat(upgradeIco("freightPod"), "Freight pods", me.upgrades.freightPod, "#ff6b6b"));
+    // Boosters / Cannons / Freight pods carry a full "what can I do with these?"
+    // hover info (every use spelled out), gated on the hover-info toggle.
+    const upRow = (kind: "booster" | "cannon" | "freightPod", label: string, color: string): HTMLElement => {
+      const row = stat(upgradeIco(kind), label, me.upgrades[kind], color);
+      row.classList.add("ms-stat-info");
+      this.attachInfo(row, UPGRADE_USES[kind]);
+      return row;
+    };
+    stats.appendChild(upRow("booster", "Boosters", "#ef8a2b"));
+    stats.appendChild(upRow("cannon", "Cannons", "#6fb3ff"));
+    stats.appendChild(upRow("freightPod", "Freight pods", "#ff6b6b"));
     stats.appendChild(stat(shipIco(), "Transport ships", me.supply.transportShips, "#c98bff"));
     stats.appendChild(stat(colonyIco(), "Colonies", me.supply.colonies, "#ffd23f"));
     {
@@ -1349,8 +1416,8 @@ export class HUD {
     // Trade moved to the bottom action bar (P6c) — click a resource card there to
     // start trading, which keeps the sidebar compact for small/mobile screens.
 
-    // --- Reference card (build costs + VP), collapsible ---
-    side.appendChild(this.buildReferencePanel());
+    // The build costs + VP reference moved OUT of the Fleet panel to the floating
+    // "i" tool (see buildToolsCluster), keeping the sidebar focused on your fleet.
 
     // --- Log (M2): the activity log now lives inside the Fleet panel, so the
     // single Fleet toggle shows/hides it too (no separate floating log panel). ---
@@ -1371,18 +1438,8 @@ export class HUD {
     return side;
   }
 
-  /** Collapsible reference: what each build costs and what every VP source is worth. */
-  private buildReferencePanel(): HTMLElement {
-    const sec = el(`<div class="side-sec side-ref"></div>`);
-    const head = el(
-      `<button class="ref-toggle" aria-expanded="${this.showRef}">
-         <span>${this.showRef ? "▾" : "▸"} Costs &amp; victory points</span>
-       </button>`,
-    );
-    head.addEventListener("click", () => { this.showRef = !this.showRef; this.rerender(); });
-    sec.appendChild(head);
-    if (!this.showRef) return sec;
-
+  /** Reference content (build costs + VP values) for the floating "i" popover. */
+  private buildReferenceBody(): HTMLElement {
     const body = el(`<div class="ref-body"></div>`);
 
     // --- Build costs ---
@@ -1436,8 +1493,75 @@ export class HUD {
       );
     }
 
-    sec.appendChild(body);
-    return sec;
+    return body;
+  }
+
+  /** Floating HUD tools (top-right vertical stack):
+   *   ⓘ  — open/close the Costs & victory-points reference popover
+   *   👁 — toggle rich hover info on/off (descriptions + map tooltips)
+   *   ⌖  — toggle the 60s idle auto-recenter on/off
+   *  All three persist across reloads. */
+  private buildToolsCluster(): HTMLElement {
+    const wrap = el(`<div class="hud-tools"></div>`);
+
+    const iBtn = el(
+      `<button class="tool-btn ${this.showRef ? "active" : ""}" title="Building costs & victory points">ⓘ</button>`,
+    );
+    iBtn.addEventListener("click", () => { this.showRef = !this.showRef; this.rerender(); });
+    wrap.appendChild(iBtn);
+
+    const hoverBtn = el(
+      `<button class="tool-btn ${this.hoverInfoOn ? "active" : ""}" title="Hover info: ${this.hoverInfoOn ? "on (tap to hide)" : "off (tap to show)"}">👁</button>`,
+    );
+    hoverBtn.addEventListener("click", () => {
+      this.hoverInfoOn = !this.hoverInfoOn;
+      try { localStorage.setItem("sf_hoverInfo", this.hoverInfoOn ? "1" : "0"); } catch { /* ignore */ }
+      if (!this.hoverInfoOn) this.costPop.classList.remove("show");
+      this.rerender();
+    });
+    wrap.appendChild(hoverBtn);
+
+    const recBtn = el(
+      `<button class="tool-btn ${this.autoRecenterOn ? "active" : ""}" title="Auto-recenter map (60s idle): ${this.autoRecenterOn ? "on" : "off"}">⌖</button>`,
+    );
+    recBtn.addEventListener("click", () => {
+      this.autoRecenterOn = !this.autoRecenterOn;
+      try { localStorage.setItem("sf_autoRecenter", this.autoRecenterOn ? "1" : "0"); } catch { /* ignore */ }
+      this.board.setAutoRecenter(this.autoRecenterOn);
+      this.rerender();
+    });
+    wrap.appendChild(recBtn);
+
+    // The reference popover hangs to the LEFT of the "i" button when open.
+    if (this.showRef) {
+      const pop = el(`<div class="ref-pop"></div>`);
+      pop.appendChild(el(`<div class="ref-pop-title">Costs &amp; victory points</div>`));
+      pop.appendChild(this.buildReferenceBody());
+      wrap.appendChild(pop);
+    }
+    return wrap;
+  }
+
+  /** The full build palette, always visible but GRAYED OUT, shown while you wait
+   *  for another player. The buttons don't act (it isn't your turn) but hovering
+   *  still explains each option's cost + what it does. Uses a CSS class instead of
+   *  the disabled attribute so pointer/hover events still fire. */
+  private fillDisabledBuildPalette(actions: HTMLElement, me: PlayerState): void {
+    const palette = el(`<div class="build-palette off-turn"></div>`);
+    const label = (icon: string, name: string): string =>
+      `<span class="b-ico">${icon}</span><span class="b-name">${name}</span>`;
+    const add = (icon: string, name: string, cost: Partial<Record<Resource, number>>, uses: string): void => {
+      const b = el(`<button class="secondary is-disabled" aria-disabled="true">${label(icon, name)}</button>`);
+      this.attachCostTip(b, me, cost, uses);
+      palette.appendChild(b);
+    };
+    add(shipIco("colonyShip"), "Colony Ship", BUILD_COSTS.colonyShip, BUILD_USES.colonyShip);
+    add(shipIco("tradeShip"), "Trade Ship", BUILD_COSTS.tradeShip, BUILD_USES.tradeShip);
+    add(spaceportIco(), "Spaceport", BUILD_COSTS.spaceport, BUILD_USES.spaceport);
+    add(upgradeIco("booster"), "Booster", BUILD_COSTS.booster, UPGRADE_USES.booster);
+    add(upgradeIco("cannon"), "Cannon", BUILD_COSTS.cannon, UPGRADE_USES.cannon);
+    add(upgradeIco("freightPod"), "Freight Pod", BUILD_COSTS.freightPod, UPGRADE_USES.freightPod);
+    actions.appendChild(palette);
   }
 
   /** Set up board click handlers appropriate to the current mode. */
@@ -1748,7 +1872,7 @@ export class HUD {
             title: shipTip(BUILD_COSTS.colonyShip, "colony ship"),
           }),
           BUILD_COSTS.colonyShip,
-          "Launches a colony ship.",
+          BUILD_USES.colonyShip,
         );
         addBuild(
           btn(buildLabel(shipIco("tradeShip"), freeTradeShips > 0 ? "Trade Ship (free)" : "Trade Ship", transportLeft), () => { this.launchKind = "tradeShip"; this.mode = "launchShip"; this.render(state); }, {
@@ -1758,7 +1882,7 @@ export class HUD {
               : shipTip(BUILD_COSTS.tradeShip, "trade ship"),
           }),
           BUILD_COSTS.tradeShip,
-          freeTradeShips > 0 ? "Launches a free trade ship (no cost)." : "Launches a trade ship.",
+          (freeTradeShips > 0 ? "<b>Free trade ship</b> — no resource cost (granted by an encounter).<br>" : "") + BUILD_USES.tradeShip,
         );
         addBuild(
           btn(
@@ -1774,7 +1898,7 @@ export class HUD {
             },
           ),
           BUILD_COSTS.spaceport,
-          "Upgrades a colony (+1 VP).",
+          BUILD_USES.spaceport,
         );
         addBuild(
           btn(buildLabel(upgradeIco("booster"), "Booster", boosterLeft), () => this.act({ t: "build", what: "booster" }), {
@@ -1782,7 +1906,7 @@ export class HUD {
             title: buildTip(BUILD_COSTS.booster, "+1 ship speed."),
           }),
           BUILD_COSTS.booster,
-          "+1 ship speed.",
+          UPGRADE_USES.booster,
         );
         addBuild(
           btn(buildLabel(upgradeIco("cannon"), "Cannon", cannonLeft), () => this.act({ t: "build", what: "cannon" }), {
@@ -1790,7 +1914,7 @@ export class HUD {
             title: buildTip(BUILD_COSTS.cannon, "+1 combat / clears pirate bases."),
           }),
           BUILD_COSTS.cannon,
-          "+1 combat / clears pirate bases.",
+          UPGRADE_USES.cannon,
         );
         addBuild(
           btn(buildLabel(upgradeIco("freightPod"), "Freight Pod", freightLeft), () => this.act({ t: "build", what: "freightPod" }), {
@@ -1798,7 +1922,7 @@ export class HUD {
             title: buildTip(BUILD_COSTS.freightPod, "Extra trade stations / terraforms ice planets."),
           }),
           BUILD_COSTS.freightPod,
-          "Extra trade stations / terraforms ice planets.",
+          UPGRADE_USES.freightPod,
         );
         // Diplomat "Fame for Sale": pay 1 goods for 1 fame piece, once per turn.
         if (me.friendshipCards.includes("diplomats:fameForSale")) {

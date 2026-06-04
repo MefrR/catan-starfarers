@@ -320,10 +320,23 @@ export class BoardRenderer {
     this.recenterAnim = requestAnimationFrame(step);
   }
 
-  /** (Re)start the 10s idle countdown that auto-recenters the map. */
+  /** User setting: when false, the idle auto-recenter is disabled (double-tap
+   *  recenter still works). Toggled from the HUD tools. */
+  autoRecenterEnabled = true;
+
+  /** (Re)start the 60s idle countdown that auto-recenters the map. No-op when the
+   *  player has switched auto-recenter off. */
   private resetIdleTimer(): void {
     window.clearTimeout(this.idleTimer);
+    if (!this.autoRecenterEnabled) return;
     this.idleTimer = window.setTimeout(() => this.animateRecenter(), 60000);
+  }
+
+  /** Turn the idle auto-recenter on/off (HUD tools toggle). */
+  setAutoRecenter(on: boolean): void {
+    this.autoRecenterEnabled = on;
+    if (on) this.resetIdleTimer();
+    else window.clearTimeout(this.idleTimer);
   }
 
   /**

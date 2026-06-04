@@ -569,8 +569,60 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .build-cost-pop .bc-cell.ok .bc-num { color: #6ee7a8; }
 .build-cost-pop .bc-cell.miss .bc-num { color: #ff8a8a; }
 .build-cost-pop .bc-extra {
-  margin-top: 6px; font-size: 10px; color: var(--muted); text-align: center;
+  margin-top: 6px; font-size: 10.5px; line-height: 1.45; color: var(--muted); text-align: left;
 }
+.build-cost-pop .bc-extra b { color: #dfe6f5; }
+
+/* Rich info tooltip body (reuses the floating build-cost popover element). */
+.build-cost-pop .info-tip {
+  font-size: 11.5px; line-height: 1.5; color: var(--text); text-align: left; max-width: 240px;
+}
+.build-cost-pop .info-tip b { color: #fff; }
+
+/* Floating HUD tools (right edge): ⓘ costs/VP, 👁 hover-info, ⌖ auto-recenter. */
+.hud-tools {
+  position: fixed; right: 14px; top: 50%; transform: translateY(-50%);
+  z-index: 70; display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+}
+.hud-tools .tool-btn {
+  pointer-events: auto;
+  width: 38px; height: 38px; padding: 0; border-radius: 11px;
+  font-size: 18px; line-height: 1; cursor: pointer;
+  background: rgba(12, 16, 28, 0.78); color: #cdd6ea;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.hud-tools .tool-btn:hover { border-color: var(--accent); color: #fff; }
+.hud-tools .tool-btn.active {
+  background: color-mix(in srgb, var(--accent) 32%, rgba(12, 16, 28, 0.85));
+  border-color: var(--accent); color: #fff;
+}
+.hud-tools .ref-pop {
+  pointer-events: auto;
+  position: absolute; right: 48px; top: 50%; transform: translateY(-50%);
+  width: 232px; max-height: 74vh; overflow-y: auto;
+  padding: 12px 14px; border-radius: 12px;
+  background: rgba(8, 12, 24, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+.hud-tools .ref-pop-title {
+  font-size: 12px; font-weight: 800; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 8px;
+}
+.hud-tools .ref-body { margin-top: 0; }
+
+/* Fleet upgrade rows that carry a hover description. */
+.ms-stat-info { cursor: help; }
+
+/* Off-turn build palette: every option visible but grayed; still hoverable so
+   the player can read what each does while waiting. */
+.build-palette { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.build-palette.off-turn { margin-top: 8px; opacity: 0.6; }
+.build-palette .is-disabled { cursor: help; filter: grayscale(0.55); }
+.build-palette .is-disabled:hover { opacity: 0.9; filter: grayscale(0.2); }
 
 .actionbar {
   left: 50%; bottom: 16px; transform: translateX(-50%);
