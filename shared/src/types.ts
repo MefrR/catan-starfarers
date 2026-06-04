@@ -264,6 +264,10 @@ export interface GamePhaseState {
   /** Free space jumps granted (e.g. by an encounter): the player may move one ship
    *  to ANY open intersection on the map. Keyed by player id; decremented on use. */
   spaceJumps?: Record<PlayerId, number>;
+  /** Free trade ships granted (e.g. by an encounter): the player may launch this
+   *  many trade ships at NO resource cost. Keyed by player id; decremented on use.
+   *  Persists across turns until launched. */
+  freeTradeShips?: Record<PlayerId, number>;
   /** Resources that production could NOT pay this roll because the bank ran dry —
    *  the client shows an "out of X" notice to everyone. Cleared on the next roll. */
   productionShortfall?: Resource[];

@@ -342,10 +342,12 @@ export function encounterShake(state: GameState, playerId: PlayerId, rng: Rng): 
   return true;
 }
 
-/** Grant a free trade ship (returned to the player's supply to deploy). */
-function grantTradeShip(p: PlayerState, log: (s: string) => void): void {
+/** Grant a free trade ship: add the piece to supply AND a free-launch credit so
+ *  the player can deploy it at no resource cost (launchable in flight or build). */
+function grantTradeShip(state: GameState, p: PlayerState, log: (s: string) => void): void {
   p.supply.transportShips++;
-  log(`${p.name} receives a free trade ship in their supply.`);
+  (state.phaseState.freeTradeShips ??= {})[p.id] = (state.phaseState.freeTradeShips[p.id] ?? 0) + 1;
+  log(`${p.name} receives a free trade ship — launch it for free next to a spaceport.`);
 }
 
 /** Rob 1 random resource from every opponent into the subject's hand. */
@@ -579,7 +581,7 @@ function merchantPrinceCard(id: number): EncounterCard {
         gainFame(subject, 1);
         log(`The prince is satisfied: +1 resource, +1 fame.`);
       } else {
-        grantTradeShip(subject, log);
+        grantTradeShip(state, subject, log);
         log(`The prince is delighted and gifts ${subject.name} a trade ship.`);
       }
     },
@@ -653,7 +655,7 @@ function pirateDuelDemandCard(
       const { state, subject, log } = ctx;
       if (won) {
         if (opts.winCarbon) { takeSpecific(state, subject, "carbon", 2); gainFame(subject, 1); log(`Victory! You blast the pirates and seize 2 carbon and 1 fame.`); }
-        else { grantTradeShip(subject, log); gainFame(subject, 1); log(`Victory! You capture the pirate ship — a free trade ship and 1 fame.`); }
+        else { grantTradeShip(state, subject, log); gainFame(subject, 1); log(`Victory! You capture the pirate ship — a free trade ship and 1 fame.`); }
       } else {
         gainFame(subject, 1);
         scrapUpgrade(subject, log);
@@ -686,10 +688,10 @@ function pirateFleeCard(id: number, offset: number, win: "upgrade" | "ship"): En
       setupDuel(ctx, offset, "combat");
     },
     resolveDuel: (ctx, won) => {
-      const { subject, log } = ctx;
+      const { state, subject, log } = ctx;
       if (won) {
         if (win === "upgrade") { addFreeUpgrade(subject); gainFame(subject, 1); log(`Victory! You salvage alien tech — a free upgrade and 1 fame.`); }
-        else { grantTradeShip(subject, log); log(`Victory! You seize the pirate ship — a free trade ship.`); }
+        else { grantTradeShip(state, subject, log); log(`Victory! You seize the pirate ship — a free trade ship.`); }
       } else {
         if (win === "upgrade") scrapUpgrade(subject, log);
         else damageOneShip(ctx);
@@ -802,7 +804,7 @@ function rescueDuelCard(
       if (won) {
         if (win === "resources") { takeChoice(state, subject, 2); log(`Victory! You drive off the pirates and the grateful crew gives you 2 resources and 1 fame.`); }
         else if (win === "goods") { takeSpecific(state, subject, "goods", 2); log(`Victory! You rescue a merchant — 2 goods and 1 fame.`); }
-        else if (win === "ship") { grantTradeShip(subject, log); log(`Victory! The rescued ship joins you — a free trade ship and 1 fame.`); }
+        else if (win === "ship") { grantTradeShip(state, subject, log); log(`Victory! The rescued ship joins you — a free trade ship and 1 fame.`); }
         else { spaceJumpReward(state, subject, log); log(`Victory! The rescued pilot opens a wormhole — a space jump and 1 fame.`); }
         gainFame(subject, 1);
       } else {
@@ -841,7 +843,7 @@ function distressSpeedCard(
       const { state, subject, rng, log } = ctx;
       if (won) {
         if (win === "upgrade") { addFreeUpgrade(subject); log(`You reach the ship in time and rescue a scientist — a free upgrade and 1 fame.`); }
-        else if (win === "ship") { grantTradeShip(subject, log); log(`You rescue a merchant in time — a free trade ship and 1 fame.`); }
+        else if (win === "ship") { grantTradeShip(state, subject, log); log(`You rescue a merchant in time — a free trade ship and 1 fame.`); }
         else { robEachOpponent(state, subject, rng, log); log(`You rescue a benefactor who rewards you — 1 resource from each rival and 1 fame.`); }
         gainFame(subject, 1);
       } else {
@@ -930,7 +932,7 @@ function travelerShipCard(id: number): EncounterCard {
       "Give 3 → they gift you a trade ship",
     ],
     resolve: (ctx) => {
-      const { subject, log } = ctx;
+      const { state, subject, log } = ctx;
       const offer = offerWithinHand(ctx);
       if (offer > 0) requestLoss(ctx, offer);
       if (offer <= 0) {
@@ -939,7 +941,7 @@ function travelerShipCard(id: number): EncounterCard {
         gainFame(subject, 1);
         log(`The travelers are grateful: +1 fame.`);
       } else {
-        grantTradeShip(subject, log);
+        grantTradeShip(state, subject, log);
       }
     },
   };

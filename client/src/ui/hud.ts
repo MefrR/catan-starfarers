@@ -509,14 +509,18 @@ export class HUD {
     const afford = (cost: Partial<ResourceBag>): boolean =>
       RESOURCES.every((r) => me.hand[r] >= (cost[r] ?? 0));
     const noTransport = me.supply.transportShips <= 0;
+    const freeTrade = (this.game.getState().phaseState.freeTradeShips?.[me.id] ?? 0) > 0;
     const pick = this.launchPicker;
     pick.replaceChildren();
 
     const mkBtn = (kind: ShipKind, label: string, cost: Partial<ResourceBag>): HTMLElement => {
+      // A free trade-ship credit (from an encounter) makes the trade ship free.
+      const free = kind === "tradeShip" && freeTrade;
+      const lbl = free ? `${label} (free)` : label;
       const b = el(
-        `<button class="mp-ship" title="${label}">${shipIco(kind)}<span class="mp-lbl">${label}</span></button>`,
+        `<button class="mp-ship" title="${lbl}">${shipIco(kind)}<span class="mp-lbl">${lbl}</span></button>`,
       );
-      if (!afford(cost) || noTransport) (b as HTMLButtonElement).disabled = true;
+      if ((!afford(cost) && !free) || noTransport) (b as HTMLButtonElement).disabled = true;
       else
         b.addEventListener("click", () => {
           this.act({ t: "build", what: kind, targetId: site });
@@ -1515,10 +1519,11 @@ export class HUD {
       const sites = shipLaunchSites(me, state);
       const canAfford = (cost: Partial<ResourceBag>): boolean =>
         RESOURCES.every((r) => me.hand[r] >= (cost[r] ?? 0));
+      const hasFreeTrade = (state.phaseState.freeTradeShips?.[me.id] ?? 0) > 0;
       const canShip =
         me.supply.transportShips > 0 &&
         sites.length > 0 &&
-        (canAfford(BUILD_COSTS.colonyShip) || canAfford(BUILD_COSTS.tradeShip));
+        (canAfford(BUILD_COSTS.colonyShip) || canAfford(BUILD_COSTS.tradeShip) || hasFreeTrade);
       if (canShip) {
         this.board.setHighlights(sites);
         this.board.onIntersectionClick = (id) => {
@@ -1706,6 +1711,7 @@ export class HUD {
         const hasColony = state.buildings.some((b) => b.owner === me.id && b.kind === "colony");
         const hasLaunch = shipLaunchSites(me, state).length > 0;
         const noTransport = me.supply.transportShips <= 0;
+        const freeTradeShips = state.phaseState.freeTradeShips?.[me.id] ?? 0;
 
         // Colony / Trade ship: need resources, an open launch point, and a free
         // transport ship in supply. Tell the player exactly which is missing.
@@ -1745,12 +1751,14 @@ export class HUD {
           "Launches a colony ship.",
         );
         addBuild(
-          btn(buildLabel(shipIco("tradeShip"), "Trade Ship", transportLeft), () => { this.launchKind = "tradeShip"; this.mode = "launchShip"; this.render(state); }, {
-            disabled: !afford(BUILD_COSTS.tradeShip) || !hasLaunch || noTransport,
-            title: shipTip(BUILD_COSTS.tradeShip, "trade ship"),
+          btn(buildLabel(shipIco("tradeShip"), freeTradeShips > 0 ? "Trade Ship (free)" : "Trade Ship", transportLeft), () => { this.launchKind = "tradeShip"; this.mode = "launchShip"; this.render(state); }, {
+            disabled: (!afford(BUILD_COSTS.tradeShip) && freeTradeShips <= 0) || !hasLaunch || noTransport,
+            title: freeTradeShips > 0
+              ? (noTransport ? "Can't build: no transport ships left (all in use)." : !hasLaunch ? "Can't build: no open space point next to a spaceport." : "Launch a FREE trade ship (no resource cost) — granted by an encounter.")
+              : shipTip(BUILD_COSTS.tradeShip, "trade ship"),
           }),
           BUILD_COSTS.tradeShip,
-          "Launches a trade ship.",
+          freeTradeShips > 0 ? "Launches a free trade ship (no cost)." : "Launches a trade ship.",
         );
         addBuild(
           btn(
@@ -1833,6 +1841,23 @@ export class HUD {
               this.mode = "spaceJump";
               this.rerender();
             }));
+          }
+        }
+
+        // Free trade ship granted by an encounter: launch it at NO cost onto an
+        // open point next to one of your spaceports, right here in flight.
+        const freeShips = ps.freeTradeShips?.[me.id] ?? 0;
+        if (freeShips > 0) {
+          const hasLaunch = shipLaunchSites(me, state).length > 0;
+          if (this.mode === "launchShip" && this.launchKind === "tradeShip") {
+            actions.appendChild(el(`<div class="waiting">🚀 Tap a glowing point next to your spaceport to launch your free trade ship.</div>`));
+            actions.appendChild(btn("Cancel", () => { this.resetSelection(); this.rerender(); }, { secondary: true }));
+          } else {
+            actions.appendChild(btn(
+              `🚀 Launch free trade ship${freeShips > 1 ? ` (${freeShips})` : ""}`,
+              () => { this.resetSelection(); this.launchKind = "tradeShip"; this.mode = "launchShip"; this.rerender(); },
+              { disabled: !hasLaunch, title: hasLaunch ? "Launch your free trade ship (no resource cost)." : "No open space point next to a spaceport to launch from." },
+            ));
           }
         }
 

@@ -713,7 +713,10 @@ function doBuild(
   rng: Rng,
 ): string | undefined {
   const cost = BUILD_COSTS[what];
-  if (!canAfford(player.hand, cost)) return "Not enough resources.";
+  // A free trade ship from an encounter launches at NO resource cost (consumes a
+  // free-launch credit instead of paying).
+  const freeShip = what === "tradeShip" && (state.phaseState.freeTradeShips?.[player.id] ?? 0) > 0;
+  if (!freeShip && !canAfford(player.hand, cost)) return "Not enough resources.";
 
   if (what === "colonyShip" || what === "tradeShip") {
     if (player.supply.transportShips <= 0) return "No transport ships left in your supply.";
@@ -723,19 +726,26 @@ function doBuild(
     const launch = targetId && sites.includes(targetId) ? targetId : sites[0]!;
     if (targetId && !sites.includes(targetId))
       return "Launch the ship onto an open point next to your spaceport.";
-    pay(player.hand, state.supplyBank, cost);
+    if (freeShip) state.phaseState.freeTradeShips![player.id]!--;
+    else pay(player.hand, state.supplyBank, cost);
     player.supply.transportShips--;
     const kind: ShipKind = what;
+    // A ship launched DURING flight (a free encounter ship) shouldn't also get a
+    // move this turn — mark it already-moved. Build-phase launches move normally.
+    const launchedInFlight = state.phaseState.phase === "flight";
     const ship: Ship = {
       id: `ship-${player.id}-${state.ships.length}-${Math.floor(Math.random() * 1e6)}`,
       kind,
       owner: player.id,
       intersectionId: launch,
-      movedThisTurn: false,
+      movedThisTurn: launchedInFlight,
       distanceMoved: 0,
     };
     state.ships.push(ship);
-    log(state, `${player.name} built a ${what === "colonyShip" ? "colony" : "trade"} ship.`);
+    log(
+      state,
+      `${player.name} ${freeShip ? "launched a free" : "built a"} ${what === "colonyShip" ? "colony" : "trade"} ship.`,
+    );
     return undefined;
   }
 
@@ -1266,7 +1276,12 @@ export function applyIntent(
 
     case "build": {
       if (!isActive) return fail(input, "Not your turn.");
-      if (ps.phase !== "tradeBuild") return fail(input, "Can only build during trade & build.");
+      // A free encounter trade ship can be launched during the flight phase too,
+      // right after the encounter that granted it.
+      const freeShipLaunch =
+        intent.what === "tradeShip" && (ps.freeTradeShips?.[playerId] ?? 0) > 0;
+      if (ps.phase !== "tradeBuild" && !(ps.phase === "flight" && freeShipLaunch))
+        return fail(input, "Can only build during trade & build.");
       if (anyDiscardsPending()) return fail(input, "Resolve discards first.");
       if (stealPending()) return fail(input, "Steal a card first.");
       const err = doBuild(state, me, intent.what, intent.targetId, rng);

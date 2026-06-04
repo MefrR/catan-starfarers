@@ -36,7 +36,8 @@
       "Bash(cd \"/c/Users/Admin/Downloads/Catan Starfarers\" && tail -30 /tmp/sf_server.log)",
       "Bash(cd \"/c/Users/Admin/Downloads\" && ls -la \"encounter cards\" 2>/dev/null | head -50; echo \"---count---\"; ls \"encounter cards\"/*.jpg 2>/dev/null | wc -l)",
       "Bash(cd \"/c/Users/Admin/Downloads/Catan Starfarers\" && sed -i 's/grantTradeShip\\(state, subject, log\\)/grantTradeShip\\(subject, log\\)/g' shared/src/encounters.ts && grep -c \"grantTradeShip\\(subject, log\\)\" shared/src/encounters.ts)",
-      "Bash(cd \"/c/Users/Admin/Downloads/Catan Starfarers\" && sed -n '/export function reserveDrawForVP/,/^}/p' shared/src/*.ts)"
+      "Bash(cd \"/c/Users/Admin/Downloads/Catan Starfarers\" && sed -n '/export function reserveDrawForVP/,/^}/p' shared/src/*.ts)",
+      "Bash(git commit -q -m ' *)"
     ]
   }
 }
