@@ -1811,10 +1811,13 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   mix-blend-mode: screen;
   animation: ssCanvas 2.5s ease both;
 }
+/* The stars layer is positioned, so it would paint over the in-flow shaker
+   stage — lift the stage above the streaks. */
+.shake-stage { position: relative; z-index: 1; }
 @keyframes ssCanvas {
   0% { opacity: 0; }
-  12% { opacity: 1; }
-  85% { opacity: 1; }
+  12% { opacity: 0.6; }
+  85% { opacity: 0.6; }
   100% { opacity: 0; }
 }
 

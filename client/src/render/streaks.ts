@@ -74,11 +74,10 @@ void main(void) {
 	for (float i=1.; i<12.; i++) {
 		uv+=.1*cos(i*vec2(.1+.01*i, .8)+i*i+T*.5+.1*uv.x);
 		vec2 p=uv;
-		float d=length(p);
-		col+=.00125/d*(cos(sin(i)*vec3(1,2,3))+1.);
 		float b=noise(i+p+bg*1.731);
 		col+=.002*b/length(max(p,vec2(b*p.x*.02,p.y)));
-		// (background cloud mix removed at the owner's direction — lights only)
+		// (removed at the owner's direction: the cloud background mix AND the
+		// wide 1/d ambient glow term — keep ONLY the flying star streaks)
 	}
 	O=vec4(col,1);
 }`;
