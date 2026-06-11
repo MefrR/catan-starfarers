@@ -3143,29 +3143,55 @@ export class HUD {
     const gained = resDeltas.filter((x) => x.d > 0);
     const lost = resDeltas.filter((x) => x.d < 0);
 
-    const parts: string[] = [];
-    let glyph = "";
-    if (medalDelta > 0) { parts.push(`+${medalDelta} VP medal`); glyph = medalGlyphSvg(); }
-    if (fameDelta > 0) { parts.push(`+${fameDelta} fame (${fameDelta * 0.5} VP)`); if (!glyph) glyph = fameGlyphSvg(); }
-    if (fameDelta < 0) parts.push(`${fameDelta} fame (${fameDelta * 0.5} VP)`);
-    for (const g of gained) parts.push(`+${g.d} ${RESOURCE_LABEL[g.r]}`);
-    for (const l of lost) parts.push(`${l.d} ${RESOURCE_LABEL[l.r]}`);
-
     // Prefer the card's own narration (the descriptive sentences it logged while
     // resolving) so the player reads WHAT happened — e.g. "You capture the pirate
-    // ship — a free trade ship and 1 fame." — not just "+1 fuel". Fall back to the
-    // resource/fame deltas, then to a neutral line.
+    // ship — a free trade ship and 1 fame." — falling back to a neutral line.
     const narration = state.log
       .slice(this.encLogMark)
       .filter((l) => !/^Encounter:/.test(l) && !/ shakes: /.test(l))
       .slice(-2)
       .join("  ");
-    const label = narration || (parts.length ? parts.join("  ·  ") : "Nothing happened.");
+    const label = narration || "The encounter passes without incident.";
 
-    // Center toast.
-    const toast = el(`<div class="result-toast"><span class="rt-glyph">${glyph}</span><span>${escapeHtml(label)}</span></div>`);
+    // OUTCOME panel: verdict word + burst + sparks + delta chips. The tone is
+    // judged from the net swing (medals weigh double).
+    const swing =
+      medalDelta * 2 +
+      fameDelta +
+      gained.reduce((s, x) => s + x.d, 0) +
+      lost.reduce((s, x) => s + x.d, 0);
+    const tone = swing > 0 ? "gain" : swing < 0 ? "loss" : "even";
+    const verdict =
+      tone === "gain"
+        ? mine ? "FORTUNE!" : `${escapeHtml(subject.name.split(" ")[0] ?? "")} PROFITS`
+        : tone === "loss"
+          ? mine ? "SETBACK" : `${escapeHtml(subject.name.split(" ")[0] ?? "")} SUFFERS`
+          : "RESOLVED";
+    const chip = (cls: string, glyphHtml: string, text: string): string =>
+      `<span class="er-chip ${cls}" style="animation-delay:${0.35 + chipCount++ * 0.09}s">${glyphHtml}${text}</span>`;
+    let chipCount = 0;
+    let chips = "";
+    if (medalDelta > 0) chips += chip("gain", medalGlyphSvg(), `+${medalDelta} VP medal`);
+    if (fameDelta > 0) chips += chip("gain", fameGlyphSvg(), `+${fameDelta} fame`);
+    if (fameDelta < 0) chips += chip("loss", fameGlyphSvg(), `${fameDelta} fame`);
+    for (const g of gained) chips += chip("gain", resourceGlyphSvg(g.r), `+${g.d} ${RESOURCE_LABEL[g.r]}`);
+    for (const l of lost) chips += chip("loss", resourceGlyphSvg(l.r), `${l.d} ${RESOURCE_LABEL[l.r]}`);
+    const sparks = Array.from({ length: 12 }, (_v, i) => {
+      const a = (Math.PI * 2 * i) / 12 + 0.26;
+      const d = 90 + (i % 3) * 38;
+      return `<i class="er-spark" style="--dx:${(Math.cos(a) * d).toFixed(0)}px;--dy:${(Math.sin(a) * d).toFixed(0)}px;animation-delay:${(i % 4) * 0.04}s"></i>`;
+    }).join("");
+    const toast = el(`
+      <div class="enc-result tone-${tone}">
+        <div class="er-burst"></div>
+        ${sparks}
+        <div class="er-verdict">${verdict}</div>
+        <div class="er-narr">${escapeHtml(label)}</div>
+        ${chips ? `<div class="er-chips">${chips}</div>` : ""}
+      </div>`);
     document.body.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add("show"));
+    sfx.play(tone === "gain" ? "medal" : tone === "loss" ? "steal" : "trade");
     const center = { x: window.innerWidth / 2, y: window.innerHeight * 0.38 };
 
     // Mine: fame/medal → left sidebar, resources → hand cards.

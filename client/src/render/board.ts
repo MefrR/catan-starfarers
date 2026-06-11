@@ -1486,90 +1486,60 @@ export class BoardRenderer {
     layer.addChild(g);
   }
 
-  /**
-   * Draws an upright isometric block (rectangular prism) in the owner colour:
-   * three lit/shaded faces so a stack of these reads as the chunky 3D plastic
-   * towers from the printed pieces. Base-centre at (tx,ty), footprint half-width
-   * `hw`, pixel height `h`.
-   */
-  private isoTower(
-    g: Graphics,
-    tx: number,
-    ty: number,
-    hw: number,
-    h: number,
-    topC: number,
-    leftC: number,
-    rightC: number,
-  ): void {
-    const ink = 0x0a0f1e;
-    const dh = hw * 0.5; // iso depth
-    // Left face.
-    g.poly([tx - hw, ty, tx, ty + dh, tx, ty + dh - h, tx - hw, ty - h])
-      .fill({ color: leftC })
-      .stroke({ color: ink, width: 0.8 });
-    // Right face.
-    g.poly([tx, ty + dh, tx + hw, ty, tx + hw, ty - h, tx, ty + dh - h])
-      .fill({ color: rightC })
-      .stroke({ color: ink, width: 0.8 });
-    // Top face (diamond).
-    g.poly([tx - hw, ty - h, tx, ty + dh - h, tx + hw, ty - h, tx, ty - dh - h])
-      .fill({ color: topC })
-      .stroke({ color: ink, width: 0.8 });
-  }
 
-  /** Flat isometric hexagonal platform used as the base for colony/spaceport. */
-  private isoHexBase(g: Graphics, cx: number, cy: number, s: number, topC: number, sideC: number): void {
-    const ink = 0x0a0f1e;
-    const thick = s * 0.32;
-    const hex = (yy: number): number[] => {
-      const p: number[] = [];
-      for (let i = 0; i < 6; i++) {
-        const a = (Math.PI / 180) * (60 * i + 30);
-        p.push(cx + s * Math.cos(a), yy + s * 0.52 * Math.sin(a));
-      }
-      return p;
-    };
-    g.poly(hex(cy + thick)).fill({ color: sideC }).stroke({ color: ink, width: 1 });
-    g.poly(hex(cy)).fill({ color: topC }).stroke({ color: ink, width: 1 });
-  }
-
-  /** Colony: a hex platform topped with a small cluster of red iso towers. */
+  /** Colony: a wide glass-dome habitat (matches the redesigned HUD icon) —
+   *  landing pad, owner-colored dome with glass highlight arcs, airlock. */
   private drawColony(g: Graphics, cx: number, cy: number, s: number, color: number): void {
-    const topC = tint(color, 0.42);
-    const rightC = color;
-    const leftC = tint(color, -0.32) >>> 0;
-    this.isoHexBase(g, cx, cy + s * 0.45, s, tint(color, 0.18), leftC);
-    // Towers, drawn back-to-front for correct overlap.
-    this.isoTower(g, cx + s * 0.04, cy + s * 0.18, s * 0.34, s * 1.05, topC, leftC, rightC); // tall centre
-    this.isoTower(g, cx - s * 0.42, cy + s * 0.4, s * 0.26, s * 0.6, topC, leftC, rightC);
-    this.isoTower(g, cx + s * 0.44, cy + s * 0.46, s * 0.24, s * 0.48, topC, leftC, rightC);
+    const ink = 0x0a0f1e;
+    const dark = tint(color, -0.3) >>> 0;
+    const lite = tint(color, 0.55);
+    const k = s / 7;
+    const X = (px: number): number => cx + (px - 12) * k;
+    const Y = (py: number): number => cy + (py - 14.5) * k;
+    // Pad.
+    g.ellipse(X(12), Y(18.6), k * 9.4, k * 2.4).fill({ color: dark }).stroke({ color: ink, width: 1 });
+    // Dome.
+    g.moveTo(X(4.4), Y(18.4)).arc(X(12), Y(18.4), k * 7.6, Math.PI, 0).closePath()
+      .fill({ color }).stroke({ color: ink, width: 1.2 });
+    // Glass highlight arcs.
+    g.moveTo(X(6.4), Y(18.2)).arc(X(12), Y(18.2), k * 5.6, Math.PI, 0)
+      .stroke({ color: lite, width: Math.max(1, k * 0.9), alpha: 0.9 });
+    g.moveTo(X(8.6), Y(18)).arc(X(12), Y(18), k * 3.5, Math.PI, 0)
+      .stroke({ color: lite, width: Math.max(0.8, k * 0.6), alpha: 0.55 });
+    // Door.
+    g.roundRect(X(10.6), Y(13.4), k * 2.8, k * 5, k * 0.7).fill({ color: ink, alpha: 0.4 });
+    // Airlock module.
+    g.roundRect(X(18.6), Y(16.2), k * 3.6, k * 2.4, k * 1.2).fill({ color: lite }).stroke({ color: ink, width: 0.8 });
   }
 
-  /** Spaceport: a bigger platform with a denser, taller cluster of towers. */
+  /** Spaceport: a tall control tower piercing a glowing landing ring with a
+   *  beacon on top (matches the redesigned HUD icon). */
   private drawSpaceport(g: Graphics, cx: number, cy: number, s: number, color: number): void {
-    const topC = tint(color, 0.42);
-    const rightC = color;
-    const leftC = tint(color, -0.32) >>> 0;
-    this.isoHexBase(g, cx, cy + s * 0.55, s * 1.18, tint(color, 0.18), leftC);
-    // Back row.
-    this.isoTower(g, cx - s * 0.36, cy + s * 0.1, s * 0.28, s * 0.9, topC, leftC, rightC);
-    this.isoTower(g, cx + s * 0.36, cy + s * 0.14, s * 0.26, s * 0.78, topC, leftC, rightC);
-    // Tall central spire.
-    this.isoTower(g, cx + s * 0.02, cy + s * 0.22, s * 0.32, s * 1.55, topC, leftC, rightC);
-    // Front row (shorter, overlaps the back).
-    this.isoTower(g, cx - s * 0.5, cy + s * 0.5, s * 0.24, s * 0.55, topC, leftC, rightC);
-    this.isoTower(g, cx + s * 0.46, cy + s * 0.54, s * 0.26, s * 0.66, topC, leftC, rightC);
-    // Beacon atop the spire.
-    g.circle(cx + s * 0.02, cy - s * 1.33 + s * 0.22, s * 0.16).fill({ color: 0xffd23f }).stroke({ color: 0x0a0f1e, width: 1 });
+    const ink = 0x0a0f1e;
+    const dark = tint(color, -0.3) >>> 0;
+    const k = s / 6.5;
+    const X = (px: number): number => cx + (px - 12) * k;
+    const Y = (py: number): number => cy + (py - 12) * k;
+    // Pad.
+    g.ellipse(X(12), Y(19.4), k * 8.6, k * 2).fill({ color: dark }).stroke({ color: ink, width: 1 });
+    // Landing ring — back half behind the tower (dim), front half over it.
+    g.ellipse(X(12), Y(10.6), k * 8, k * 2.6).stroke({ color: 0x6fd0ff, width: Math.max(1, k * 0.9), alpha: 0.45 });
+    // Tower.
+    g.poly([X(10.2), Y(19.4), X(11), Y(7.4), X(13), Y(7.4), X(13.8), Y(19.4)])
+      .fill({ color }).stroke({ color: ink, width: 1.2 });
+    // Front half of the ring (bright), drawn over the tower.
+    g.moveTo(X(4), Y(10.6)).arc(X(12), Y(10.6), k * 8, Math.PI, 0, true)
+      .stroke({ color: 0x6fd0ff, width: Math.max(1.2, k * 1.1) });
+    // Control cap + beacon.
+    g.roundRect(X(9.4), Y(5), k * 5.2, k * 3, k * 1.5).fill({ color }).stroke({ color: ink, width: 1.2 });
+    g.circle(X(12), Y(3.4), k * 1.3).fill({ color: 0xffd23f }).stroke({ color: ink, width: 0.8 });
   }
 
   /**
-   * Owner-coloured rocket piece resting on a pedestal — echoes the printed
-   * plastic ships (chunky horizontal rocket on a hex/cylinder stand). Drawn into
-   * an existing Graphics `g`, centred at (sx,sy), nose pointing right, ~2.4r wide.
-   * Colony ships sit on a hex pedestal with a porthole; trade ships on a
-   * cylindrical pedestal with a cargo band.
+   * Ship pieces, matching the redesigned HUD icons exactly:
+   *   colony ship = a VERTICAL settler rocket carrying a green habitat dome;
+   *   trade ship  = a HORIZONTAL freighter stacked with gold cargo crates.
+   * Body in the owner color; the dome/crates keep their identity colors.
    */
   private drawShip(
     g: Graphics,
@@ -1581,44 +1551,39 @@ export class BoardRenderer {
   ): void {
     const ink = 0x0a0f1e;
     const dark = tint(color, -0.28) >>> 0;
-    const lite = tint(color, 0.5);
-    const rocketY = sy - r * 0.42; // rocket sits above the pedestal
-    const bodyR = r * 0.4;
-    const noseX = sx + r * 1.05;
-    const tailX = sx - r * 0.95;
-
-    // --- Pedestal ---
     if (kind === "colonyShip") {
-      this.isoHexBase(g, sx, sy + r * 0.55, r * 0.62, tint(color, 0.18), dark);
-    } else {
-      // Cylindrical stand.
-      g.roundRect(sx - r * 0.5, sy + r * 0.18, r, r * 0.7, r * 0.18).fill({ color }).stroke({ color: ink, width: 1 });
-      g.ellipse(sx, sy + r * 0.18, r * 0.5, r * 0.2).fill({ color: tint(color, 0.18) }).stroke({ color: ink, width: 1 });
+      const k = r / 5.4;
+      const X = (px: number): number => sx + (px - 12) * k;
+      const Y = (py: number): number => sy + (py - 12) * k;
+      // Habitat dome nose (green — the colony-ship identity).
+      g.moveTo(X(7.6), Y(10.4)).arc(X(12), Y(10.4), k * 4.4, Math.PI, 0).closePath()
+        .fill({ color: 0x57e389 }).stroke({ color: ink, width: 1.1 });
+      g.moveTo(X(9.2), Y(9.8)).arc(X(12), Y(9.8), k * 2.7, Math.PI, 0)
+        .stroke({ color: ink, width: 0.8, alpha: 0.45 });
+      // Body.
+      g.roundRect(X(7.6), Y(10.4), k * 8.8, k * 7.2, k * 1.4).fill({ color }).stroke({ color: ink, width: 1.1 });
+      g.circle(X(12), Y(13.6), k * 1.5).fill({ color: ink, alpha: 0.45 });
+      // Legs.
+      g.poly([X(7.6), Y(14.4), X(4.6), Y(19), X(7.6), Y(17.6)]).fill({ color: dark }).stroke({ color: ink, width: 0.8 });
+      g.poly([X(16.4), Y(14.4), X(19.4), Y(19), X(16.4), Y(17.6)]).fill({ color: dark }).stroke({ color: ink, width: 0.8 });
+      // Flame.
+      g.poly([X(10), Y(17.6), X(12), Y(21.6), X(14), Y(17.6)]).fill({ color: 0xffd23f }).stroke({ color: ink, width: 0.8 });
+      return;
     }
-    // Neck connecting rocket to pedestal.
-    g.rect(sx - r * 0.12, rocketY, r * 0.24, r * 0.85).fill({ color: dark }).stroke({ color: ink, width: 0.8 });
-
-    // --- Rocket (horizontal) ---
-    // Tail fins.
-    g.poly([tailX + r * 0.25, rocketY - bodyR, tailX - r * 0.25, rocketY - bodyR * 2, tailX + r * 0.15, rocketY])
-      .fill({ color: dark }).stroke({ color: ink, width: 0.8 });
-    g.poly([tailX + r * 0.25, rocketY + bodyR, tailX - r * 0.25, rocketY + bodyR * 2, tailX + r * 0.15, rocketY])
-      .fill({ color: dark }).stroke({ color: ink, width: 0.8 });
-    // Fuselage.
-    g.roundRect(tailX, rocketY - bodyR, noseX - r * 0.35 - tailX, bodyR * 2, bodyR * 0.9)
+    // Trade freighter.
+    const k = r / 4.6;
+    const X = (px: number): number => sx + (px - 12) * k;
+    const Y = (py: number): number => sy + (py - 11.4) * k;
+    // Cargo crates (gold — the trade-ship identity).
+    g.roundRect(X(5.2), Y(6.4), k * 3.2, k * 3.2, k * 0.6).fill({ color: 0xffd23f }).stroke({ color: ink, width: 0.8 });
+    g.roundRect(X(9), Y(6.4), k * 3.2, k * 3.2, k * 0.6).fill({ color: 0xffb13f }).stroke({ color: ink, width: 0.8 });
+    g.roundRect(X(12.8), Y(6.4), k * 3.2, k * 3.2, k * 0.6).fill({ color: 0xffd23f }).stroke({ color: ink, width: 0.8 });
+    // Hull.
+    g.poly([X(3.5), Y(10), X(17.5), Y(10), X(21.5), Y(12.6), X(17.5), Y(16.4), X(3.5), Y(16.4), X(2.6), Y(13.2)])
       .fill({ color }).stroke({ color: ink, width: 1.2 });
-    // Nose cone.
-    g.poly([noseX, rocketY, sx + r * 0.4, rocketY - bodyR, sx + r * 0.4, rocketY + bodyR])
-      .fill({ color: dark }).stroke({ color: ink, width: 1.2 });
-    // Sheen along the top of the hull.
-    g.roundRect(tailX + r * 0.1, rocketY - bodyR * 0.78, (noseX - r * 0.5) - tailX, bodyR * 0.5, bodyR * 0.3)
-      .fill({ color: 0xffffff, alpha: 0.25 });
-    // Distinguishing detail.
-    if (kind === "colonyShip") {
-      g.circle(sx - r * 0.05, rocketY, bodyR * 0.62).fill({ color: lite }).stroke({ color: ink, width: 1 });
-    } else {
-      g.rect(sx - r * 0.35, rocketY - bodyR, r * 0.5, bodyR * 2).fill({ color: lite }).stroke({ color: ink, width: 1 });
-    }
+    g.circle(X(18), Y(12.9), k * 1.2).fill({ color: ink, alpha: 0.45 });
+    // Engine block.
+    g.roundRect(X(1), Y(11.4), k * 2.4, k * 3, k * 0.8).fill({ color: 0x6fd0ff }).stroke({ color: ink, width: 0.8 });
   }
 
   /**
