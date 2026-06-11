@@ -706,22 +706,25 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   position: fixed; right: 14px; top: 50%; transform: translateY(-50%);
   z-index: 70; display: flex; flex-direction: column; gap: 8px; pointer-events: none;
 }
+/* Static tools — no star layers / traveling light on these. */
+.hud-tools .tool-btn::before,
+.hud-tools .tool-btn::after {
+  content: none;
+}
 .hud-tools .tool-btn {
   pointer-events: auto;
   width: 38px; height: 38px; padding: 0; border-radius: 11px;
   font-size: 18px; line-height: 1; cursor: pointer;
-  background: #070b18; color: #cdd6ea;
-  --sb-cover: rgba(12, 16, 28, 0.82);
-  --sb-lightcolor: #b9d6ff;
-  --sb-light: 52px;
+  background: rgba(12, 16, 28, 0.78); color: #cdd6ea;
   border: 1px solid rgba(255, 255, 255, 0.16);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
   display: flex; align-items: center; justify-content: center;
+  overflow: visible;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 .hud-tools .tool-btn:hover { border-color: var(--accent); color: #fff; }
 .hud-tools .tool-btn.active {
-  --sb-cover: color-mix(in srgb, var(--accent) 32%, rgba(12, 16, 28, 0.88));
+  background: color-mix(in srgb, var(--accent) 32%, rgba(12, 16, 28, 0.85));
   border-color: var(--accent); color: #fff;
 }
 .hud-tools .ref-pop {
