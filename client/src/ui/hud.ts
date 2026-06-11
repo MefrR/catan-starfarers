@@ -3863,45 +3863,71 @@ function civAvatarSvg(civ: string): string {
  * carbon = blue crystal cluster, fuel = gold cylinder, food = green
  * seed-creature, ore = red rock, goods = purple/gold chest.
  */
+/**
+ * Resource glyphs, fully redesigned (sci-fi set — old printed-card look kept
+ * in git history if the owner wants to revert):
+ *   ore    = a molten asteroid with glowing magma fissures
+ *   fuel   = an energy cell: capsule with a window of glowing propellant
+ *   carbon = a graphene molecule lattice (fused hexagons + bright nodes)
+ *   food   = a hydroponic sprout under a glass dome
+ *   goods  = a sealed cargo case with gold straps and a glowing seal
+ */
 function resourceGlyphSvg(r: Resource): string {
   const wrap = (inner: string): string =>
-    `<svg viewBox="0 0 24 24" width="22" height="22" stroke-linejoin="round">${inner}</svg>`;
+    `<svg viewBox="0 0 24 24" width="22" height="22" stroke-linejoin="round" stroke-linecap="round">${inner}</svg>`;
   switch (r) {
     case "carbon":
       return wrap(
-        `<polygon points="6,15.5 8.5,6.5 11,15.5" fill="#2f7fd6" stroke="#0a0f1e" stroke-width="0.7"/>
-         <polygon points="13,15.5 16,7.5 18.2,15.5" fill="#3f97e4" stroke="#0a0f1e" stroke-width="0.7"/>
-         <polygon points="9,16.5 12,2.5 15,16.5" fill="#57b6f0" stroke="#0a0f1e" stroke-width="0.7"/>
-         <line x1="12" y1="2.5" x2="12" y2="16.5" stroke="#bfe9ff" stroke-width="0.8"/>`,
+        `<polygon points="12,4 15.1,5.8 15.1,9.4 12,11.2 8.9,9.4 8.9,5.8" fill="rgba(87,182,240,0.22)" stroke="#57b6f0" stroke-width="1.2"/>
+         <polygon points="8.9,9.4 12,11.2 12,14.8 8.9,16.6 5.8,14.8 5.8,11.2" fill="rgba(47,127,214,0.18)" stroke="#3f97e4" stroke-width="1.2"/>
+         <polygon points="15.1,9.4 18.2,11.2 18.2,14.8 15.1,16.6 12,14.8 12,11.2" fill="rgba(47,127,214,0.18)" stroke="#3f97e4" stroke-width="1.2"/>
+         <circle cx="12" cy="11.2" r="1.5" fill="#dff4ff"/>
+         <circle cx="8.9" cy="9.4" r="1.1" fill="#bfe9ff"/>
+         <circle cx="15.1" cy="9.4" r="1.1" fill="#bfe9ff"/>
+         <circle cx="12" cy="14.8" r="1.1" fill="#bfe9ff"/>
+         <circle cx="12" cy="4" r="0.8" fill="#8fd2ff"/>
+         <circle cx="5.8" cy="14.8" r="0.8" fill="#8fd2ff"/>
+         <circle cx="18.2" cy="14.8" r="0.8" fill="#8fd2ff"/>`,
       );
     case "fuel":
       return wrap(
-        `<rect x="8" y="5" width="8" height="14" fill="#d99a2b" stroke="#0a0f1e" stroke-width="0.7"/>
-         <rect x="8.8" y="5" width="2.2" height="14" fill="#f6c659" opacity="0.6"/>
-         <ellipse cx="12" cy="5" rx="4" ry="1.7" fill="#f6c659" stroke="#0a0f1e" stroke-width="0.7"/>
-         <ellipse cx="12" cy="19" rx="4" ry="1.7" fill="#a06c14" stroke="#0a0f1e" stroke-width="0.7"/>
-         <rect x="8" y="11" width="8" height="1.8" fill="#a06c14"/>`,
+        `<rect x="10.9" y="2.2" width="2.2" height="1.8" fill="#a06c14" stroke="#0a0f1e" stroke-width="0.5"/>
+         <rect x="9.2" y="3.8" width="5.6" height="2.6" rx="1" fill="#f6c659" stroke="#0a0f1e" stroke-width="0.7"/>
+         <rect x="7.8" y="6.2" width="8.4" height="13.2" rx="2.6" fill="#b97e1f" stroke="#0a0f1e" stroke-width="0.8"/>
+         <rect x="9.5" y="8" width="5" height="9.6" rx="1.8" fill="#241806" stroke="#0a0f1e" stroke-width="0.5"/>
+         <rect x="9.5" y="11.8" width="5" height="5.8" rx="1.8" fill="#ffc34d"/>
+         <circle cx="11" cy="13.6" r="0.6" fill="#ffe7ab"/>
+         <circle cx="13" cy="15.6" r="0.5" fill="#ffe7ab"/>
+         <path d="M12.7 8.7 L10.9 11.6 H12.2 L11.3 14 L13.8 10.7 H12.4 Z" fill="#ffe7ab"/>`,
       );
     case "food":
       return wrap(
-        `<circle cx="12" cy="12" r="8.5" fill="#4ca63a" stroke="#0a0f1e" stroke-width="0.7"/>
-         <circle cx="8.4" cy="9.4" r="2" fill="#8fd66f" opacity="0.7"/>
-         <circle cx="15.2" cy="14.5" r="1.7" fill="#8fd66f" opacity="0.7"/>
-         <circle cx="9.5" cy="15.5" r="1.6" fill="#8fd66f" opacity="0.7"/>`,
+        `<path d="M4.8 14 a7.2 7.2 0 0 1 14.4 0" fill="rgba(143,214,111,0.12)" stroke="#8fd66f" stroke-width="0.9" opacity="0.85"/>
+         <path d="M12 16.2 C12 13.4 12 11 12 8.4" stroke="#3f8f30" stroke-width="1.6" fill="none"/>
+         <path d="M12 12.4 C9.2 12 7.4 10 7.6 7.4 C10.4 7.8 11.9 9.8 12 12.4 Z" fill="#57c244" stroke="#0a0f1e" stroke-width="0.5"/>
+         <path d="M12 10 C14.8 9.6 16.5 7.7 16.4 5.2 C13.6 5.6 12.1 7.5 12 10 Z" fill="#7ad862" stroke="#0a0f1e" stroke-width="0.5"/>
+         <ellipse cx="12" cy="16.2" rx="5.2" ry="1.2" fill="#5a3d22" stroke="#0a0f1e" stroke-width="0.5"/>
+         <path d="M6.8 16.4 H17.2 L16 20 A2.1 2.1 0 0 1 14 21.4 H10 A2.1 2.1 0 0 1 8 20 Z" fill="#2f7325" stroke="#0a0f1e" stroke-width="0.7"/>`,
       );
     case "ore":
       return wrap(
-        `<polygon points="3.5,13 6.5,5.5 13,4.5 20,11 17.3,18.6 6,19" fill="#cc3633" stroke="#0a0f1e" stroke-width="0.7"/>
-         <polygon points="6.5,5.5 13,4.5 12,10.2 6,10.6" fill="#f0746a" opacity="0.85"/>
-         <polygon points="6,19 17.3,18.6 16,12 7,12.4" fill="#8c2120" opacity="0.7"/>`,
+        `<polygon points="4,13 7,5.6 14,4 20.4,9.6 18.6,17.6 9,19.6" fill="#a32a28" stroke="#0a0f1e" stroke-width="0.8"/>
+         <polygon points="7,5.6 14,4 12.6,9.2 8.2,10" fill="#d6504c" opacity="0.9"/>
+         <polygon points="9,19.6 18.6,17.6 17.2,13.4 10.4,14.6" fill="#6e1a19" opacity="0.8"/>
+         <path d="M6.6 12.6 L10.2 11.2 L12.6 13.6 L16.2 12 L18 14.2" stroke="#ffb054" stroke-width="1.3" fill="none"/>
+         <path d="M10.2 11.2 L9.6 15.6" stroke="#ff7d3e" stroke-width="1" fill="none"/>
+         <circle cx="16.2" cy="12" r="0.9" fill="#ffd28a"/>
+         <circle cx="6.6" cy="12.6" r="0.7" fill="#ffd28a" opacity="0.8"/>`,
       );
     case "goods":
       return wrap(
-        `<path d="M4 12 L4 9 Q4 4.5 12 4.5 Q20 4.5 20 9 L20 12 Z" fill="#7b4fc4" stroke="#0a0f1e" stroke-width="0.7"/>
-         <rect x="4" y="11.5" width="16" height="8.5" fill="#7b4fc4" stroke="#0a0f1e" stroke-width="0.7"/>
-         <rect x="4" y="11.5" width="16" height="2" fill="#e3b341" stroke="#0a0f1e" stroke-width="0.4"/>
-         <rect x="10.4" y="5" width="3.2" height="15" fill="#e3b341" stroke="#0a0f1e" stroke-width="0.4"/>
-         <circle cx="12" cy="14.8" r="1.6" fill="#e3b341" stroke="#0a0f1e" stroke-width="0.5"/>`,
+        `<path d="M9.5 7 V5.6 A2.5 2.1 0 0 1 14.5 5.6 V7" stroke="#e3b341" stroke-width="1.5" fill="none"/>
+         <rect x="4.4" y="7" width="15.2" height="11.6" rx="2" fill="#7b4fc4" stroke="#0a0f1e" stroke-width="0.8"/>
+         <rect x="4.4" y="7" width="15.2" height="3.2" rx="2" fill="#9a73e0" opacity="0.85"/>
+         <rect x="7.4" y="7" width="2" height="11.6" fill="#e3b341" stroke="#0a0f1e" stroke-width="0.4"/>
+         <rect x="14.6" y="7" width="2" height="11.6" fill="#e3b341" stroke="#0a0f1e" stroke-width="0.4"/>
+         <circle cx="12" cy="13" r="2.6" fill="rgba(255,217,106,0.25)"/>
+         <polygon points="12,10.8 14,13 12,15.2 10,13" fill="#ffd96a" stroke="#0a0f1e" stroke-width="0.5"/>`,
       );
   }
 }

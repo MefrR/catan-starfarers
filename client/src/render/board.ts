@@ -1383,146 +1383,103 @@ export class BoardRenderer {
   }
 
   /**
-   * Full-colour resource glyph centred at (x,y), sized to radius r. Drawn as
-   * crisp original vectors that echo the printed card art: carbon = blue crystal
-   * cluster, fuel = gold fuel cylinder, food = green seed-creature, ore = red
-   * rock, goods = purple/gold treasure chest.
+   * Full-colour resource glyph centred at (x,y), sized to radius r — the
+   * redesigned sci-fi set, matching the HUD card glyphs 1:1 (the SVG designs
+   * are literally coordinate-ported here):
+   *   ore = molten asteroid · fuel = energy cell · carbon = molecule lattice
+   *   food = hydroponic sprout · goods = sealed cargo case
    */
   private drawResourceGlyph(layer: Container, res: Resource, x: number, y: number, r: number): void {
     const ink = 0x0a0f1e;
     const g = new Graphics();
+    // Port helpers from the 24x24 SVG space: per-glyph scale k + centre line cy.
+    const port = (k: number, cy: number) => ({
+      X: (px: number): number => x + (px - 12) * k,
+      Y: (py: number): number => y + (py - cy) * k,
+      P: (pts: number[]): number[] => pts.map((v, i) => (i % 2 === 0 ? x + (v - 12) * k : y + (v - cy) * k)),
+      k,
+    });
     switch (res) {
       case "carbon": {
-        // Cluster of angular ice-blue crystal shards.
-        const lo = 0x2f7fd6;
-        const mid = 0x57b6f0;
-        const hi = 0xbfe9ff;
-        const shard = (
-          bx: number,
-          by: number,
-          w: number,
-          h: number,
-          lean: number,
-        ): void => {
-          const tip = [bx + lean, by - h];
-          const lft = [bx - w, by];
-          const rgt = [bx + w, by];
-          // Body (two facets, lit + shaded).
-          g.poly([tip[0]!, tip[1]!, rgt[0]!, rgt[1]!, bx + lean * 0.3, by + h * 0.05, lft[0]!, lft[1]!])
-            .fill({ color: mid })
-            .stroke({ color: ink, width: 1 });
-          g.poly([tip[0]!, tip[1]!, bx + lean * 0.3, by + h * 0.05, lft[0]!, lft[1]!]).fill({ color: lo });
-          // Highlight edge.
-          this.strokeLine(g, tip[0]!, tip[1]!, bx + lean * 0.3, by + h * 0.05, 1, hi, 0.8);
-        };
-        shard(x - r * 0.42, y + r * 0.7, r * 0.32, r * 1.0, -r * 0.08);
-        shard(x + r * 0.42, y + r * 0.78, r * 0.3, r * 0.85, r * 0.1);
-        shard(x, y + r * 0.92, r * 0.42, r * 1.5, r * 0.02);
+        // Graphene molecule: three fused hexagon rings + bright atom nodes.
+        const { X, Y, P, k } = port(r / 6.5, 10.3);
+        g.poly(P([12, 4, 15.1, 5.8, 15.1, 9.4, 12, 11.2, 8.9, 9.4, 8.9, 5.8]))
+          .fill({ color: 0x57b6f0, alpha: 0.2 })
+          .stroke({ color: 0x57b6f0, width: Math.max(1, k * 1.1) });
+        g.poly(P([8.9, 9.4, 12, 11.2, 12, 14.8, 8.9, 16.6, 5.8, 14.8, 5.8, 11.2]))
+          .fill({ color: 0x2f7fd6, alpha: 0.16 })
+          .stroke({ color: 0x3f97e4, width: Math.max(1, k * 1.1) });
+        g.poly(P([15.1, 9.4, 18.2, 11.2, 18.2, 14.8, 15.1, 16.6, 12, 14.8, 12, 11.2]))
+          .fill({ color: 0x2f7fd6, alpha: 0.16 })
+          .stroke({ color: 0x3f97e4, width: Math.max(1, k * 1.1) });
+        g.circle(X(12), Y(11.2), k * 1.5).fill({ color: 0xdff4ff });
+        for (const [nx, ny] of [[8.9, 9.4], [15.1, 9.4], [12, 14.8]]) {
+          g.circle(X(nx!), Y(ny!), k * 1.1).fill({ color: 0xbfe9ff });
+        }
+        for (const [nx, ny] of [[12, 4], [5.8, 14.8], [18.2, 14.8]]) {
+          g.circle(X(nx!), Y(ny!), k * 0.8).fill({ color: 0x8fd2ff });
+        }
         break;
       }
       case "fuel": {
-        // Upright gold fuel cylinder with cap, bands and a sheen strip.
-        const body = 0xd99a2b;
-        const lite = 0xf6c659;
-        const dark = 0xa06c14;
-        const w = r * 0.62;
-        const top = y - r * 1.02;
-        const bot = y + r * 1.02;
-        const capH = r * 0.26;
-        // Barrel.
-        g.rect(x - w, top + capH, w * 2, bot - top - capH * 2)
-          .fill({ color: body })
-          .stroke({ color: ink, width: 1.2 });
-        // Sheen.
-        g.rect(x - w * 0.55, top + capH, w * 0.5, bot - top - capH * 2).fill({ color: lite, alpha: 0.55 });
-        // Caps (ellipse-like rounded rects).
-        g.roundRect(x - w * 1.12, top, w * 2.24, capH * 1.6, capH * 0.7)
-          .fill({ color: lite })
-          .stroke({ color: ink, width: 1.2 });
-        g.roundRect(x - w * 1.12, bot - capH * 1.6, w * 2.24, capH * 1.6, capH * 0.7)
-          .fill({ color: dark })
-          .stroke({ color: ink, width: 1.2 });
-        // Mid bands.
-        g.rect(x - w, y - r * 0.18, w * 2, r * 0.16).fill({ color: dark, alpha: 0.85 });
+        // Energy cell: capsule with a dark window of glowing propellant + bolt.
+        const { X, Y, P, k } = port(r / 8.5, 10.8);
+        g.rect(X(10.9), Y(2.2), k * 2.2, k * 1.8).fill({ color: 0xa06c14 }).stroke({ color: ink, width: 0.8 });
+        g.roundRect(X(9.2), Y(3.8), k * 5.6, k * 2.6, k).fill({ color: 0xf6c659 }).stroke({ color: ink, width: 1 });
+        g.roundRect(X(7.8), Y(6.2), k * 8.4, k * 13.2, k * 2.6).fill({ color: 0xb97e1f }).stroke({ color: ink, width: 1.2 });
+        g.roundRect(X(9.5), Y(8), k * 5, k * 9.6, k * 1.8).fill({ color: 0x241806 }).stroke({ color: ink, width: 0.8 });
+        g.roundRect(X(9.5), Y(11.8), k * 5, k * 5.8, k * 1.8).fill({ color: 0xffc34d });
+        g.circle(X(11), Y(13.6), k * 0.6).fill({ color: 0xffe7ab });
+        g.circle(X(13), Y(15.6), k * 0.5).fill({ color: 0xffe7ab });
+        g.poly(P([12.7, 8.7, 10.9, 11.6, 12.2, 11.6, 11.3, 14, 13.8, 10.7, 12.4, 10.7])).fill({ color: 0xffe7ab });
         break;
       }
       case "food": {
-        // Round green seed-creature: bumpy sphere + a single eye.
-        const skin = 0x4ca63a;
-        const shade = 0x2f7325;
-        const lite = 0x8fd66f;
-        g.circle(x, y, r * 0.95).fill({ color: skin }).stroke({ color: ink, width: 1.2 });
-        // Shaded lower-right crescent. Start the subpath explicitly at the arc's
-        // first point: a bare arc().fill() begins its path at the world origin
-        // [0,0], so the chord fill would fan a green wedge across the board.
-        {
-          const sa = -Math.PI * 0.15;
-          const ea = Math.PI * 0.85;
-          const rr = r * 0.95;
-          g.moveTo(x + Math.cos(sa) * rr, y + Math.sin(sa) * rr)
-            .arc(x, y, rr, sa, ea)
-            .closePath()
-            .fill({ color: shade, alpha: 0.5 });
-        }
-        // Surface bumps.
-        for (const [bx, by, br] of [
-          [-0.35, -0.3, 0.22],
-          [0.32, -0.12, 0.18],
-          [-0.1, 0.4, 0.2],
-          [0.4, 0.35, 0.15],
-        ] as const) {
-          g.circle(x + bx * r, y + by * r, br * r).fill({ color: lite, alpha: 0.7 });
-        }
+        // Hydroponic sprout: glass dome arc, twin leaves, soil basin.
+        const { X, Y, P, k } = port(r / 8, 13.3);
+        g.moveTo(X(4.8), Y(14)).arc(X(12), Y(14), k * 7.2, Math.PI, 0).stroke({ color: 0x8fd66f, width: Math.max(1, k * 0.9), alpha: 0.8 });
+        this.strokeLine(g, X(12), Y(16.2), X(12), Y(8.4), Math.max(1.2, k * 1.6), 0x3f8f30, 1);
+        g.moveTo(X(12), Y(12.4))
+          .bezierCurveTo(X(9.2), Y(12), X(7.4), Y(10), X(7.6), Y(7.4))
+          .bezierCurveTo(X(10.4), Y(7.8), X(11.9), Y(9.8), X(12), Y(12.4))
+          .closePath()
+          .fill({ color: 0x57c244 })
+          .stroke({ color: ink, width: 0.8 });
+        g.moveTo(X(12), Y(10))
+          .bezierCurveTo(X(14.8), Y(9.6), X(16.5), Y(7.7), X(16.4), Y(5.2))
+          .bezierCurveTo(X(13.6), Y(5.6), X(12.1), Y(7.5), X(12), Y(10))
+          .closePath()
+          .fill({ color: 0x7ad862 })
+          .stroke({ color: ink, width: 0.8 });
+        g.ellipse(X(12), Y(16.2), k * 5.2, k * 1.2).fill({ color: 0x5a3d22 }).stroke({ color: ink, width: 0.8 });
+        g.poly(P([6.8, 16.4, 17.2, 16.4, 15.6, 20.6, 13.6, 21.4, 10.4, 21.4, 8.4, 20.6])).fill({ color: 0x2f7325 }).stroke({ color: ink, width: 1 });
         break;
       }
       case "ore": {
-        // Angular red ore rock with a bright facet.
-        const red = 0xcc3633;
-        const dark = 0x8c2120;
-        const lite = 0xf0746a;
-        g.poly([
-          x - r * 0.95, y + r * 0.1,
-          x - r * 0.5, y - r * 0.7,
-          x + r * 0.25, y - r * 0.85,
-          x + r * 0.95, y - r * 0.1,
-          x + r * 0.7, y + r * 0.75,
-          x - r * 0.45, y + r * 0.8,
-        ])
-          .fill({ color: red })
-          .stroke({ color: ink, width: 1.2 });
-        // Lit top facet.
-        g.poly([x - r * 0.5, y - r * 0.7, x + r * 0.25, y - r * 0.85, x + r * 0.1, y - r * 0.1, x - r * 0.4, y - r * 0.05])
-          .fill({ color: lite, alpha: 0.85 });
-        // Shaded base facet.
-        g.poly([x - r * 0.45, y + r * 0.8, x + r * 0.7, y + r * 0.75, x + r * 0.55, y + r * 0.2, x - r * 0.3, y + r * 0.25])
-          .fill({ color: dark, alpha: 0.7 });
+        // Molten asteroid: faceted rock split by glowing magma fissures.
+        const { X, Y, P, k } = port(r / 8, 11.8);
+        g.poly(P([4, 13, 7, 5.6, 14, 4, 20.4, 9.6, 18.6, 17.6, 9, 19.6])).fill({ color: 0xa32a28 }).stroke({ color: ink, width: 1.2 });
+        g.poly(P([7, 5.6, 14, 4, 12.6, 9.2, 8.2, 10])).fill({ color: 0xd6504c, alpha: 0.9 });
+        g.poly(P([9, 19.6, 18.6, 17.6, 17.2, 13.4, 10.4, 14.6])).fill({ color: 0x6e1a19, alpha: 0.8 });
+        const crack = [[6.6, 12.6], [10.2, 11.2], [12.6, 13.6], [16.2, 12], [18, 14.2]] as const;
+        for (let i = 0; i < crack.length - 1; i++) {
+          this.strokeLine(g, X(crack[i]![0]), Y(crack[i]![1]), X(crack[i + 1]![0]), Y(crack[i + 1]![1]), Math.max(1.2, k * 1.3), 0xffb054, 1);
+        }
+        this.strokeLine(g, X(10.2), Y(11.2), X(9.6), Y(15.6), Math.max(1, k), 0xff7d3e, 1);
+        g.circle(X(16.2), Y(12), k * 0.9).fill({ color: 0xffd28a });
+        g.circle(X(6.6), Y(12.6), k * 0.7).fill({ color: 0xffd28a, alpha: 0.8 });
         break;
       }
       case "goods": {
-        // Purple treasure chest with gold trim and a lock.
-        const body = 0x7b4fc4;
-        const dark = 0x4f2e8a;
-        const gold = 0xe3b341;
-        const w = r * 0.98;
-        const h = r * 0.62;
-        const lidH = r * 0.5;
-        // Chest body.
-        g.rect(x - w, y - h * 0.1, w * 2, h * 1.5).fill({ color: body }).stroke({ color: ink, width: 1.2 });
-        g.rect(x - w, y - h * 0.1, w * 2, h * 0.4).fill({ color: dark, alpha: 0.5 });
-        // Domed lid.
-        g.moveTo(x - w, y - h * 0.1)
-          .lineTo(x - w, y - h * 0.45)
-          .arc(x, y - h * 0.45, w, Math.PI, 0)
-          .lineTo(x + w, y - h * 0.1)
-          .closePath()
-          .fill({ color: body })
-          .stroke({ color: ink, width: 1.2 });
-        void lidH;
-        // Gold trim bands.
-        g.rect(x - w, y - h * 0.1, w * 2, r * 0.13).fill({ color: gold }).stroke({ color: ink, width: 0.8 });
-        g.rect(x - w * 0.18, y - h * 0.55, w * 0.36, h * 1.9).fill({ color: gold }).stroke({ color: ink, width: 0.8 });
-        // Lock.
-        g.circle(x, y + h * 0.3, r * 0.16).fill({ color: gold }).stroke({ color: ink, width: 1 });
+        // Sealed cargo case: straps, carry handle and a glowing diamond seal.
+        const { X, Y, P, k } = port(r / 7.5, 11);
+        g.moveTo(X(9.5), Y(7)).arc(X(12), Y(6.4), k * 2.5, Math.PI, 0).stroke({ color: 0xe3b341, width: Math.max(1.2, k * 1.4) });
+        g.roundRect(X(4.4), Y(7), k * 15.2, k * 11.6, k * 2).fill({ color: 0x7b4fc4 }).stroke({ color: ink, width: 1.2 });
+        g.roundRect(X(4.4), Y(7), k * 15.2, k * 3.2, k * 2).fill({ color: 0x9a73e0, alpha: 0.85 });
+        g.rect(X(7.4), Y(7), k * 2, k * 11.6).fill({ color: 0xe3b341 }).stroke({ color: ink, width: 0.7 });
+        g.rect(X(14.6), Y(7), k * 2, k * 11.6).fill({ color: 0xe3b341 }).stroke({ color: ink, width: 0.7 });
+        g.circle(X(12), Y(13), k * 2.6).fill({ color: 0xffd96a, alpha: 0.25 });
+        g.poly(P([12, 10.8, 14, 13, 12, 15.2, 10, 13])).fill({ color: 0xffd96a }).stroke({ color: ink, width: 0.8 });
         break;
       }
     }
