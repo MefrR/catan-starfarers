@@ -123,17 +123,20 @@ input[type="text"]:focus { border-color: var(--accent); }
 }
 button {
   cursor: pointer;
-  border: none;
   border-radius: 10px;
   padding: 12px 16px;
   font-size: 15px;
-  font-weight: 600;
-  color: #05060f;
+  font-weight: 700;
+  color: var(--text);
   /* The unlit interior behind the cover — what the star holes reveal when
      the light is elsewhere (near-black, so stars stay invisible). */
-  background: #0a0f1f;
-  --sb-cover: linear-gradient(90deg, var(--accent), var(--accent-2));
+  background: #070b18;
+  /* Dark cover (like the build-dock tiles) so the traveling light + star
+     holes actually read — bright gradients washed the effect out. Primary
+     keeps hierarchy via the accent border + a faint accent tint. */
+  --sb-cover: linear-gradient(165deg, rgba(34, 48, 86, 0.95), rgba(10, 14, 28, 0.95));
   --sb-lightcolor: #f4f9ff;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -141,7 +144,8 @@ button {
   transition:
     transform 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.4),
     filter 0.16s ease,
-    box-shadow 0.16s ease;
+    box-shadow 0.16s ease,
+    border-color 0.16s ease;
 }
 /* Layer 2: the traveling light (under the cover). */
 @supports (offset-path: border-box) {
@@ -213,6 +217,24 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .color-pick, .mapstyle-pick, .friend-card, .chat-send, .chat-toggle,
 .chat-close, .step {
   overflow: visible;
+}
+/* Menu / lobby screens: NO star effect (the menu gets its own design pass).
+   Restore the original gradient primary / glass secondary look there. The
+   pickers (.color-pick / .mapstyle-pick / .ai-remove) keep their own styles. */
+.screen button::before,
+.screen button::after {
+  content: none;
+}
+.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove) {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  color: #05060f;
+  border: none;
+  overflow: visible;
+}
+.screen button.secondary:not(.mapstyle-pick) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
 }
 /* Wrapper around a disabled "Establish Colony" button: a disabled <button>
    swallows pointer events, so the wrapper stays clickable to show the reason. */
@@ -1211,9 +1233,9 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 @media (max-width: 560px) { .go-break { grid-template-columns: 1fr; } }
 .go-newgame {
   margin-top: 20px; width: 100%; padding: 11px; border-radius: 12px; font-weight: 800;
-  cursor: pointer; border: none; color: #07101f;
-  background: #0a0f1f;
-  --sb-cover: linear-gradient(160deg, var(--accent), #6fa8ff);
+  cursor: pointer; color: var(--text);
+  /* Inherits the dark star-button cover; the accent border carries the CTA. */
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
 }
 .go-newgame:hover { filter: brightness(1.08); }
 /* R18: multiplayer Play again / Leave footer. */
@@ -1387,7 +1409,13 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .exit-msg { font-size: 13px; color: var(--muted); margin-bottom: 18px; line-height: 1.5; }
 .exit-actions { display: flex; gap: 12px; justify-content: center; }
 .exit-actions .exit-yes {
-  background: var(--danger); color: #fff; border: none;
+  /* Danger CTA: keep the red as the star-cover so the warning color reads
+     (a plain element background would be hidden under the cover layer). */
+  background: #1c0a0e;
+  --sb-cover: linear-gradient(165deg, color-mix(in srgb, var(--danger) 72%, #2a0c10), #4a1118);
+  --sb-lightcolor: #ffd9d9;
+  color: #fff;
+  border: 1px solid color-mix(in srgb, var(--danger) 65%, transparent);
 }
 
 /* R3 + small-screen tightening: shrink the center action bar and panels. */
