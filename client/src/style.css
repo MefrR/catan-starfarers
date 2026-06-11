@@ -123,20 +123,20 @@ input[type="text"]:focus { border-color: var(--accent); }
 }
 button {
   cursor: pointer;
-  border-radius: 10px;
-  padding: 12px 16px;
+  /* Pill shape, like the reference's rounded-3xl. */
+  border-radius: 999px;
+  padding: 12px 18px;
   font-size: 15px;
   font-weight: 700;
-  color: var(--text);
+  color: #ecf0fb;
   /* The unlit interior behind the cover — what the star holes reveal when
      the light is elsewhere (near-black, so stars stay invisible). */
-  background: #070b18;
-  /* Dark cover (like the build-dock tiles) so the traveling light + star
-     holes actually read — bright gradients washed the effect out. Primary
-     keeps hierarchy via the accent border + a faint accent tint. */
-  --sb-cover: linear-gradient(165deg, rgba(34, 48, 86, 0.95), rgba(10, 14, 28, 0.95));
-  --sb-lightcolor: #f4f9ff;
-  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  background: #08090f;
+  /* Near-black cover with a whisper of top sheen — matching the reference,
+     where the ONLY visible light is the rim arc + the lit star holes. */
+  --sb-cover: linear-gradient(180deg, #12151f, #0a0c13);
+  --sb-lightcolor: #fafafa;
+  border: 1px solid rgba(255, 255, 255, 0.16);
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -156,18 +156,20 @@ button {
     width: var(--sb-light, 110px);
     aspect-ratio: 1;
     pointer-events: none;
-    background: radial-gradient(ellipse at center, var(--sb-lightcolor), transparent 62%);
+    /* Bright core so the rim arc reads crisp where the blob passes. */
+    background: radial-gradient(ellipse at center, var(--sb-lightcolor) 0%, transparent 55%);
     offset-path: border-box;
     offset-rotate: 0deg;
     animation: sbTravel var(--sb-dur, 3s) linear infinite;
   }
 }
-/* Layer 3: the star-holed cover, inset to leave a glowing rim. */
+/* Layer 3: the star-holed cover, inset to leave a glowing rim (the
+   reference's borderWidth: 2). */
 button::before {
   content: "";
   position: absolute;
   z-index: -1;
-  inset: 1.5px;
+  inset: 2px;
   border-radius: inherit;
   background: var(--sb-cover);
   -webkit-mask-image: var(--sb-holes);
@@ -189,11 +191,12 @@ button:hover {
 button:active { transform: translateY(1px) scale(0.985); box-shadow: none; transition-duration: 0.05s; }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button.secondary {
-  --sb-cover: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
-  --sb-lightcolor: #b9d6ff;
-  color: var(--text);
-  border: 1px solid var(--panel-border);
+  /* Same pill, dimmer: fainter border + a softer, bluer light. */
+  --sb-lightcolor: #9db8e8;
+  color: var(--muted);
+  border-color: rgba(255, 255, 255, 0.09);
 }
+button.secondary:hover { color: var(--text); }
 button.secondary:hover { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); border-color: rgba(160, 195, 255, 0.45); }
 button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 button:disabled::after { content: none; } /* no traveling light on dead buttons */
@@ -1232,10 +1235,10 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .go-up b { font-size: 13px; font-weight: 800; }
 @media (max-width: 560px) { .go-break { grid-template-columns: 1fr; } }
 .go-newgame {
-  margin-top: 20px; width: 100%; padding: 11px; border-radius: 12px; font-weight: 800;
-  cursor: pointer; color: var(--text);
-  /* Inherits the dark star-button cover; the accent border carries the CTA. */
-  border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  margin-top: 20px; width: 100%; padding: 11px; font-weight: 800;
+  cursor: pointer; color: #ecf0fb;
+  /* Inherits the dark pill star-button; a slightly brighter rim marks the CTA. */
+  border-color: rgba(255, 255, 255, 0.24);
 }
 .go-newgame:hover { filter: brightness(1.08); }
 /* R18: multiplayer Play again / Leave footer. */
