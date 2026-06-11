@@ -134,6 +134,9 @@ export class HUD {
   private tradeOpen = false;
   /** Whether the Costs & VP reference popover (the "i" tool) is open. */
   private showRef = false;
+  /** Last `${activePlayer}:${phase}` rendered — drives the action-bar swap-in
+   *  animation only when the turn/phase actually changes (not every state tick). */
+  private lastBannerKey = "";
   /** HUD-tools toggle: show rich hover info (descriptions/tooltips). Persisted. */
   private hoverInfoOn = true;
   /** HUD-tools toggle: idle 60s auto-recenter of the map. Persisted. */
@@ -898,11 +901,33 @@ export class HUD {
       );
     }
 
+    // Phase flow strip: the three core turn steps with the current one lit, so
+    // every player always sees where the turn is. Off-flow phases (setup,
+    // encounter, game over) fall back to a plain label.
+    const FLOW: { phase: string; label: string }[] = [
+      { phase: "production", label: "Produce" },
+      { phase: "tradeBuild", label: "Build" },
+      { phase: "flight", label: "Fly" },
+    ];
+    const flowIdx = FLOW.findIndex((f) => f.phase === ps.phase);
+    const phaseStrip =
+      flowIdx >= 0
+        ? `<span class="phase-flow">${FLOW.map(
+            (f, i) =>
+              `<span class="pf-step ${i === flowIdx ? "on" : i < flowIdx ? "done" : ""}">${f.label}</span>`,
+          ).join(`<span class="pf-sep">›</span>`)}</span>`
+        : `<span class="phase-name">${PHASE_LABEL[ps.phase]}</span>`;
     const banner = el(`
       <div class="turn-banner">
         <span class="phase" style="color:${COLOR_HEX[active.color]}">${escapeHtml(active.name)}</span>
-        <span class="phase-name">${PHASE_LABEL[ps.phase]}</span>
+        ${phaseStrip}
       </div>`);
+    // Animate the action bar's content swap ONLY when the turn/phase actually
+    // changes — the HUD re-renders wholesale on every state tick, so an
+    // unconditional entrance animation would flicker constantly.
+    const bannerKey = `${active.id}:${ps.phase}`;
+    const phaseChanged = bannerKey !== this.lastBannerKey;
+    this.lastBannerKey = bannerKey;
     // Turn timer chip (host-configured). Text is refreshed by an interval so it
     // ticks without a full HUD re-render.
     const timedStep = this.myTimedStep(state);
@@ -915,7 +940,7 @@ export class HUD {
     }
     bar.appendChild(banner);
 
-    const actions = el(`<div class="actions"></div>`);
+    const actions = el(`<div class="actions ${phaseChanged ? "swap-in" : ""}"></div>`);
     if (owesDiscard > 0) {
       actions.appendChild(el(`<div class="waiting">Tap your cards above to discard ${owesDiscard}.</div>`));
     } else if (myTurn && ps.awaitingSteal) {

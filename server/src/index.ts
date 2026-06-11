@@ -21,6 +21,10 @@ const io = new IOServer(httpServer, {
   // network blip doesn't kick players mid-game (they also auto-rejoin).
   pingInterval: 25000,
   pingTimeout: 60000,
+  // Every move broadcasts the full GameState JSON (tens of KB) to every player.
+  // Compressing frames over ~1KB cuts that to a few KB — a big win on mobile
+  // data and on the free-tier server's tiny bandwidth.
+  perMessageDeflate: { threshold: 1024 },
 });
 
 // In production, serve the built client. In dev, Vite serves it on its own port.

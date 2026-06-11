@@ -351,22 +351,98 @@ export class BoardRenderer {
     }, 130);
   }
 
-  /** Zoom toward a screen point (canvas-relative math), clamped to limits. */
-  private zoomToward(clientX: number, clientY: number, factor: number): void {
-    const canvas = this.app.canvas as HTMLCanvasElement;
-    const rect = canvas.getBoundingClientRect();
-    const mx = clientX - rect.left;
-    const my = clientY - rect.top;
+  /** Set zoom to an absolute value while keeping the given canvas-space point
+   *  fixed under the cursor/fingers (the shared math for wheel + pinch). */
+  private applyZoomAt(mx: number, my: number, newZoom: number): void {
     const worldX = (mx - this.panX) / this.zoom;
     const worldY = (my - this.panY) / this.zoom;
-    this.zoom = Math.max(
-      BoardRenderer.MIN_ZOOM,
-      Math.min(BoardRenderer.MAX_ZOOM, this.zoom * factor),
-    );
+    this.zoom = Math.max(BoardRenderer.MIN_ZOOM, Math.min(BoardRenderer.MAX_ZOOM, newZoom));
     this.panX = mx - worldX * this.zoom;
     this.panY = my - worldY * this.zoom;
     this.applyViewTransform();
     this.scheduleCrispRender();
+  }
+
+  /** Zoom toward a screen point (canvas-relative math), clamped to limits. */
+  private zoomToward(clientX: number, clientY: number, factor: number): void {
+    const canvas = this.app.canvas as HTMLCanvasElement;
+    const rect = canvas.getBoundingClientRect();
+    this.applyZoomAt(clientX - rect.left, clientY - rect.top, this.zoom * factor);
+  }
+
+  // --- Smooth wheel zoom: the wheel sets a TARGET; a ticker glide eases the live
+  // zoom toward it every frame, so steps melt into one continuous motion. Pinch
+  // stays direct (the fingers are the animation). ---
+  private zoomTarget = 1;
+  private zoomAnchor = { x: 0, y: 0 };
+  private zoomGlide = 0;
+
+  private glideZoomToward(clientX: number, clientY: number, factor: number): void {
+    const canvas = this.app.canvas as HTMLCanvasElement;
+    const rect = canvas.getBoundingClientRect();
+    // Re-anchor on every wheel tick so the glide always pulls toward the cursor.
+    this.zoomAnchor = { x: clientX - rect.left, y: clientY - rect.top };
+    const base = this.zoomGlide ? this.zoomTarget : this.zoom;
+    this.zoomTarget = Math.max(
+      BoardRenderer.MIN_ZOOM,
+      Math.min(BoardRenderer.MAX_ZOOM, base * factor),
+    );
+    if (this.zoomGlide) return; // glide already running — it will chase the new target
+    let prev = performance.now();
+    const step = (now: number): void => {
+      const dt = Math.min(50, now - prev);
+      prev = now;
+      const gap = this.zoomTarget - this.zoom;
+      if (Math.abs(gap) < 0.002) {
+        this.applyZoomAt(this.zoomAnchor.x, this.zoomAnchor.y, this.zoomTarget);
+        this.zoomGlide = 0;
+        return;
+      }
+      // Exponential ease: cover ~63% of the remaining gap every 60ms.
+      const k = 1 - Math.exp(-dt / 60);
+      this.applyZoomAt(this.zoomAnchor.x, this.zoomAnchor.y, this.zoom + gap * k);
+      this.zoomGlide = requestAnimationFrame(step);
+    };
+    this.zoomGlide = requestAnimationFrame(step);
+  }
+
+  private cancelZoomGlide(): void {
+    cancelAnimationFrame(this.zoomGlide);
+    this.zoomGlide = 0;
+  }
+
+  // --- Drag inertia: the map keeps the throw's momentum after release and
+  // glides to a stop with friction (cancelled by any new touch/wheel). ---
+  private inertiaAnim = 0;
+  private dragVel = { x: 0, y: 0, t: 0 };
+
+  private startInertia(): void {
+    const speed = Math.hypot(this.dragVel.x, this.dragVel.y);
+    if (speed < 0.25 || this.zoom <= 1) return; // too slow / nothing to throw at fit zoom
+    let vx = this.dragVel.x;
+    let vy = this.dragVel.y;
+    let prev = performance.now();
+    const step = (now: number): void => {
+      const dt = Math.min(50, now - prev);
+      prev = now;
+      this.panX += vx * dt;
+      this.panY += vy * dt;
+      const decay = Math.exp(-dt / 320); // friction time-constant
+      vx *= decay;
+      vy *= decay;
+      this.applyViewTransform();
+      if (Math.hypot(vx, vy) < 0.02) {
+        this.inertiaAnim = 0;
+        return;
+      }
+      this.inertiaAnim = requestAnimationFrame(step);
+    };
+    this.inertiaAnim = requestAnimationFrame(step);
+  }
+
+  private cancelInertia(): void {
+    cancelAnimationFrame(this.inertiaAnim);
+    this.inertiaAnim = 0;
   }
 
   /**
@@ -386,7 +462,11 @@ export class BoardRenderer {
       (e: WheelEvent) => {
         e.preventDefault();
         cancelAnimationFrame(this.recenterAnim);
-        this.zoomToward(e.clientX, e.clientY, e.deltaY < 0 ? 1.12 : 1 / 1.12);
+        this.cancelInertia();
+        // Trackpads emit many small deltas, wheels emit chunky ones — scale the
+        // factor by the delta so both feel right, then glide smoothly toward it.
+        const mag = Math.min(1.35, 1.12 + Math.abs(e.deltaY) * 0.0006);
+        this.glideZoomToward(e.clientX, e.clientY, e.deltaY < 0 ? mag : 1 / mag);
         this.resetIdleTimer();
       },
       { passive: false },
@@ -401,8 +481,11 @@ export class BoardRenderer {
     canvas.addEventListener("pointerdown", (e: PointerEvent) => {
       cancelAnimationFrame(this.recenterAnim); // grabbing cancels an auto-recenter
       this.recenterAnim = 0;
+      this.cancelInertia(); // catching the map stops a momentum glide
+      this.cancelZoomGlide();
       this.resetIdleTimer();
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      this.dragVel = { x: 0, y: 0, t: performance.now() };
       moved = false;
       if (pts.size === 2) {
         const vs = [...pts.values()];
@@ -451,6 +534,15 @@ export class BoardRenderer {
       this.hideTip();
       this.panX += dx;
       this.panY += dy;
+      // Track release velocity (px/ms, smoothed) so letting go throws the map.
+      const now = performance.now();
+      const dt = Math.max(1, now - this.dragVel.t);
+      const blend = 0.4;
+      this.dragVel = {
+        x: this.dragVel.x * (1 - blend) + (dx / dt) * blend,
+        y: this.dragVel.y * (1 - blend) + (dy / dt) * blend,
+        t: now,
+      };
       canvas.style.cursor = "grabbing";
       this.applyViewTransform();
     });
@@ -459,9 +551,14 @@ export class BoardRenderer {
       // A single finger/click lifted without dragging = a tap. Two taps in quick
       // succession at roughly the same spot recenters the map to the middle.
       const wasTap = !moved && pts.size === 1 && e.type === "pointerup";
+      const wasDrag = moved && pts.size === 1 && e.type === "pointerup";
       pts.delete(e.pointerId);
       if (pts.size < 2) pinchDist = 0;
-      if (pts.size === 0) canvas.style.cursor = "";
+      if (pts.size === 0) {
+        canvas.style.cursor = "";
+        // A flick released within ~80ms of the last move keeps its momentum.
+        if (wasDrag && performance.now() - this.dragVel.t < 80) this.startInertia();
+      }
       if (wasTap) {
         const now = performance.now();
         const near =
@@ -1072,13 +1169,16 @@ export class BoardRenderer {
     this.shipPosInit = true;
   }
 
-  /** Glowing comet that flies along a fading trail from (fx,fy)→(tx,ty), board-space. */
+  /** Glowing comet that arcs along a curved, fading trail from (fx,fy)→(tx,ty),
+   *  board-space. The path is a quadratic bezier lifted perpendicular to the
+   *  flight line, with an eased head, a tapering multi-segment tail, and a soft
+   *  pulsing glow — so moves read as graceful orbits rather than straight slides. */
   private spawnMoveTrail(fx: number, fy: number, tx: number, ty: number, color: number): void {
     const trail = new Graphics();
     const comet = new Graphics();
     this.fx.addChild(trail, comet);
     const start = performance.now();
-    const dur = 700;
+    const dur = 820;
     const toScreen = (x: number, y: number): { x: number; y: number } => ({
       x: this.fit.ox + x * this.fit.scale,
       y: this.fit.oy + y * this.fit.scale,
@@ -1086,6 +1186,22 @@ export class BoardRenderer {
     const a = toScreen(fx, fy);
     const b = toScreen(tx, ty);
     const s = this.fit.scale;
+    // Control point: midpoint lifted perpendicular to the path (~18% of length).
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const lift = Math.min(len * 0.18, s * 0.9);
+    const cp = {
+      x: (a.x + b.x) / 2 + (-(b.y - a.y) / len) * lift,
+      y: (a.y + b.y) / 2 + ((b.x - a.x) / len) * lift,
+    };
+    const along = (u: number): { x: number; y: number } => {
+      const v = 1 - u;
+      return {
+        x: v * v * a.x + 2 * v * u * cp.x + u * u * b.x,
+        y: v * v * a.y + 2 * v * u * cp.y + u * u * b.y,
+      };
+    };
+    // Smooth ease-in-out so the ship accelerates away and brakes on arrival.
+    const ease = (t: number): number => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
     const tick = (): void => {
       const t = (performance.now() - start) / dur;
       if (t >= 1) {
@@ -1094,17 +1210,29 @@ export class BoardRenderer {
         comet.destroy();
         return;
       }
-      const e = 1 - (1 - t) * (1 - t); // ease-out
-      const hx = a.x + (b.x - a.x) * e;
-      const hy = a.y + (b.y - a.y) * e;
+      const e = ease(t);
+      const head = along(e);
+      // Tapering tail: a few segments behind the head, thinner + fainter rearward.
       trail.clear();
-      trail
-        .moveTo(a.x, a.y)
-        .lineTo(hx, hy)
-        .stroke({ color, width: Math.max(2, s * 0.08), alpha: 0.5 * (1 - t) });
+      const SEGS = 7;
+      for (let i = 0; i < SEGS; i++) {
+        const u0 = Math.max(0, e - 0.32 + (0.32 * i) / SEGS);
+        const u1 = Math.max(0, e - 0.32 + (0.32 * (i + 1)) / SEGS);
+        if (u1 <= u0) continue;
+        const p0 = along(u0);
+        const p1 = along(u1);
+        const f = (i + 1) / SEGS; // 0 rear → 1 at the head
+        trail
+          .moveTo(p0.x, p0.y)
+          .lineTo(p1.x, p1.y)
+          .stroke({ color, width: Math.max(1.2, s * 0.1 * f), alpha: 0.55 * f * (1 - t * 0.6) });
+      }
+      // Comet head with a soft pulsing halo.
+      const pulse = 1 + 0.18 * Math.sin(t * Math.PI * 6);
       comet.clear();
-      comet.circle(hx, hy, s * 0.12).fill({ color, alpha: 0.9 });
-      comet.circle(hx, hy, s * 0.22).stroke({ color: 0xffffff, width: 2, alpha: 0.6 * (1 - t) });
+      comet.circle(head.x, head.y, s * 0.3 * pulse).fill({ color, alpha: 0.12 });
+      comet.circle(head.x, head.y, s * 0.12).fill({ color, alpha: 0.95 });
+      comet.circle(head.x, head.y, s * 0.2 * pulse).stroke({ color: 0xffffff, width: 2, alpha: 0.55 * (1 - t) });
     };
     this.app.ticker.add(tick);
   }
@@ -1141,7 +1269,9 @@ export class BoardRenderer {
     this.piecesInit = true;
   }
 
-  /** Expanding owner-coloured ring + flash at a board position (fit-space). */
+  /** Expanding owner-coloured rings + sparkle burst at a board position
+   *  (fit-space): a double ripple plus a handful of radiating sparks, so a new
+   *  piece lands with a satisfying pop instead of a single thin ring. */
   private spawnBuildFx(bx: number, by: number, color: number): void {
     const cx = this.fit.ox + bx * this.fit.scale;
     const cy = this.fit.oy + by * this.fit.scale;
@@ -1149,7 +1279,9 @@ export class BoardRenderer {
     const ring = new Graphics();
     this.fx.addChild(ring);
     const start = performance.now();
-    const dur = 850;
+    const dur = 950;
+    // Deterministic spark fan (no Math.random — same burst every time, by design).
+    const SPARKS = 8;
     const tick = (): void => {
       const t = (performance.now() - start) / dur;
       if (t >= 1) {
@@ -1157,14 +1289,29 @@ export class BoardRenderer {
         ring.destroy();
         return;
       }
-      const e = 1 - (1 - t) * (1 - t); // ease-out
+      const e = 1 - Math.pow(1 - t, 3); // ease-out cubic
       ring.clear();
+      // Primary ripple.
       ring
         .circle(cx, cy, s * (0.12 + e * 0.55))
         .stroke({ color, width: 5 * (1 - t) + 1, alpha: 1 - t });
-      ring
-        .circle(cx, cy, s * (0.55 + e * 0.5))
-        .stroke({ color: 0xffffff, width: 2 * (1 - t), alpha: 0.7 * (1 - t) });
+      // Trailing second ripple, slightly delayed.
+      const t2 = Math.max(0, t - 0.18) / 0.82;
+      const e2 = 1 - Math.pow(1 - t2, 3);
+      if (t2 > 0) {
+        ring
+          .circle(cx, cy, s * (0.1 + e2 * 0.85))
+          .stroke({ color: 0xffffff, width: 2.5 * (1 - t2), alpha: 0.65 * (1 - t2) });
+      }
+      // Radiating sparks that fly out and fade.
+      for (let i = 0; i < SPARKS; i++) {
+        const ang = (Math.PI * 2 * i) / SPARKS + 0.4;
+        const d = s * (0.2 + e * 0.75);
+        const px = cx + Math.cos(ang) * d;
+        const py = cy + Math.sin(ang) * d;
+        ring.circle(px, py, Math.max(1, s * 0.045 * (1 - t))).fill({ color, alpha: 0.8 * (1 - t) });
+      }
+      // Soft centre glow.
       ring.circle(cx, cy, s * 0.2).fill({ color, alpha: 0.45 * (1 - t) });
     };
     this.app.ticker.add(tick);
