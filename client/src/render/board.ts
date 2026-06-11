@@ -1013,11 +1013,10 @@ export class BoardRenderer {
         const tip = isColonySite
           ? `<b>Colony site</b><br>Land a colony ship here to settle (+1 VP).<br>It sits between two planets and collects from both.`
           : `<b>Docking point</b><br>Land a trade ship here to build a trade station (+1 VP) and earn a friendship card.`;
-        node.on("pointerover", () => {
-          this.tooltipEl.innerHTML = tip;
-          this.tooltipEl.classList.add("show");
-          this.positionTooltip();
-        });
+        // Route through showTip so the 👁 hover-info toggle (tooltipsSuppressed)
+        // and the auto-dismiss timer apply here too — this path used to bypass
+        // both and kept showing "Colony site" with hover info switched off.
+        node.on("pointerover", () => this.showTip(tip, false));
         node.on("pointerout", () => this.tooltipEl.classList.remove("show"));
       }
       nodeLayer.addChild(node);

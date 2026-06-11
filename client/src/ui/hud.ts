@@ -208,6 +208,10 @@ export class HUD {
   /** R1/R2: collapse toggles for the side panels on small screens. */
   private sidebarCollapsed = true;
   private scoreCompact = true;
+  /** Previous toggle states, to play a slide animation ONLY on an actual
+   *  collapse/expand (the HUD re-renders wholesale on every state tick). */
+  private lastSidebarCollapsed: boolean | null = null;
+  private lastScoreCompact: boolean | null = null;
 
   constructor(mount: HTMLElement, game: GameDriver, board: BoardRenderer) {
     this.root = mount;
@@ -858,7 +862,12 @@ export class HUD {
     const screen = el(`<div class="hud"></div>`);
 
     const target = state.config.targetVictoryPoints;
-    const scoreboard = el(`<div class="hud-panel scoreboard ${this.scoreCompact ? "compact" : ""}"></div>`);
+    // Slide animation only when the player actually compressed/expanded it.
+    const scoreToggled = this.lastScoreCompact !== null && this.lastScoreCompact !== this.scoreCompact;
+    this.lastScoreCompact = this.scoreCompact;
+    const scoreboard = el(
+      `<div class="hud-panel scoreboard ${this.scoreCompact ? "compact" : ""} ${scoreToggled ? "panel-toggling-r" : ""}"></div>`,
+    );
     // Tapping the tracker's own border/padding (the container itself) toggles it.
     scoreboard.addEventListener("click", (e) => {
       if (e.target === scoreboard) { this.scoreCompact = !this.scoreCompact; this.rerender(); }
@@ -1472,7 +1481,12 @@ export class HUD {
   /** Left sidebar: mothership illustration + upgrade counts, shaker balls, trade. */
   private buildSidebar(state: GameState, me: PlayerState): HTMLElement {
     const ps = state.phaseState;
-    const side = el(`<div class="hud-panel sidebar-left ${this.sidebarCollapsed ? "collapsed" : ""}"></div>`);
+    // Play the slide animation only when the player actually toggled the panel.
+    const toggled = this.lastSidebarCollapsed !== null && this.lastSidebarCollapsed !== this.sidebarCollapsed;
+    this.lastSidebarCollapsed = this.sidebarCollapsed;
+    const side = el(
+      `<div class="hud-panel sidebar-left ${this.sidebarCollapsed ? "collapsed" : ""} ${toggled ? "panel-toggling" : ""}"></div>`,
+    );
     // Tapping the panel's own border/padding (its "edge" — i.e. the container
     // itself, not a child control) toggles it collapsed/expanded.
     side.addEventListener("click", (e) => {
@@ -3084,12 +3098,24 @@ export class HUD {
     // R9: tint the shaker window in the active player's color so spectators can
     // tell at a glance whose mothership is shaking.
     const accent = COLOR_HEX[active.color] ?? "#ffd23f";
+    // White glowing star streaks flying rightward BEHIND the shaker stage —
+    // they live inside the overlay, so they appear and vanish with it.
+    const streaks = Array.from({ length: 14 }, () => {
+      const top = (4 + Math.random() * 92).toFixed(1);
+      const delay = (Math.random() * 1.6).toFixed(2);
+      const dur = (0.9 + Math.random() * 1.1).toFixed(2);
+      const scale = (0.5 + Math.random() * 0.9).toFixed(2);
+      return `<i class="ss-star" style="top:${top}%;animation-delay:${delay}s;animation-duration:${dur}s;--ss:${scale}"></i>`;
+    }).join("");
     const overlay = el(
-      `<div class="shake-overlay"><div class="shake-stage" style="--accent:${accent}">
-         <div class="cs-title" style="color:${accent}">${escapeHtml(active.name)} shakes the mothership</div>
-         <div class="cs-balls">${ballHtml}</div>
-         <div class="cs-result" style="visibility:hidden">Speed <b>${speed}</b> · Combat <b>${combat}</b></div>
-       </div></div>`,
+      `<div class="shake-overlay">
+         <div class="shake-stars">${streaks}</div>
+         <div class="shake-stage" style="--accent:${accent}">
+           <div class="cs-title" style="color:${accent}">${escapeHtml(active.name)} shakes the mothership</div>
+           <div class="cs-balls">${ballHtml}</div>
+           <div class="cs-result" style="visibility:hidden">Speed <b>${speed}</b> · Combat <b>${combat}</b></div>
+         </div>
+       </div>`,
     );
     document.body.appendChild(overlay);
     const stage = overlay.querySelector(".shake-stage") as HTMLElement;

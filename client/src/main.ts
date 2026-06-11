@@ -1,5 +1,6 @@
 import "./style.css";
 import { Starfield } from "./render/starfield.js";
+import { AuroraBg } from "./render/aurora.js";
 import { BoardRenderer } from "./render/board.js";
 import { NewGameMenu, type LaunchOptions } from "./ui/menu.js";
 import { HUD } from "./ui/hud.js";
@@ -80,6 +81,9 @@ async function boot(): Promise<void> {
     screen.querySelector("#online")!.addEventListener("click", () => {
       void startNetwork("online");
     });
+    // Aurora shader backdrop behind the menu card; it tears itself down the
+    // moment this screen is replaced (its canvas leaves the DOM).
+    new AuroraBg(screen);
     app.replaceChildren(screen);
   };
 

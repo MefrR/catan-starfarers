@@ -1618,3 +1618,56 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow
   .event-ticker { top: 56px; max-width: 86vw; }
   .et-entry { font-size: 11.5px; padding: 6px 11px; }
 }
+
+/* === W2: panel toggle animation — plays only when the player collapses or
+   expands the Fleet sidebar (slides from the left) / victory tracker (from the
+   right); keyed by the HUD so per-tick re-renders don't replay it. === */
+.sidebar-left.panel-toggling { animation: panelInL 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.15) both; }
+.scoreboard.panel-toggling-r { animation: panelInR 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.15) both; }
+@keyframes panelInL {
+  from { opacity: 0.35; transform: translateX(-16px) scale(0.985); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes panelInR {
+  from { opacity: 0.35; transform: translateX(16px) scale(0.985); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+/* === W4: aurora shader canvas behind the main-menu card. === */
+.menu-aurora {
+  position: absolute; inset: 0; z-index: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+.screen .card { position: relative; z-index: 1; }
+
+/* === W5: glowing star streaks flying right behind the center shaker. === */
+.shake-stars {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+}
+.ss-star {
+  position: absolute; left: -12vw;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 0 6px 2px rgba(255, 255, 255, 0.9),
+    0 0 18px 6px rgba(180, 215, 255, 0.45);
+  opacity: 0;
+  transform: scale(var(--ss, 1));
+  animation-name: ssFly;
+  animation-timing-function: cubic-bezier(0.3, 0, 0.7, 1);
+  animation-iteration-count: infinite;
+}
+/* The streak tail: a horizontal light trail behind the head. */
+.ss-star::before {
+  content: ""; position: absolute; right: 3px; top: 50%;
+  width: 16vw; height: 2px; transform: translateY(-50%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85));
+  border-radius: 2px;
+}
+@keyframes ssFly {
+  0% { opacity: 0; transform: translateX(0) scale(var(--ss, 1)); }
+  12% { opacity: 0.95; }
+  85% { opacity: 0.9; }
+  100% { opacity: 0; transform: translateX(124vw) scale(var(--ss, 1)); }
+}
