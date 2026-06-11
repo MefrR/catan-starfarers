@@ -311,23 +311,26 @@ export class HUD {
     extra?: string,
   ): void {
     const build = (): string => {
-      const cells = RESOURCES.filter((r) => (cost[r] ?? 0) > 0)
+      // One mini-card PER resource required (e.g. 3 ore cards + 2 carbon
+      // cards). Cards you hold are lit in the resource's color; cards you're
+      // still missing are grayed out — readable at a glance, no numbers.
+      const groups = RESOURCES.filter((r) => (cost[r] ?? 0) > 0)
         .map((r) => {
           const need = cost[r] ?? 0;
-          const have = me.hand[r];
-          const ok = have >= need;
-          return `<span class="bc-cell ${ok ? "ok" : "miss"}" style="--res:${RES_COLOR[r]}">
-                    <span class="bc-glyph">${resourceGlyphSvg(r)}</span>
-                    <span class="bc-num">${Math.min(have, need)}/${need}</span>
-                  </span>`;
+          const have = Math.min(me.hand[r], need);
+          let cards = "";
+          for (let i = 0; i < need; i++) {
+            cards += `<span class="bc-mini ${i < have ? "lit" : "dim"}" style="--res:${RES_COLOR[r]}">${resourceGlyphSvg(r)}</span>`;
+          }
+          return `<span class="bc-group" title="${RESOURCE_LABEL[r]} ${have}/${need}">${cards}</span>`;
         })
         .join("");
       const ready = RESOURCES.every((r) => me.hand[r] >= (cost[r] ?? 0));
       const head = ready
         ? `<div class="bc-head ready">✓ All resources ready</div>`
-        : `<div class="bc-head short">Missing resources (red)</div>`;
+        : `<div class="bc-head short">Gray cards are still missing</div>`;
       // `extra` is our own trusted HTML (build "uses" descriptions / blocker text).
-      return `${head}<div class="bc-cells">${cells}</div>${extra ? `<div class="bc-extra">${extra}</div>` : ""}`;
+      return `${head}<div class="bc-cells">${groups}</div>${extra ? `<div class="bc-extra">${extra}</div>` : ""}`;
     };
     const show = (e: PointerEvent): void => {
       if (!this.hoverInfoOn) return; // hover info toggled off in the HUD tools
@@ -999,6 +1002,25 @@ export class HUD {
         });
       }
       hand.appendChild(card);
+    }
+    // Discoverability: a small labeled Trade button next to the cards — not
+    // everyone knows that tapping a resource card starts a trade. Active only
+    // when trading is actually possible (your build phase); dim otherwise.
+    if (!discardMode) {
+      const tradeBtn = el(
+        `<button class="hand-trade-btn ${tradeMode ? "" : "off"}" title="${
+          tradeMode
+            ? "Open the trade tray — or tap a resource card to offer it"
+            : "Trading opens during your trade & build phase"
+        }"><span class="ht-ico">⇄</span><span class="ht-lbl">Trade</span></button>`,
+      );
+      if (tradeMode) {
+        tradeBtn.addEventListener("click", () => {
+          this.tradeOpen = true;
+          this.rerender();
+        });
+      }
+      hand.appendChild(tradeBtn);
     }
     bar.appendChild(hand);
 
