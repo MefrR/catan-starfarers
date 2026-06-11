@@ -1484,3 +1484,56 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow
     transition-duration: 0.01ms !important;
   }
 }
+
+/* === V2: turn-handoff splash — a center sweep in the player's color. === */
+.turn-splash {
+  position: fixed; left: 0; right: 0; top: 38%; z-index: 150;
+  display: flex; align-items: center; justify-content: center; gap: 18px;
+  pointer-events: none;
+  animation: tsLife 1.65s ease forwards;
+}
+.turn-splash .ts-text {
+  font-size: clamp(26px, 5vw, 42px); font-weight: 900; letter-spacing: 0.02em;
+  color: var(--pc, var(--accent));
+  text-shadow: 0 4px 30px color-mix(in srgb, var(--pc, var(--accent)) 65%, transparent), 0 2px 8px rgba(0,0,0,0.8);
+  animation: tsText 1.65s cubic-bezier(0.2, 0.9, 0.3, 1.1) forwards;
+  white-space: nowrap;
+}
+.turn-splash .ts-line {
+  height: 2px; flex: 0 1 160px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--pc, var(--accent)), transparent);
+  animation: tsLine 1.65s ease forwards;
+}
+@keyframes tsLife { 0% { opacity: 0; } 10% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes tsText {
+  0% { transform: translateY(18px) scale(0.85); }
+  18% { transform: translateY(0) scale(1.04); }
+  28% { transform: scale(1); }
+  100% { transform: scale(1); }
+}
+@keyframes tsLine { 0% { flex-basis: 0; opacity: 0; } 25% { flex-basis: 160px; opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+/* === V3: event ticker — top-center auto-fading feed of new log lines. === */
+.event-ticker {
+  position: fixed; left: 50%; top: 14px; transform: translateX(-50%);
+  z-index: 55; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  pointer-events: none; max-width: min(480px, 70vw);
+}
+.et-entry {
+  padding: 7px 14px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 600; color: var(--text); text-align: center;
+  background: rgba(10, 14, 28, 0.88);
+  border: 1px solid rgba(120, 160, 255, 0.25);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  animation: etIn 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.et-entry.out { opacity: 0; transform: translateY(-8px); }
+@keyframes etIn { from { opacity: 0; transform: translateY(-10px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@media (max-width: 700px) {
+  /* Keep the ticker clear of the exit button + scoreboard on small screens. */
+  .event-ticker { top: 56px; max-width: 86vw; }
+  .et-entry { font-size: 11.5px; padding: 6px 11px; }
+}

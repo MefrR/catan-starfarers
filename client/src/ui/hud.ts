@@ -28,6 +28,7 @@ import {
 import type { GameDriver } from "../game/store.js";
 import type { BoardRenderer } from "../render/board.js";
 import { ChatBox } from "./chat.js";
+import { sfx } from "../audio.js";
 
 const el = (html: string): HTMLElement => {
   const t = document.createElement("template");
@@ -137,6 +138,19 @@ export class HUD {
   /** Last `${activePlayer}:${phase}` rendered — drives the action-bar swap-in
    *  animation only when the turn/phase actually changes (not every state tick). */
   private lastBannerKey = "";
+  /** Turn-handoff tracking: was it the human's turn on the previous render?
+   *  null = first render (suppress the splash for the opening state). */
+  private wasMyTurn: boolean | null = null;
+  /** Tab-title blinker while the tab is hidden and it's the human's turn. */
+  private titleBlink = 0;
+  /** V3 event ticker: previous log length + tail line, to detect new entries
+   *  even after the log hits its 200-line cap (where length stops growing). */
+  private tickerEl: HTMLDivElement | null = null;
+  private prevLogLen = -1;
+  private prevLogLast: string | null = null;
+  /** V1: total piece count last render, to play the "build" thunk for ANY
+   *  player's new colony/ship/spaceport/trade station. */
+  private prevPieceCount = -1;
   /** HUD-tools toggle: show rich hover info (descriptions/tooltips). Persisted. */
   private hoverInfoOn = true;
   /** HUD-tools toggle: idle 60s auto-recenter of the map. Persisted. */
@@ -203,6 +217,13 @@ export class HUD {
     // Q6: Space triggers the contextual primary action (roll / end / shake).
     this.keyHandler = (e) => this.onKeyDown(e);
     window.addEventListener("keydown", this.keyHandler);
+    // V2: hiding/showing the tab mid-turn starts/stops the title alert without
+    // waiting for the next state tick.
+    this.visHandler = () => {
+      const live = this.game.getState().phaseState.phase !== "gameOver";
+      this.syncTitleAlert(this.game.isHumanTurn() && live);
+    };
+    document.addEventListener("visibilitychange", this.visHandler);
     // Q5: floating build-cost popover (resource icons + what's missing).
     this.costPop = document.createElement("div");
     this.costPop.className = "build-cost-pop";
@@ -252,16 +273,28 @@ export class HUD {
     this.board.onViewChange = null;
     this.chat?.destroy();
     this.chat = null;
+    if (this.visHandler) {
+      document.removeEventListener("visibilitychange", this.visHandler);
+      this.visHandler = null;
+    }
+    if (this.titleBlink) {
+      window.clearInterval(this.titleBlink);
+      this.titleBlink = 0;
+      document.title = "Catan: Starfarers";
+    }
+    this.tickerEl?.remove();
+    this.tickerEl = null;
     this.root.replaceChildren();
     document
       .querySelectorAll(
-        ".gameover-overlay, .encounter-overlay, .discard-overlay, .shake-overlay, .dice-overlay, .result-toast, .fly-token, .marker-fly, .exit-confirm",
+        ".gameover-overlay, .encounter-overlay, .discard-overlay, .shake-overlay, .dice-overlay, .result-toast, .fly-token, .marker-fly, .exit-confirm, .turn-splash",
       )
       .forEach((n) => n.remove());
   }
 
   private unsubscribe: (() => void) | null = null;
   private keyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private visHandler: (() => void) | null = null;
 
   /** Q5: rich hover/click popover showing a build's cost as resource icons,
    *  marking what's missing (red) vs satisfied (green) and "Ready to build". */
@@ -333,6 +366,78 @@ export class HUD {
     });
     elm.addEventListener("pointerout", () => this.costPop.classList.remove("show"));
     elm.addEventListener("pointerdown", show);
+  }
+
+  /** V2: center-screen "Your turn!" sweep in the player's color (~1.6s). */
+  private showTurnSplash(state: GameState): void {
+    document.querySelectorAll(".turn-splash").forEach((n) => n.remove());
+    const me = state.players.find((p) => p.id === this.game.humanId);
+    const color = COLOR_HEX[me?.color ?? "yellow"];
+    const splash = el(
+      `<div class="turn-splash" style="--pc:${color}">
+         <div class="ts-line"></div>
+         <div class="ts-text">Your turn${me ? `, ${escapeHtml(me.name)}` : ""}!</div>
+         <div class="ts-line"></div>
+       </div>`,
+    );
+    document.body.appendChild(splash);
+    window.setTimeout(() => splash.remove(), 1700);
+  }
+
+  /** V2: while the tab is hidden and it's the human's turn, blink the tab title
+   *  so a backgrounded player notices the table is waiting on them. */
+  private syncTitleAlert(myTurn: boolean): void {
+    const BASE = "Catan: Starfarers";
+    const wants = myTurn && document.visibilityState === "hidden";
+    if (wants && !this.titleBlink) {
+      let flip = false;
+      this.titleBlink = window.setInterval(() => {
+        flip = !flip;
+        document.title = flip ? "● Your turn!" : BASE;
+      }, 1000);
+    } else if (!wants && this.titleBlink) {
+      window.clearInterval(this.titleBlink);
+      this.titleBlink = 0;
+      document.title = BASE;
+    }
+  }
+
+  /** V3: surface new log lines as auto-fading toasts (top center, max 3). The
+   *  log is capped at 200 lines (old lines splice off the front), so growth is
+   *  detected by length while under the cap and by the previous tail line once
+   *  at it. The opening backlog is skipped — only live events tick. */
+  private syncTicker(state: GameState): void {
+    const log = state.log;
+    if (this.prevLogLen === -1 || log.length < this.prevLogLen) {
+      // First render, or the log was reset (play again): adopt without showing.
+      this.prevLogLen = log.length;
+      this.prevLogLast = log[log.length - 1] ?? null;
+      return;
+    }
+    let fresh: string[] = [];
+    if (log.length > this.prevLogLen) {
+      fresh = log.slice(this.prevLogLen);
+    } else if (log.length === 200 && this.prevLogLast != null) {
+      const idx = log.lastIndexOf(this.prevLogLast);
+      if (idx >= 0 && idx < log.length - 1) fresh = log.slice(idx + 1);
+    }
+    this.prevLogLen = log.length;
+    this.prevLogLast = log[log.length - 1] ?? null;
+    if (fresh.length === 0) return;
+    if (!this.tickerEl) {
+      this.tickerEl = document.createElement("div");
+      this.tickerEl.className = "event-ticker";
+      document.body.appendChild(this.tickerEl);
+    }
+    for (const line of fresh.slice(-3)) {
+      const entry = el(`<div class="et-entry">${escapeHtml(line)}</div>`);
+      this.tickerEl.appendChild(entry);
+      while (this.tickerEl.children.length > 3) this.tickerEl.firstElementChild?.remove();
+      window.setTimeout(() => {
+        entry.classList.add("out");
+        window.setTimeout(() => entry.remove(), 350);
+      }, 4500);
+    }
   }
 
   /**
@@ -641,6 +746,7 @@ export class HUD {
     const rc = ps.rollCount ?? 0;
     if (rc > this.lastAnimatedRoll && ps.lastRoll) {
       this.lastAnimatedRoll = rc;
+      sfx.play("dice");
       this.playDiceRoll(ps.lastRoll[0], ps.lastRoll[1]);
     }
     const me0 = state.players.find((p) => p.id === this.game.humanId)!;
@@ -670,6 +776,7 @@ export class HUD {
     const sc = ps.shakeCount ?? 0;
     if (sc > this.lastAnimatedShake) {
       this.lastAnimatedShake = sc;
+      sfx.play("shake");
       this.diceTimers.push(window.setTimeout(() => this.playShakeAnimation(), 30));
       // Big center-screen shake, visible to everyone (mirrors the dice roll).
       this.playShakeCenter(state);
@@ -679,12 +786,14 @@ export class HUD {
     const lc = ps.lastClearedSpecial;
     if (lc && lc.seq > this.lastAnimatedClear) {
       this.lastAnimatedClear = lc.seq;
+      sfx.play("medal");
       this.diceTimers.push(window.setTimeout(() => this.playClearedSpecial(me0, lc), 200));
     }
     // Q4: a 7-steal just happened — fly a card from the victim's row to the thief's.
     const stl = ps.lastSteal;
     if (stl && stl.seq > this.lastAnimatedSteal) {
       this.lastAnimatedSteal = stl.seq;
+      sfx.play("steal");
       this.diceTimers.push(window.setTimeout(() => this.playSteal(stl.fromId, stl.toId), 200));
     }
     // R8: a player-to-player trade just completed — fly a card each way between the
@@ -692,6 +801,7 @@ export class HUD {
     const tr = ps.lastTrade;
     if (tr && tr.seq > this.lastAnimatedTrade) {
       this.lastAnimatedTrade = tr.seq;
+      sfx.play("trade");
       this.diceTimers.push(window.setTimeout(() => this.playTrade(tr.fromId, tr.toId), 150));
     }
     // R10: any player bought a mothership upgrade — bloom the upgrade on their
@@ -699,8 +809,29 @@ export class HUD {
     const up = ps.lastUpgrade;
     if (up && up.seq > this.lastAnimatedUpgrade) {
       this.lastAnimatedUpgrade = up.seq;
+      sfx.play("build");
       this.diceTimers.push(window.setTimeout(() => this.playUpgrade(up.playerId, up.kind), 120));
     }
+    // V1: a new piece appeared on the map (anyone's colony / spaceport / ship /
+    // trade station) — soft landing thunk. Count-based so it needs no new state.
+    const pieceCount = state.buildings.length + state.ships.length + state.tradeStations.length;
+    if (this.prevPieceCount >= 0 && pieceCount > this.prevPieceCount) sfx.play("build");
+    this.prevPieceCount = pieceCount;
+
+    // V2: turn handoff — when the turn passes TO the human, sweep a center
+    // "Your turn!" splash + chime, and blink the tab title if backgrounded.
+    // Suppressed on the very first render (joining mid-state isn't a handoff).
+    const myTurnNow = this.game.isHumanTurn() && ps.phase !== "gameOver";
+    if (this.wasMyTurn !== null && myTurnNow && !this.wasMyTurn) {
+      this.showTurnSplash(state);
+      sfx.play("turn");
+    }
+    this.wasMyTurn = myTurnNow;
+    this.syncTitleAlert(myTurnNow);
+
+    // V3: event ticker — surface NEW log lines as auto-fading toasts so other
+    // players' actions are readable without opening the log panel.
+    this.syncTicker(state);
     // #8: when a player newly gains an outpost friendship marker (+2 VP), fly a
     // celebratory "+2 VP" token to their scoreboard row. Skip the very first
     // render so pre-existing markers don't all fire at once.
@@ -1239,6 +1370,7 @@ export class HUD {
     }
     if (this.gameOverShown) return;
     this.gameOverShown = true;
+    sfx.play("win");
 
     const winner = state.players.find((p) => p.id === ps.winner);
     const ranked = [...state.players].sort((a, b) => b.victoryPoints - a.victoryPoints);
@@ -1596,6 +1728,16 @@ export class HUD {
       this.rerender();
     });
     wrap.appendChild(recBtn);
+
+    const sndBtn = el(
+      `<button class="tool-btn ${sfx.muted ? "" : "active"}" title="Sound effects: ${sfx.muted ? "off (tap to enable)" : "on (tap to mute)"}">♪</button>`,
+    );
+    sndBtn.addEventListener("click", () => {
+      sfx.setMuted(!sfx.muted);
+      if (!sfx.muted) sfx.play("trade"); // tiny confirmation blip when enabling
+      this.rerender();
+    });
+    wrap.appendChild(sndBtn);
 
     // The reference popover hangs to the LEFT of the "i" button when open.
     if (this.showRef) {
@@ -2405,7 +2547,7 @@ export class HUD {
     const duelSig = `${enc?.duel?.subjectRoll ?? "x"}|${enc?.duel?.oppRoll ?? "x"}`;
     const duelChanged = enc?.awaiting === "duel" && duelSig !== this.shownDuelSig;
     if (enc && (isNew || confirmChanged || stepChanged || duelChanged)) {
-      if (isNew) { this.snapshotPlayers(state); this.encLogMark = state.log.length; }
+      if (isNew) { this.snapshotPlayers(state); this.encLogMark = state.log.length; sfx.play("encounter"); }
       this.shownEncounter = { cardId: enc.cardId, subjectId: enc.subjectId, awaiting: enc.awaiting };
       this.shownConfirmCount = confirmCount;
       this.shownDuelSig = duelSig;
