@@ -6,6 +6,7 @@ import {
   type SetupMember,
 } from "@starfarers/shared";
 import type { Seat } from "../game/store.js";
+import { shatter } from "./fx.js";
 
 const el = (html: string): HTMLElement => {
   const t = document.createElement("template");
@@ -20,6 +21,13 @@ const COLOR_NAME: Record<PlayerColor, string> = {
   black: "Black",
 };
 
+const COLOR_HEX: Record<PlayerColor, string> = {
+  yellow: "#ffd23f",
+  red: "#ff5d5d",
+  blue: "#4fa8ff",
+  black: "#8a8fa6",
+};
+
 const AI_NAMES = ["Nova", "Orion", "Vega", "Lyra", "Atlas", "Cygnus"];
 
 export interface LaunchOptions {
@@ -27,7 +35,12 @@ export interface LaunchOptions {
   config: Partial<GameConfig>;
 }
 
-/** Single-player setup screen. Calls onLaunch with seats + chosen config. */
+/**
+ * Single-player setup screen — an OPEN mission-briefing layout floating
+ * directly on the comet field (no boxed card): labelled rows with segmented
+ * controls, round color swatches, and a big rotating-glow LAUNCH GAME that
+ * shatters on click.
+ */
 export class NewGameMenu {
   private root: HTMLElement;
   private onLaunch: (opts: LaunchOptions) => void;
@@ -52,36 +65,62 @@ export class NewGameMenu {
   private render(): void {
     const screen = el(`
       <div class="screen">
-        <div class="card">
-          <h1 class="title">CATAN: STARFARERS</h1>
-          <p class="subtitle">Single player — command your fleet against rival civilizations.</p>
-          <label>Your name</label>
-          <input type="text" id="name" placeholder="Commander" maxlength="16" value="Commander" />
-          <label class="mt">Your color</label>
-          <div class="row" id="colors"></div>
-          <label class="mt">AI opponents</label>
-          <div class="row" id="opponents"></div>
-          <label class="mt">Map style</label>
-          <div class="row" id="mapstyle"></div>
-          <label class="mt">AI difficulty</label>
-          <div class="row" id="difficulty"></div>
-          <label class="mt">Turn timer</label>
-          <div class="row" id="turntimer"></div>
-          <button class="mt" id="launch">Launch game</button>
-          ${this.onBack ? `<button class="mt secondary" id="back">← Back</button>` : ""}
+        <div class="setup">
+          <div class="setup-head">
+            <div class="setup-kicker">Mission setup</div>
+            <h1 class="setup-title">PREPARE FOR LAUNCH</h1>
+          </div>
+
+          <div class="setup-row">
+            <div class="setup-label">Commander</div>
+            <div class="setup-ctrl setup-identity">
+              <input type="text" id="name" class="setup-name" placeholder="Commander" maxlength="16" value="Commander" />
+              <div class="swatches" id="colors"></div>
+            </div>
+          </div>
+
+          <div class="setup-row">
+            <div class="setup-label">Rivals</div>
+            <div class="setup-ctrl">
+              <div class="seg" id="opponents"></div>
+              <div class="seg" id="difficulty"></div>
+            </div>
+          </div>
+
+          <div class="setup-row">
+            <div class="setup-label">Galaxy</div>
+            <div class="setup-ctrl">
+              <div class="seg seg-wide" id="mapstyle"></div>
+            </div>
+          </div>
+
+          <div class="setup-row">
+            <div class="setup-label">Turn timer</div>
+            <div class="setup-ctrl">
+              <div class="seg" id="turntimer"></div>
+            </div>
+          </div>
+
+          <div class="setup-launch">
+            <div class="glow-wrap">
+              <div class="glow-layer glow-far"><i></i></div>
+              <div class="glow-layer glow-near"><i></i></div>
+              <button class="glow-btn" id="launch">LAUNCH GAME</button>
+            </div>
+            ${this.onBack ? `<button class="setup-back" id="back">← Back</button>` : ""}
+          </div>
         </div>
       </div>
     `);
 
+    // --- Color swatches: round player-colored orbs, the picked one ringed. ---
     const colorsRow = screen.querySelector("#colors")!;
     const paintColors = (): void => {
       colorsRow.replaceChildren();
       for (const c of PLAYER_COLORS) {
         const sel = c === this.color;
         const btn = el(
-          `<button class="color-pick ${sel ? "selected" : ""}">
-             <span class="dot ${c}"></span><span class="cn">${COLOR_NAME[c]}</span>
-           </button>`,
+          `<button class="swatch ${sel ? "selected" : ""}" title="${COLOR_NAME[c]}" style="--sw:${COLOR_HEX[c]}"></button>`,
         );
         btn.addEventListener("click", () => {
           this.color = c;
@@ -92,93 +131,105 @@ export class NewGameMenu {
     };
     paintColors();
 
-    const oppRow = screen.querySelector("#opponents")!;
-    const paintOpps = (): void => {
-      oppRow.replaceChildren();
-      for (const n of [0, 1, 2, 3]) {
-        const sel = n === this.opponents;
+    // --- Segmented controls (joined pill options, one lit). ---
+    const seg = (
+      host: Element,
+      options: { label: string; hint?: string; selected: boolean; pick: () => void }[],
+    ): void => {
+      host.replaceChildren();
+      for (const o of options) {
         const btn = el(
-          `<button class="secondary" style="flex:1;${sel ? "outline:2px solid var(--accent);" : ""}">${n === 0 ? "Solo" : n}</button>`,
+          `<button class="seg-opt ${o.selected ? "on" : ""}">${o.label}${o.hint ? `<span class="seg-hint">${o.hint}</span>` : ""}</button>`,
         );
-        btn.addEventListener("click", () => {
-          this.opponents = n;
-          paintOpps();
-        });
-        oppRow.appendChild(btn);
+        btn.addEventListener("click", o.pick);
+        host.appendChild(btn);
       }
     };
+
+    const oppRow = screen.querySelector("#opponents")!;
+    const paintOpps = (): void =>
+      seg(
+        oppRow,
+        [0, 1, 2, 3].map((n) => ({
+          label: n === 0 ? "Solo" : `${n} AI`,
+          selected: n === this.opponents,
+          pick: () => {
+            this.opponents = n;
+            paintOpps();
+          },
+        })),
+      );
     paintOpps();
 
-    const mapRow = screen.querySelector("#mapstyle")!;
-    const paintMap = (): void => {
-      mapRow.replaceChildren();
-      const opts: { fog: boolean; label: string; desc: string }[] = [
-        { fog: false, label: "Charted", desc: "Whole galaxy visible" },
-        { fog: true, label: "Uncharted", desc: "Fog — explore to reveal" },
-      ];
-      for (const o of opts) {
-        const sel = o.fog === this.fogMap;
-        const btn = el(
-          `<button class="secondary mapstyle-pick" style="flex:1;${sel ? "outline:2px solid var(--accent);" : ""}">
-             <b>${o.label}</b><span class="ms-desc">${o.desc}</span>
-           </button>`,
-        );
-        btn.addEventListener("click", () => {
-          this.fogMap = o.fog;
-          paintMap();
-        });
-        mapRow.appendChild(btn);
-      }
-    };
-    paintMap();
-
     const diffRow = screen.querySelector("#difficulty")!;
-    const paintDiff = (): void => {
-      diffRow.replaceChildren();
-      const opts: { v: AiDifficulty; label: string; desc: string }[] = [
-        { v: "easy", label: "Easy", desc: "Passive rivals" },
-        { v: "normal", label: "Normal", desc: "Steady expansion" },
-        { v: "hard", label: "Hard", desc: "Aggressive racers" },
-      ];
-      for (const o of opts) {
-        const sel = o.v === this.aiDifficulty;
-        const btn = el(
-          `<button class="secondary mapstyle-pick" style="flex:1;${sel ? "outline:2px solid var(--accent);" : ""}">
-             <b>${o.label}</b><span class="ms-desc">${o.desc}</span>
-           </button>`,
-        );
-        btn.addEventListener("click", () => {
-          this.aiDifficulty = o.v;
-          paintDiff();
-        });
-        diffRow.appendChild(btn);
-      }
-    };
+    const paintDiff = (): void =>
+      seg(
+        diffRow,
+        (
+          [
+            { v: "easy", label: "Easy" },
+            { v: "normal", label: "Normal" },
+            { v: "hard", label: "Hard" },
+          ] as { v: AiDifficulty; label: string }[]
+        ).map((o) => ({
+          label: o.label,
+          selected: o.v === this.aiDifficulty,
+          pick: () => {
+            this.aiDifficulty = o.v;
+            paintDiff();
+          },
+        })),
+      );
     paintDiff();
+
+    const mapRow = screen.querySelector("#mapstyle")!;
+    const paintMap = (): void =>
+      seg(mapRow, [
+        {
+          label: "Charted",
+          hint: "Whole galaxy visible",
+          selected: !this.fogMap,
+          pick: () => {
+            this.fogMap = false;
+            paintMap();
+          },
+        },
+        {
+          label: "Uncharted",
+          hint: "Fog — explore to reveal",
+          selected: this.fogMap,
+          pick: () => {
+            this.fogMap = true;
+            paintMap();
+          },
+        },
+      ]);
+    paintMap();
 
     // Turn timer: Off, or 15–180s in 5s steps (− / value / +). Off ↔ 15s.
     const timerRow = screen.querySelector("#turntimer")!;
     const paintTimer = (): void => {
       timerRow.replaceChildren();
-      const off = el(
-        `<button class="secondary" style="flex:0 0 auto;${this.turnSeconds === 0 ? "outline:2px solid var(--accent);" : ""}">Off</button>`,
-      );
+      const off = el(`<button class="seg-opt ${this.turnSeconds === 0 ? "on" : ""}">Off</button>`);
       off.addEventListener("click", () => { this.turnSeconds = 0; paintTimer(); });
-      const minus = el(`<button class="secondary" style="flex:0 0 auto" ${this.turnSeconds <= 15 ? "disabled" : ""}>−5s</button>`);
+      const minus = el(`<button class="seg-opt" ${this.turnSeconds <= 15 ? "disabled" : ""}>−5s</button>`);
       minus.addEventListener("click", () => { this.turnSeconds = Math.max(15, this.turnSeconds - 5); paintTimer(); });
-      const val = el(`<button class="secondary" style="flex:1" disabled>${this.turnSeconds === 0 ? "No limit" : this.turnSeconds + "s per turn"}</button>`);
-      const plus = el(`<button class="secondary" style="flex:0 0 auto" ${this.turnSeconds >= 180 ? "disabled" : ""}>+5s</button>`);
+      const val = el(`<button class="seg-opt seg-val" disabled>${this.turnSeconds === 0 ? "No limit" : this.turnSeconds + "s / turn"}</button>`);
+      const plus = el(`<button class="seg-opt" ${this.turnSeconds >= 180 ? "disabled" : ""}>+5s</button>`);
       plus.addEventListener("click", () => { this.turnSeconds = this.turnSeconds === 0 ? 15 : Math.min(180, this.turnSeconds + 5); paintTimer(); });
       timerRow.append(off, minus, val, plus);
     };
     paintTimer();
 
-    screen.querySelector("#launch")!.addEventListener("click", () => {
+    const launchBtn = screen.querySelector("#launch") as HTMLElement;
+    launchBtn.addEventListener("click", () => {
       const name = (screen.querySelector("#name") as HTMLInputElement).value.trim() || "Commander";
-      this.onLaunch({
+      const opts: LaunchOptions = {
         seats: this.buildSeats(name),
         config: { fogMap: this.fogMap, aiDifficulty: this.aiDifficulty, turnSeconds: this.turnSeconds },
-      });
+      };
+      // The button bursts into shards, then the warp takes us into the game.
+      shatter(launchBtn, "#39d8c8", () => this.onLaunch(opts));
     });
     screen.querySelector("#back")?.addEventListener("click", () => this.onBack?.());
 

@@ -1,6 +1,7 @@
 import "./style.css";
 import { Starfield } from "./render/starfield.js";
 import { CometField } from "./render/comets.js";
+import { shatter, warpTransition } from "./ui/fx.js";
 import { BoardRenderer } from "./render/board.js";
 import { NewGameMenu, type LaunchOptions } from "./ui/menu.js";
 import { HUD } from "./ui/hud.js";
@@ -35,21 +36,24 @@ async function boot(): Promise<void> {
   };
 
   const mountGame = (game: GameDriver): void => {
-    teardownGame?.();
-    dropMenuBg();
-    board.humanId = game.humanId;
-    (window as unknown as { __sf: unknown }).__sf = { game, board };
-    const unsubBoard = game.subscribe((state) => board.render(state));
-    app.replaceChildren(); // clear the menu; HUD mounts its own overlay
-    const hud = new HUD(app, game, board);
-    // The canvas resizes to the window asynchronously; recenter once layout has
-    // settled so the map is always centered regardless of window size.
-    requestAnimationFrame(() => board.recenter());
-    teardownGame = (): void => {
-      unsubBoard();
-      hud.destroy();
-      teardownGame = null;
-    };
+    // The warp flash covers the menu→board swap, then fades off the live game.
+    warpTransition(() => {
+      teardownGame?.();
+      dropMenuBg();
+      board.humanId = game.humanId;
+      (window as unknown as { __sf: unknown }).__sf = { game, board };
+      const unsubBoard = game.subscribe((state) => board.render(state));
+      app.replaceChildren(); // clear the menu; HUD mounts its own overlay
+      const hud = new HUD(app, game, board);
+      // The canvas resizes to the window asynchronously; recenter once layout
+      // has settled so the map is always centered regardless of window size.
+      requestAnimationFrame(() => board.recenter());
+      teardownGame = (): void => {
+        unsubBoard();
+        hud.destroy();
+        teardownGame = null;
+      };
+    });
   };
 
   const startSingle = (opts: LaunchOptions): void => {
@@ -92,13 +96,15 @@ async function boot(): Promise<void> {
         </div>
       </div>
     `);
-    screen.querySelector("#single")!.addEventListener("click", () => {
+    const single = screen.querySelector("#single") as HTMLElement;
+    single.addEventListener("click", () => {
       ensureMenuBg();
-      new NewGameMenu(app, startSingle, showLanding);
+      shatter(single, "#5b8cff", () => new NewGameMenu(app, startSingle, showLanding));
     });
-    screen.querySelector("#online")!.addEventListener("click", () => {
+    const online = screen.querySelector("#online") as HTMLElement;
+    online.addEventListener("click", () => {
       ensureMenuBg();
-      void startNetwork("online");
+      shatter(online, "#39d8c8", () => void startNetwork("online"));
     });
     ensureMenuBg();
     app.replaceChildren(screen);

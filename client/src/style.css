@@ -229,7 +229,7 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .screen button::after {
   content: none;
 }
-.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove) {
+.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove):not(.seg-opt):not(.swatch):not(.glow-btn):not(.setup-back) {
   background: linear-gradient(92deg, rgba(91, 140, 255, 0.28), rgba(57, 216, 200, 0.24));
   color: #eaf2ff;
   border: 1px solid rgba(120, 190, 255, 0.42);
@@ -237,7 +237,7 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   overflow: visible;
   backdrop-filter: blur(6px);
 }
-.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove):hover {
+.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove):not(.seg-opt):not(.swatch):not(.glow-btn):not(.setup-back):hover {
   border-color: rgba(98, 224, 205, 0.8);
   box-shadow: 0 0 22px rgba(57, 216, 200, 0.28);
 }
@@ -1844,3 +1844,183 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   border-color: rgba(255, 255, 255, 0.14);
 }
 .hand-trade-btn.off:hover { transform: none; box-shadow: none; filter: grayscale(0.7); }
+
+/* === Y1/Y2: menu redesign — open mission-setup layout, glow launch, page
+   transitions, warp into the game. === */
+
+/* Every menu screen rises in on mount. */
+.screen { animation: screenIn 0.5s cubic-bezier(0.22, 0.9, 0.32, 1) both; }
+@keyframes screenIn {
+  from { opacity: 0; transform: translateY(26px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Open setup layout: labelled rows floating straight on the comet field. */
+.setup {
+  position: relative; z-index: 1;
+  width: min(860px, 94vw); margin: auto; padding: 12px 8px;
+  display: flex; flex-direction: column; gap: 26px;
+}
+.setup-head { text-align: center; margin-bottom: 6px; }
+.setup-kicker {
+  font-size: 12px; font-weight: 700; letter-spacing: 0.28em; text-transform: uppercase;
+  color: #7e93c4;
+}
+.setup-title {
+  margin: 8px 0 0; font-size: clamp(26px, 5vw, 44px); font-weight: 900; letter-spacing: 0.08em;
+  background: linear-gradient(92deg, #5b8cff, #39d8c8, #52e8a0);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.setup-row {
+  display: grid; grid-template-columns: 150px 1fr; gap: 18px; align-items: center;
+  padding-bottom: 22px;
+  border-bottom: 1px solid rgba(120, 160, 255, 0.12);
+}
+.setup-label {
+  font-size: 12px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase;
+  color: #93a6d6; text-align: right;
+}
+.setup-ctrl { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.setup-identity { gap: 18px; }
+.setup input.setup-name {
+  flex: 1 1 200px; min-width: 160px; width: auto;
+  background: transparent; border: none; outline: none; border-radius: 0;
+  border-bottom: 2px solid rgba(120, 160, 255, 0.3);
+  color: var(--text); font-size: 19px; font-weight: 700; padding: 8px 2px;
+  transition: border-color 0.2s ease;
+}
+.setup input.setup-name:focus { border-color: #39d8c8; }
+
+/* Round color swatches: glowing orbs, the picked one ringed + lifted. */
+.swatches { display: flex; gap: 12px; }
+.swatch {
+  width: 34px; height: 34px; border-radius: 50%; padding: 0;
+  background: radial-gradient(circle at 32% 30%, color-mix(in srgb, var(--sw) 60%, #fff), var(--sw) 55%, color-mix(in srgb, var(--sw) 55%, #000));
+  border: 2px solid transparent;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--sw) 45%, transparent);
+  cursor: pointer; overflow: visible;
+  transition: transform 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.4), box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.swatch::before, .swatch::after { content: none; }
+.swatch:hover { transform: translateY(-2px) scale(1.08); }
+.swatch.selected {
+  border-color: #fff;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--sw) 80%, transparent), 0 0 4px #fff;
+  transform: scale(1.12);
+}
+
+/* Segmented control: joined pill, one option lit. */
+.seg {
+  display: inline-flex; border-radius: 999px; overflow: hidden;
+  border: 1px solid rgba(120, 160, 255, 0.22);
+  background: rgba(8, 11, 22, 0.55); backdrop-filter: blur(8px);
+}
+.seg-wide { flex: 1 1 320px; }
+.seg-wide .seg-opt { flex: 1; }
+.seg-opt {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  padding: 10px 18px; border: none; border-radius: 0;
+  background: transparent; color: #9fb0d8;
+  font-size: 13.5px; font-weight: 700; cursor: pointer;
+  overflow: visible;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.seg-opt::before, .seg-opt::after { content: none; }
+.seg-opt + .seg-opt { border-left: 1px solid rgba(120, 160, 255, 0.14); }
+.seg-opt:hover { color: #eaf2ff; transform: none; box-shadow: none; filter: none; }
+.seg-opt.on {
+  background: linear-gradient(92deg, rgba(91, 140, 255, 0.32), rgba(57, 216, 200, 0.28));
+  color: #fff;
+}
+.seg-opt:disabled { opacity: 0.55; cursor: default; }
+.seg-opt.seg-val { color: #eaf2ff; opacity: 1; min-width: 110px; }
+.seg-hint { font-size: 10px; font-weight: 600; color: #8094c2; }
+.seg-opt.on .seg-hint { color: rgba(255, 255, 255, 0.75); }
+
+/* The LAUNCH GAME glow button: rotating gradient glow layers (far blurred
+   halo + near rim) behind a dark surface — our palette take on the reference. */
+.setup-launch {
+  display: flex; flex-direction: column; align-items: center; gap: 14px; margin-top: 8px;
+}
+.glow-wrap { position: relative; display: inline-block; }
+.glow-layer {
+  position: absolute; overflow: hidden; pointer-events: none;
+  border-radius: 22px; opacity: 0.55;
+  transition: opacity 0.3s ease;
+}
+.glow-wrap:hover .glow-layer { opacity: 0.9; }
+.glow-far { inset: -10px; filter: blur(26px); }
+.glow-near { inset: -3px; filter: blur(5px); }
+.glow-layer i {
+  position: absolute; inset: -150%;
+  background: linear-gradient(90deg, #5b8cff 25%, transparent 45% 55%, #39d8c8 75%);
+  animation: glowSpin 8s cubic-bezier(0.56, 0.15, 0.28, 0.86) infinite, glowPulse 4s ease-in-out infinite;
+}
+@keyframes glowSpin {
+  0% { transform: rotate(10deg); }
+  50% { transform: rotate(190deg); }
+  100% { transform: rotate(370deg); }
+}
+@keyframes glowPulse {
+  0%, 100% { transform: scale(1) rotate(var(--r, 0deg)); }
+  50% { transform: scale(0.78) rotate(var(--r, 0deg)); }
+}
+.glow-layer i { animation: glowSpin 8s cubic-bezier(0.56, 0.15, 0.28, 0.86) infinite; }
+.glow-btn {
+  position: relative;
+  padding: 18px 56px; border-radius: 18px;
+  background: #0b0e18; color: #f2f7ff;
+  font-size: 17px; font-weight: 900; letter-spacing: 0.14em;
+  border: 1px solid rgba(140, 200, 255, 0.35);
+  overflow: visible; cursor: pointer;
+}
+.glow-btn::before, .glow-btn::after { content: none; }
+.glow-btn:hover { transform: translateY(-1px); box-shadow: 0 0 30px rgba(57, 216, 200, 0.25); }
+.setup-back {
+  background: transparent; border: none; color: #8094c2;
+  font-size: 13px; font-weight: 700; cursor: pointer; padding: 6px 14px;
+  overflow: visible;
+}
+.setup-back::before, .setup-back::after { content: none; }
+.setup-back:hover { color: #eaf2ff; transform: none; box-shadow: none; }
+
+@media (max-width: 640px) {
+  .setup-row { grid-template-columns: 1fr; gap: 8px; }
+  .setup-label { text-align: left; }
+}
+
+/* Warp transition into the game: a white-hot core flash + radial light rays
+   that zoom outward, covering the menu→board swap, then fading away. */
+.warp-overlay {
+  position: fixed; inset: 0; z-index: 500; pointer-events: none;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 50%, rgba(190, 225, 255, 0.5), rgba(6, 9, 18, 0.96) 62%);
+  animation: warpIn 0.32s ease-out both;
+  transition: opacity 0.55s ease;
+}
+.warp-overlay.out { opacity: 0; }
+@keyframes warpIn { from { opacity: 0; } to { opacity: 1; } }
+.warp-core {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 60px 30px rgba(255, 255, 255, 0.95), 0 0 160px 80px rgba(140, 190, 255, 0.6);
+  animation: warpCore 0.9s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+@keyframes warpCore {
+  0% { transform: scale(0.2); opacity: 0; }
+  35% { transform: scale(1.4); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.8; }
+}
+.warp-ray {
+  position: absolute; left: 50%; top: 50%;
+  width: 2.5px; height: var(--l, 30vh);
+  transform-origin: top center;
+  transform: rotate(var(--a, 0deg));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), transparent);
+  animation: warpRay 0.7s ease-out both;
+}
+@keyframes warpRay {
+  0% { transform: rotate(var(--a)) scaleY(0); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: rotate(var(--a)) scaleY(1.6); opacity: 0; }
+}
