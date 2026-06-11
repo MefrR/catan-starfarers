@@ -38,7 +38,9 @@
       "Bash(cd \"/c/Users/Admin/Downloads/Catan Starfarers\" && sed -i 's/grantTradeShip\\(state, subject, log\\)/grantTradeShip\\(subject, log\\)/g' shared/src/encounters.ts && grep -c \"grantTradeShip\\(subject, log\\)\" shared/src/encounters.ts)",
       "Bash(cd \"/c/Users/Admin/Downloads/Catan Starfarers\" && sed -n '/export function reserveDrawForVP/,/^}/p' shared/src/*.ts)",
       "Bash(git commit -q -m ' *)",
-      "Bash(xargs wc -l)"
+      "Bash(xargs wc -l)",
+      "Bash(grep -n \"^\\\\.[a-z-]*\\\\s*{,\\\\|background\" client/src/style.css)",
+      "Bash(awk '/^\\\\.[a-zA-Z0-9_, .:-]+ ?\\\\{/{sel=$0} /background:/{print NR\": \"sel}' client/src/style.css)"
     ]
   }
 }

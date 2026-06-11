@@ -109,6 +109,18 @@ input[type="text"] {
 }
 input[type="text"]:focus { border-color: var(--accent); }
 
+/* === Star buttons (the reference effect, faithfully): three layers —
+   1. the element's own background = the dark UNLIT interior;
+   2. ::after = a radial light blob that travels the button's border on an
+      offset-path (the "light going around");
+   3. ::before = the visible cover punched with star-shaped HOLES (an svg
+      mask) and inset by a thin rim — the traveling light shines through the
+      holes (stars appear only where the light is) and around the rim.
+   Button text paints above all three, so no markup changes are needed. === */
+:root {
+  /* Original star-holes tile: an opaque rect with dot holes (even-odd). */
+  --sb-holes: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 48'><path fill='white' fill-rule='evenodd' d='M0 0H140V48H0Z M10.4 9 a1.6 1.6 0 1 0 3.2 0 a1.6 1.6 0 1 0 -3.2 0Z M28.7 30 a1.3 1.3 0 1 0 2.6 0 a1.3 1.3 0 1 0 -2.6 0Z M42 14 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0Z M56.6 38 a1.4 1.4 0 1 0 2.8 0 a1.4 1.4 0 1 0 -2.8 0Z M68.5 8 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0Z M82.2 26 a1.8 1.8 0 1 0 3.6 0 a1.8 1.8 0 1 0 -3.6 0Z M96.7 12 a1.3 1.3 0 1 0 2.6 0 a1.3 1.3 0 1 0 -2.6 0Z M106.4 36 a1.6 1.6 0 1 0 3.2 0 a1.6 1.6 0 1 0 -3.2 0Z M120 18 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0Z M130.7 40 a1.3 1.3 0 1 0 2.6 0 a1.3 1.3 0 1 0 -2.6 0Z M18.5 42 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0Z M48.8 26 a1.2 1.2 0 1 0 2.4 0 a1.2 1.2 0 1 0 -2.4 0Z M88.8 44 a1.2 1.2 0 1 0 2.4 0 a1.2 1.2 0 1 0 -2.4 0Z M4.8 24 a1.2 1.2 0 1 0 2.4 0 a1.2 1.2 0 1 0 -2.4 0Z M116.6 6 a1.4 1.4 0 1 0 2.8 0 a1.4 1.4 0 1 0 -2.8 0Z M65 22 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0Z'/></svg>");
+}
 button {
   cursor: pointer;
   border: none;
@@ -117,12 +129,53 @@ button {
   font-size: 15px;
   font-weight: 600;
   color: #05060f;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  /* The unlit interior behind the cover — what the star holes reveal when
+     the light is elsewhere (near-black, so stars stay invisible). */
+  background: #0a0f1f;
+  --sb-cover: linear-gradient(90deg, var(--accent), var(--accent-2));
+  --sb-lightcolor: #f4f9ff;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   /* Springy micro-interaction: a soft lift on hover, a crisp press on tap. */
   transition:
     transform 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.4),
     filter 0.16s ease,
     box-shadow 0.16s ease;
+}
+/* Layer 2: the traveling light (under the cover). */
+@supports (offset-path: border-box) {
+  button::after {
+    content: "";
+    position: absolute;
+    z-index: -2;
+    width: var(--sb-light, 110px);
+    aspect-ratio: 1;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, var(--sb-lightcolor), transparent 62%);
+    offset-path: border-box;
+    offset-rotate: 0deg;
+    animation: sbTravel var(--sb-dur, 3s) linear infinite;
+  }
+}
+/* Layer 3: the star-holed cover, inset to leave a glowing rim. */
+button::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 1.5px;
+  border-radius: inherit;
+  background: var(--sb-cover);
+  -webkit-mask-image: var(--sb-holes);
+  -webkit-mask-size: 140px 48px;
+  -webkit-mask-repeat: repeat;
+  mask-image: var(--sb-holes);
+  mask-size: 140px 48px;
+  mask-repeat: repeat;
+}
+@keyframes sbTravel {
+  from { offset-distance: 0%; }
+  to { offset-distance: 100%; }
 }
 button:hover {
   filter: brightness(1.08);
@@ -131,9 +184,36 @@ button:hover {
 }
 button:active { transform: translateY(1px) scale(0.985); box-shadow: none; transition-duration: 0.05s; }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-button.secondary { background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid var(--panel-border); }
+button.secondary {
+  --sb-cover: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+  --sb-lightcolor: #b9d6ff;
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+}
 button.secondary:hover { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); border-color: rgba(160, 195, 255, 0.45); }
 button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+button:disabled::after { content: none; } /* no traveling light on dead buttons */
+/* Small/custom-styled controls keep their own look — no star layers. */
+.exit-menu::before, .exit-menu::after,
+.tray-close::before, .tray-close::after,
+.ai-remove::before, .ai-remove::after,
+.mp-yes::before, .mp-yes::after,
+.mp-no::before, .mp-no::after,
+.mp-ship::before, .mp-ship::after,
+.color-pick::before, .color-pick::after,
+.mapstyle-pick::before, .mapstyle-pick::after,
+.friend-card::before, .friend-card::after,
+.chat-send::before, .chat-send::after,
+.chat-toggle::before, .chat-toggle::after,
+.chat-close::before, .chat-close::after,
+.step::before, .step::after {
+  content: none;
+}
+.exit-menu, .tray-close, .ai-remove, .mp-yes, .mp-no, .mp-ship,
+.color-pick, .mapstyle-pick, .friend-card, .chat-send, .chat-toggle,
+.chat-close, .step {
+  overflow: visible;
+}
 /* Wrapper around a disabled "Establish Colony" button: a disabled <button>
    swallows pointer events, so the wrapper stays clickable to show the reason. */
 .estab-blocked { display: inline-flex; cursor: help; }
@@ -605,7 +685,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow
   pointer-events: auto;
   width: 38px; height: 38px; padding: 0; border-radius: 11px;
   font-size: 18px; line-height: 1; cursor: pointer;
-  background: rgba(12, 16, 28, 0.78); color: #cdd6ea;
+  background: #070b18; color: #cdd6ea;
+  --sb-cover: rgba(12, 16, 28, 0.82);
+  --sb-lightcolor: #b9d6ff;
+  --sb-light: 52px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
   display: flex; align-items: center; justify-content: center;
@@ -613,7 +696,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow
 }
 .hud-tools .tool-btn:hover { border-color: var(--accent); color: #fff; }
 .hud-tools .tool-btn.active {
-  background: color-mix(in srgb, var(--accent) 32%, rgba(12, 16, 28, 0.85));
+  --sb-cover: color-mix(in srgb, var(--accent) 32%, rgba(12, 16, 28, 0.88));
   border-color: var(--accent); color: #fff;
 }
 .hud-tools .ref-pop {
@@ -635,13 +718,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow
 .ms-stat-info { cursor: help; }
 
 /* === Build dock: six always-visible square tiles (icon-first, like the
-   resource cards). Active tiles carry a traveling light along the border —
-   a vanilla-CSS take on the "star button" (conic sweep masked to the rim). === */
-@property --bd-angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
-}
+   resource cards). They use the shared star-button layers: a light blob
+   travels the tile's border and shines through the star holes in the cover —
+   stars are visible only where the light is. Locked tiles have no light. === */
 .build-dock {
   display: flex; gap: 7px; justify-content: center; flex-wrap: nowrap;
   margin-top: 2px;
@@ -649,38 +728,18 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow
   flex-basis: 100%;
 }
 .bd-tile {
-  position: relative; isolation: isolate;
   width: clamp(52px, 11vw, 66px); height: clamp(52px, 11vw, 66px);
   flex: 0 0 auto; padding: 0; border-radius: 14px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   color: var(--text);
-  background:
-    /* faint star-dot field inside each tile */
-    radial-gradient(circle 1px at 22% 28%, rgba(255,255,255,0.5) 1px, transparent 1.6px),
-    radial-gradient(circle 1px at 70% 18%, rgba(255,255,255,0.35) 1px, transparent 1.6px),
-    radial-gradient(circle 1px at 82% 64%, rgba(255,255,255,0.4) 1px, transparent 1.6px),
-    radial-gradient(circle 1px at 34% 78%, rgba(255,255,255,0.3) 1px, transparent 1.6px),
-    linear-gradient(165deg, rgba(26, 36, 64, 0.92), rgba(10, 14, 28, 0.92));
+  background: #070b18; /* unlit interior behind the star holes */
+  --sb-cover: linear-gradient(165deg, rgba(26, 36, 64, 0.96), rgba(10, 14, 28, 0.96));
+  --sb-lightcolor: #dceaff;
+  --sb-light: 72px; /* smaller blob for the small square */
   border: 1px solid rgba(120, 160, 255, 0.22);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
   transition: transform 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.4), border-color 0.2s ease, box-shadow 0.2s ease, filter 0.25s ease;
 }
-/* Traveling border light on buildable tiles (the star-button sweep). */
-.bd-tile.ok::before {
-  content: ""; position: absolute; inset: -1px; z-index: -1; border-radius: inherit;
-  padding: 1.6px;
-  background: conic-gradient(
-    from var(--bd-angle),
-    transparent 0deg 290deg,
-    rgba(191, 224, 255, 0.95) 332deg,
-    transparent 360deg
-  );
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: bdSweep 3s linear infinite;
-}
-@keyframes bdSweep { to { --bd-angle: 360deg; } }
 .bd-tile.ok {
   cursor: pointer;
   border-color: rgba(140, 185, 255, 0.55);
@@ -691,17 +750,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow
 .bd-tile.locked {
   cursor: help; filter: grayscale(0.75) brightness(0.75); opacity: 0.75;
 }
+.bd-tile.locked::after { content: none; } /* no traveling light when locked */
 .bd-tile.locked:hover { filter: grayscale(0.35) brightness(0.9); opacity: 0.95; transform: none; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); }
-/* Free encounter trade ship: golden rim + golden sweep so it begs to be spent. */
-.bd-tile.free.ok { border-color: rgba(255, 210, 63, 0.65); }
-.bd-tile.free.ok::before {
-  background: conic-gradient(
-    from var(--bd-angle),
-    transparent 0deg 290deg,
-    rgba(255, 220, 110, 0.95) 332deg,
-    transparent 360deg
-  );
-}
+/* Free encounter trade ship: golden rim + golden light so it begs to be spent. */
+.bd-tile.free.ok { border-color: rgba(255, 210, 63, 0.65); --sb-lightcolor: #ffe08a; }
 .bd-ico { display: inline-flex; line-height: 0; }
 .bd-ico svg { width: clamp(22px, 5vw, 28px); height: clamp(22px, 5vw, 28px); }
 .bd-name {
@@ -710,10 +762,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow
 }
 .bd-tile.ok .bd-name { color: var(--text); }
 .bd-left {
-  position: absolute; top: -5px; right: -5px;
-  min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px;
+  /* Inside the tile (buttons clip overflow for the star layers). */
+  position: absolute; top: 3px; right: 3px;
+  min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 900; color: #07101f;
+  font-size: 9.5px; font-weight: 900; color: #07101f;
   background: linear-gradient(160deg, var(--accent), #8cc0ff);
   border: 1px solid rgba(8, 12, 24, 0.8);
 }
@@ -1159,7 +1212,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow
 .go-newgame {
   margin-top: 20px; width: 100%; padding: 11px; border-radius: 12px; font-weight: 800;
   cursor: pointer; border: none; color: #07101f;
-  background: linear-gradient(160deg, var(--accent), #6fa8ff);
+  background: #0a0f1f;
+  --sb-cover: linear-gradient(160deg, var(--accent), #6fa8ff);
 }
 .go-newgame:hover { filter: brightness(1.08); }
 /* R18: multiplayer Play again / Leave footer. */
@@ -1686,9 +1740,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow
   width: 46px; align-self: stretch; padding: 6px 4px;
   border-radius: 10px;
   color: var(--text);
-  background: linear-gradient(160deg, rgba(111, 179, 255, 0.18), rgba(0, 0, 0, 0.45));
+  background: #070b18;
+  --sb-cover: linear-gradient(160deg, rgba(111, 179, 255, 0.22), rgba(8, 12, 24, 0.9));
+  --sb-lightcolor: #b9d6ff;
+  --sb-light: 60px;
   border: 1px solid rgba(140, 185, 255, 0.5);
 }
+.hand-trade-btn.off::after { content: none; } /* no light while trading is closed */
 .hand-trade-btn .ht-ico { font-size: 17px; line-height: 1; font-weight: 900; color: var(--accent); }
 .hand-trade-btn .ht-lbl {
   font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.07em;
