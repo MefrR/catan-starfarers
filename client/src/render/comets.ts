@@ -1,67 +1,79 @@
 /**
- * Menu backdrop: a black void crossed by falling neon comet streaks (blue /
- * teal / green / violet) — thin diagonal light trails with bright heads,
- * drifting at different speeds. Rendered by a small ORIGINAL WebGL2 fragment
- * shader (no three.js, no copied shader code).
+ * Menu backdrop: falling neon comet streaks over a black void.
+ *
+ * The fragment shader is used VERBATIM from the React/three.js snippet the
+ * project owner supplied and asked to use exactly (the "AnoAI" component) —
+ * only the plumbing around it (a minimal raw-WebGL1 quad renderer with our
+ * menu lifecycle) is ours. Sized at CSS pixels (dpr 1), like the original.
  *
  * Lifecycle: the canvas is appended to <body> (above the board canvas, below
  * the #app screens) and persists across ALL menu screens — landing, the
  * single-player setup, and the multiplayer lobby — until destroy() is called
  * when a game mounts. A safety check also stops the loop if the canvas ever
  * leaves the DOM.
- *
- * Renders at half resolution — it's a soft glow background; the cost is tiny.
  */
 
 const FRAG = `#version 300 es
 precision highp float;
-out vec4 O;
-uniform vec2 R;
-uniform float T;
+out vec4 fragColor;
 
-float h1(float n) { return fract(sin(n * 127.1) * 43758.5453); }
+uniform float iTime;
+uniform vec2 iResolution;
+
+#define NUM_OCTAVES 3
+
+float rand(vec2 n) {
+  return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453);
+}
+
+float noise(vec2 p) {
+  vec2 ip = floor(p);
+  vec2 u = fract(p);
+  u = u*u*(3.0-2.0*u);
+
+  float res = mix(
+    mix(rand(ip), rand(ip + vec2(1.0, 0.0)), u.x),
+    mix(rand(ip + vec2(0.0, 1.0)), rand(ip + vec2(1.0, 1.0)), u.x), u.y);
+  return res * res;
+}
+
+float fbm(vec2 x) {
+  float v = 0.0;
+  float a = 0.3;
+  vec2 shift = vec2(100);
+  mat2 rot = mat2(cos(0.5), sin(0.5), -sin(0.5), cos(0.5));
+  for (int i = 0; i < NUM_OCTAVES; ++i) {
+    v += a * noise(x);
+    x = rot * x * 2.0 + shift;
+    a *= 0.4;
+  }
+  return v;
+}
 
 void main() {
-  vec2 uv = (gl_FragCoord.xy - 0.5 * R) / R.y;
-  // All comets travel along one shared diagonal (down-and-leftward streaks,
-  // like a meteor shower crossing the screen).
-  vec2 dir = normalize(vec2(-0.78, -0.62));
-  vec2 ort = vec2(-dir.y, dir.x);
-  float along = dot(uv, dir);
-  float ortho = dot(uv, ort);
+  vec2 shake = vec2(sin(iTime * 1.2) * 0.005, cos(iTime * 2.1) * 0.005);
+  vec2 p = ((gl_FragCoord.xy + shake * iResolution.xy) - iResolution.xy * 0.5) / iResolution.y * mat2(6.0, -4.0, 4.0, 6.0);
+  vec2 v;
+  vec4 o = vec4(0.0);
 
-  vec3 col = vec3(0.004, 0.005, 0.011); // near-black space base
+  float f = 2.0 + fbm(p + vec2(iTime * 5.0, 0.0)) * 0.5;
 
-  const float N = 26.0;
-  for (float i = 0.0; i < N; i++) {
-    float seed = i + 1.0;
-    // Each comet keeps its own lane, speed, cycle length and personality.
-    float lane = (h1(seed * 1.31) - 0.5) * 2.1;
-    float speed = 0.10 + h1(seed * 2.71) * 0.22;
-    float period = 2.4 + h1(seed * 3.93) * 1.8;
-    float head = mod(T * speed + h1(seed * 5.17) * period, period) - period * 0.5;
-    float dx = along - head;       // <0 behind the head (the tail side)
-    float dy = ortho - lane;
-
-    // Tail: exponential falloff behind the head; razor-thin across the path.
-    float tailLen = 4.5 + h1(seed * 7.73) * 6.0;
-    float tail = dx < 0.0 ? exp(dx * tailLen) : 0.0;
-    float thin = exp(-dy * dy * 9000.0);
-    // Head: a small hot point with a tight halo (fine streaks, not orbs).
-    float d2 = dx * dx + dy * dy;
-    float headGlow = exp(-d2 * 16000.0) * 1.5 + exp(-d2 * 1400.0) * 0.16;
-
-    // Palette: deep blue -> teal/green, with the occasional violet drifter.
-    vec3 tint = mix(vec3(0.22, 0.42, 1.0), vec3(0.2, 0.95, 0.62), h1(seed * 9.37));
-    tint = mix(tint, vec3(0.58, 0.38, 1.0), step(0.86, h1(seed * 11.13)) * 0.85);
-
-    float size = 0.35 + h1(seed * 13.7) * 0.85; // faint far comets, bold near ones
-    col += (tail * thin * 0.85 + headGlow) * tint * size;
+  for (float i = 0.0; i < 35.0; i++) {
+    v = p + cos(i * i + (iTime + p.x * 0.08) * 0.025 + i * vec2(13.0, 11.0)) * 3.5 + vec2(sin(iTime * 3.0 + i) * 0.003, cos(iTime * 3.5 - i) * 0.003);
+    float tailNoise = fbm(v + vec2(iTime * 0.5, i)) * 0.3 * (1.0 - (i / 35.0));
+    vec4 auroraColors = vec4(
+      0.1 + 0.3 * sin(i * 0.2 + iTime * 0.4),
+      0.3 + 0.5 * cos(i * 0.3 + iTime * 0.5),
+      0.7 + 0.3 * sin(i * 0.4 + iTime * 0.3),
+      1.0
+    );
+    vec4 currentContribution = auroraColors * exp(sin(i * i + iTime * 0.8)) / length(max(v, vec2(v.x * f * 0.015, v.y * 1.5)));
+    float thinnessFactor = smoothstep(0.0, 1.0, i / 35.0) * 0.6;
+    o += currentContribution * (1.0 + tailNoise * 0.8) * thinnessFactor;
   }
 
-  // Gentle vignette keeps the center calm for the menu card.
-  col *= 1.0 - 0.3 * dot(uv, uv);
-  O = vec4(col, 1.0);
+  o = tanh(pow(o / 100.0, vec4(1.6)));
+  fragColor = o * 1.5;
 }`;
 
 const VERT = `#version 300 es
@@ -121,15 +133,15 @@ export class CometField {
     const pos = gl.getAttribLocation(prog, "position");
     gl.enableVertexAttribArray(pos);
     gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
-    this.uTime = gl.getUniformLocation(prog, "T");
-    this.uRes = gl.getUniformLocation(prog, "R");
+    this.uTime = gl.getUniformLocation(prog, "iTime");
+    this.uRes = gl.getUniformLocation(prog, "iResolution");
     return true;
   }
 
   private resize = (): void => {
-    const s = 0.5 * Math.min(window.devicePixelRatio, 2);
-    this.canvas.width = Math.max(2, Math.floor(window.innerWidth * s));
-    this.canvas.height = Math.max(2, Math.floor(window.innerHeight * s));
+    // CSS-pixel sizing (dpr 1), matching the original component's setSize.
+    this.canvas.width = Math.max(2, window.innerWidth);
+    this.canvas.height = Math.max(2, window.innerHeight);
     this.gl?.viewport(0, 0, this.canvas.width, this.canvas.height);
   };
 
