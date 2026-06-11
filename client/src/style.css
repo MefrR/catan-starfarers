@@ -221,23 +221,41 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .chat-close, .step {
   overflow: visible;
 }
-/* Menu / lobby screens: NO star effect (the menu gets its own design pass).
-   Restore the original gradient primary / glass secondary look there. The
-   pickers (.color-pick / .mapstyle-pick / .ai-remove) keep their own styles. */
+/* Menu / lobby screens: NO star-button layers — the comet field IS the show.
+   Buttons are minimal neon pills in the comet palette (blue→teal): primary
+   carries a faint gradient fill, secondary is a ghost outline. The pickers
+   (.color-pick / .mapstyle-pick / .ai-remove) keep their own styles. */
 .screen button::before,
 .screen button::after {
   content: none;
 }
 .screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove) {
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
-  color: #05060f;
-  border: none;
+  background: linear-gradient(92deg, rgba(91, 140, 255, 0.28), rgba(57, 216, 200, 0.24));
+  color: #eaf2ff;
+  border: 1px solid rgba(120, 190, 255, 0.42);
+  border-radius: 999px;
   overflow: visible;
+  backdrop-filter: blur(6px);
+}
+.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove):hover {
+  border-color: rgba(98, 224, 205, 0.8);
+  box-shadow: 0 0 22px rgba(57, 216, 200, 0.28);
 }
 .screen button.secondary:not(.mapstyle-pick) {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text);
-  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(222, 232, 252, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+.screen button.secondary:not(.mapstyle-pick):hover {
+  border-color: rgba(120, 190, 255, 0.5);
+  box-shadow: 0 0 18px rgba(91, 140, 255, 0.2);
+}
+/* Setup / lobby cards: near-black glass so the comets glow through the edges. */
+.screen .card {
+  background: rgba(4, 6, 13, 0.72);
+  border: 1px solid rgba(120, 170, 255, 0.16);
+  border-radius: 22px;
+  backdrop-filter: blur(18px);
 }
 /* Wrapper around a disabled "Establish Colony" button: a disabled <button>
    swallows pointer events, so the wrapper stays clickable to show the reason. */
@@ -1728,43 +1746,101 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   to { opacity: 1; transform: translateX(0) scale(1); }
 }
 
-/* === W4: aurora shader canvas behind the main-menu card. === */
-.menu-aurora {
-  position: absolute; inset: 0; z-index: 0;
-  width: 100%; height: 100%;
+/* === Menu backdrop: the full-screen comet-field shader behind every menu
+   screen (landing / setup / lobby). Lives on <body> after the board canvas,
+   so it covers the board while the menu is up and is destroyed in-game. === */
+.menu-backdrop {
+  position: fixed; inset: 0; z-index: 0;
+  width: 100vw; height: 100vh;
   pointer-events: none;
+  background: #020308;
 }
-.screen .card { position: relative; z-index: 1; }
+.screen .card, .screen .hero { position: relative; z-index: 1; }
 
-/* === W5: glowing star streaks flying right behind the center shaker. === */
+/* === Landing hero: title + pills floating straight on the comet field. === */
+.hero {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  margin: auto; padding: 24px; max-width: 760px;
+}
+.hero-badge {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+  color: #9fb6e8; padding: 8px 18px; border-radius: 999px;
+  background: rgba(90, 140, 255, 0.08);
+  border: 1px solid rgba(120, 170, 255, 0.22);
+  backdrop-filter: blur(6px);
+  animation: heroDown 0.8s ease-out both;
+}
+.hero-title {
+  display: flex; flex-direction: column; gap: 0; line-height: 1.04;
+  margin: 26px 0 0; font-weight: 900; letter-spacing: 0.06em;
+  font-size: clamp(40px, 9vw, 84px);
+}
+.hero-title span {
+  background: linear-gradient(92deg, #5b8cff, #39d8c8);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: heroUp 0.8s ease-out 0.15s both;
+}
+.hero-title .hero-title-2 {
+  background: linear-gradient(92deg, #39d8c8, #52e8a0);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation-delay: 0.3s;
+}
+.hero-sub {
+  margin: 18px 0 0; font-size: clamp(14px, 2.2vw, 18px); font-weight: 300;
+  color: rgba(214, 226, 252, 0.82); line-height: 1.55; max-width: 520px;
+  animation: heroUp 0.8s ease-out 0.45s both;
+}
+.hero-actions {
+  display: flex; gap: 14px; margin-top: 34px; flex-wrap: wrap; justify-content: center;
+  animation: heroUp 0.8s ease-out 0.6s both;
+}
+.hero-actions button { min-width: 180px; padding: 14px 26px; font-size: 16px; }
+@keyframes heroDown { from { opacity: 0; transform: translateY(-18px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes heroUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+
+/* === W5: racing light streaks behind the center shaker — long white-hot
+   trails speeding rightward at different paces, continuously looping and
+   overtaking one another (the referenced hero-streaks look, sans clouds). === */
 .shake-stars {
   position: absolute; inset: 0; overflow: hidden; pointer-events: none;
 }
 .ss-star {
-  position: absolute; left: -12vw;
-  width: 7px; height: 7px; border-radius: 50%;
+  position: absolute; left: -45vw;
+  width: 9px; height: 9px; border-radius: 50%;
   background: #fff;
   box-shadow:
-    0 0 6px 2px rgba(255, 255, 255, 0.9),
-    0 0 18px 6px rgba(180, 215, 255, 0.45);
+    0 0 8px 3px rgba(255, 255, 255, 0.95),
+    0 0 26px 10px rgba(190, 220, 255, 0.5),
+    0 0 60px 22px rgba(140, 185, 255, 0.18);
   opacity: 0;
   transform: scale(var(--ss, 1));
   animation-name: ssFly;
-  animation-timing-function: cubic-bezier(0.3, 0, 0.7, 1);
+  /* Linear pace: the racing feel comes from streaks at different speeds
+     passing each other, not from each one easing. */
+  animation-timing-function: linear;
   animation-iteration-count: infinite;
+  will-change: transform, opacity;
 }
-/* The streak tail: a horizontal light trail behind the head. */
+/* The long tapering trail behind the head. */
 .ss-star::before {
-  content: ""; position: absolute; right: 3px; top: 50%;
-  width: 16vw; height: 2px; transform: translateY(-50%);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85));
-  border-radius: 2px;
+  content: ""; position: absolute; right: 4px; top: 50%;
+  width: 34vw; height: 3px; transform: translateY(-50%);
+  background: linear-gradient(90deg, transparent, rgba(214, 232, 255, 0.55) 60%, rgba(255, 255, 255, 0.95));
+  border-radius: 3px;
+  filter: blur(0.4px);
+}
+/* A wider, softer halo trail under the bright core. */
+.ss-star::after {
+  content: ""; position: absolute; right: 0; top: 50%;
+  width: 26vw; height: 12px; transform: translateY(-50%);
+  background: linear-gradient(90deg, transparent, rgba(170, 205, 255, 0.16));
+  border-radius: 8px;
 }
 @keyframes ssFly {
   0% { opacity: 0; transform: translateX(0) scale(var(--ss, 1)); }
-  12% { opacity: 0.95; }
-  85% { opacity: 0.9; }
-  100% { opacity: 0; transform: translateX(124vw) scale(var(--ss, 1)); }
+  8% { opacity: 1; }
+  92% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(190vw) scale(var(--ss, 1)); }
 }
 
 /* Small labeled Trade button beside the hand cards — makes the click-a-card

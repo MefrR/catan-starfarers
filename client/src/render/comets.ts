@@ -1,14 +1,16 @@
 /**
- * Aurora backdrop for the main-menu screens: drifting nebula ribbons rendered
- * by a small ORIGINAL WebGL2 fragment shader (layered value-noise fbm bands in
- * the game's blue→violet→teal palette) over a sparse twinkling starfield.
+ * Menu backdrop: a black void crossed by falling neon comet streaks (blue /
+ * teal / green / violet) — thin diagonal light trails with bright heads,
+ * drifting at different speeds. Rendered by a small ORIGINAL WebGL2 fragment
+ * shader (no three.js, no copied shader code).
  *
- * Self-managing: mount() inserts a canvas behind the screen's content; the
- * render loop stops itself the moment the canvas leaves the DOM (the menu
- * navigated away), so callers never need to track teardown.
+ * Lifecycle: the canvas is appended to <body> (above the board canvas, below
+ * the #app screens) and persists across ALL menu screens — landing, the
+ * single-player setup, and the multiplayer lobby — until destroy() is called
+ * when a game mounts. A safety check also stops the loop if the canvas ever
+ * leaves the DOM.
  *
- * Renders at half resolution — it's a soft, blurry background by nature, so
- * the GPU cost stays negligible next to the game board.
+ * Renders at half resolution — it's a soft glow background; the cost is tiny.
  */
 
 const FRAG = `#version 300 es
@@ -17,49 +19,48 @@ out vec4 O;
 uniform vec2 R;
 uniform float T;
 
-float hash(vec2 p) {
-  return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453);
-}
-float vnoise(vec2 p) {
-  vec2 i = floor(p), f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(
-    mix(hash(i), hash(i + vec2(1, 0)), f.x),
-    mix(hash(i + vec2(0, 1)), hash(i + 1.0), f.x),
-    f.y
-  );
-}
-float fbm(vec2 p) {
-  float a = 0.5, s = 0.0;
-  for (int i = 0; i < 4; i++) {
-    s += a * vnoise(p);
-    p = p * 2.07 + 11.3;
-    a *= 0.5;
-  }
-  return s;
-}
+float h1(float n) { return fract(sin(n * 127.1) * 43758.5453); }
 
 void main() {
   vec2 uv = (gl_FragCoord.xy - 0.5 * R) / R.y;
-  vec3 col = vec3(0.012, 0.016, 0.05); // deep-space base
+  // All comets travel along one shared diagonal (down-and-leftward streaks,
+  // like a meteor shower crossing the screen).
+  vec2 dir = normalize(vec2(-0.78, -0.62));
+  vec2 ort = vec2(-dir.y, dir.x);
+  float along = dot(uv, dir);
+  float ortho = dot(uv, ort);
 
-  // Three aurora ribbons at different heights, drifting at different speeds.
-  for (float i = 0.0; i < 3.0; i++) {
-    float wave = fbm(vec2(uv.x * 1.4 + T * (0.05 + 0.02 * i), i * 7.0));
-    float yy = uv.y + 0.28 - 0.24 * i + 0.2 * wave;
-    float band = exp(-abs(yy) * (7.0 - 1.5 * i));
-    vec3 tint = mix(vec3(0.18, 0.45, 0.95), vec3(0.62, 0.30, 0.95), i * 0.5);
-    tint = mix(tint, vec3(0.20, 0.85, 0.75), 0.25 * (0.5 + 0.5 * sin(T * 0.1 + i * 2.0)));
-    col += band * tint * (0.30 + 0.18 * fbm(uv * 3.0 + vec2(T * 0.08, i)));
+  vec3 col = vec3(0.004, 0.005, 0.011); // near-black space base
+
+  const float N = 26.0;
+  for (float i = 0.0; i < N; i++) {
+    float seed = i + 1.0;
+    // Each comet keeps its own lane, speed, cycle length and personality.
+    float lane = (h1(seed * 1.31) - 0.5) * 2.1;
+    float speed = 0.10 + h1(seed * 2.71) * 0.22;
+    float period = 2.4 + h1(seed * 3.93) * 1.8;
+    float head = mod(T * speed + h1(seed * 5.17) * period, period) - period * 0.5;
+    float dx = along - head;       // <0 behind the head (the tail side)
+    float dy = ortho - lane;
+
+    // Tail: exponential falloff behind the head; razor-thin across the path.
+    float tailLen = 4.5 + h1(seed * 7.73) * 6.0;
+    float tail = dx < 0.0 ? exp(dx * tailLen) : 0.0;
+    float thin = exp(-dy * dy * 9000.0);
+    // Head: a small hot point with a tight halo (fine streaks, not orbs).
+    float d2 = dx * dx + dy * dy;
+    float headGlow = exp(-d2 * 16000.0) * 1.5 + exp(-d2 * 1400.0) * 0.16;
+
+    // Palette: deep blue -> teal/green, with the occasional violet drifter.
+    vec3 tint = mix(vec3(0.22, 0.42, 1.0), vec3(0.2, 0.95, 0.62), h1(seed * 9.37));
+    tint = mix(tint, vec3(0.58, 0.38, 1.0), step(0.86, h1(seed * 11.13)) * 0.85);
+
+    float size = 0.35 + h1(seed * 13.7) * 0.85; // faint far comets, bold near ones
+    col += (tail * thin * 0.85 + headGlow) * tint * size;
   }
 
-  // Sparse twinkling stars.
-  vec2 cell = floor(gl_FragCoord.xy / 3.0);
-  float star = step(0.9985, hash(cell));
-  col += star * vec3(0.9) * (0.5 + 0.5 * sin(T * 2.0 + hash(cell) * 60.0));
-
-  // Vignette so the center (where the menu card sits) stays calm.
-  col *= 1.0 - 0.45 * dot(uv, uv);
+  // Gentle vignette keeps the center calm for the menu card.
+  col *= 1.0 - 0.3 * dot(uv, uv);
   O = vec4(col, 1.0);
 }`;
 
@@ -67,7 +68,7 @@ const VERT = `#version 300 es
 in vec4 position;
 void main() { gl_Position = position; }`;
 
-export class AuroraBg {
+export class CometField {
   private canvas: HTMLCanvasElement;
   private gl: WebGL2RenderingContext | null;
   private raf = 0;
@@ -75,13 +76,12 @@ export class AuroraBg {
   private uRes: WebGLUniformLocation | null = null;
   private start = performance.now();
 
-  /** Insert the aurora canvas as the first child of `parent` (behind content). */
-  constructor(parent: HTMLElement) {
+  constructor() {
     this.canvas = document.createElement("canvas");
-    this.canvas.className = "menu-aurora";
-    parent.prepend(this.canvas);
+    this.canvas.className = "menu-backdrop";
+    document.body.appendChild(this.canvas);
     this.gl = this.canvas.getContext("webgl2");
-    if (!this.gl) return; // no WebGL2 — the static CSS background remains
+    if (!this.gl) return; // no WebGL2 — the dark CSS background remains
     if (!this.setup()) {
       this.gl = null;
       return;
@@ -99,7 +99,7 @@ export class AuroraBg {
       gl.shaderSource(sh, src);
       gl.compileShader(sh);
       if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-        console.warn("aurora shader:", gl.getShaderInfoLog(sh));
+        console.warn("comet shader:", gl.getShaderInfoLog(sh));
         gl.deleteShader(sh);
         return null;
       }
@@ -127,7 +127,6 @@ export class AuroraBg {
   }
 
   private resize = (): void => {
-    // Half-resolution render — soft background, big GPU savings.
     const s = 0.5 * Math.min(window.devicePixelRatio, 2);
     this.canvas.width = Math.max(2, Math.floor(window.innerWidth * s));
     this.canvas.height = Math.max(2, Math.floor(window.innerHeight * s));
@@ -135,7 +134,6 @@ export class AuroraBg {
   };
 
   private frame = (): void => {
-    // Self-teardown: the menu replaced its screen — stop rendering for good.
     if (!this.canvas.isConnected) {
       this.destroy();
       return;

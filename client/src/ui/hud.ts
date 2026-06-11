@@ -3167,13 +3167,15 @@ export class HUD {
     // R9: tint the shaker window in the active player's color so spectators can
     // tell at a glance whose mothership is shaking.
     const accent = COLOR_HEX[active.color] ?? "#ffd23f";
-    // White glowing star streaks flying rightward BEHIND the shaker stage —
-    // they live inside the overlay, so they appear and vanish with it.
-    const streaks = Array.from({ length: 14 }, () => {
+    // Racing light streaks BEHIND the shaker stage: each picks its own lane,
+    // start offset and SPEED (wide spread, linear pace) so faster ones keep
+    // overtaking slower ones while the overlay is up. They live inside the
+    // overlay, so they appear and vanish with it.
+    const streaks = Array.from({ length: 16 }, () => {
       const top = (4 + Math.random() * 92).toFixed(1);
-      const delay = (Math.random() * 1.6).toFixed(2);
-      const dur = (0.9 + Math.random() * 1.1).toFixed(2);
-      const scale = (0.5 + Math.random() * 0.9).toFixed(2);
+      const delay = (-Math.random() * 2.4).toFixed(2); // negative = mid-flight at reveal
+      const dur = (0.8 + Math.random() * 2.2).toFixed(2);
+      const scale = (0.4 + Math.random() * 1.0).toFixed(2);
       return `<i class="ss-star" style="top:${top}%;animation-delay:${delay}s;animation-duration:${dur}s;--ss:${scale}"></i>`;
     }).join("");
     const overlay = el(

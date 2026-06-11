@@ -1,6 +1,6 @@
 import "./style.css";
 import { Starfield } from "./render/starfield.js";
-import { AuroraBg } from "./render/aurora.js";
+import { CometField } from "./render/comets.js";
 import { BoardRenderer } from "./render/board.js";
 import { NewGameMenu, type LaunchOptions } from "./ui/menu.js";
 import { HUD } from "./ui/hud.js";
@@ -23,8 +23,20 @@ async function boot(): Promise<void> {
   // before the lobby (and then a fresh game) takes over again.
   let teardownGame: (() => void) | null = null;
 
+  // The comet-streak backdrop lives behind EVERY menu screen (landing, the
+  // single-player setup, the lobby) and is torn down when a game mounts.
+  let menuBg: CometField | null = null;
+  const ensureMenuBg = (): void => {
+    if (!menuBg) menuBg = new CometField();
+  };
+  const dropMenuBg = (): void => {
+    menuBg?.destroy();
+    menuBg = null;
+  };
+
   const mountGame = (game: GameDriver): void => {
     teardownGame?.();
+    dropMenuBg();
     board.humanId = game.humanId;
     (window as unknown as { __sf: unknown }).__sf = { game, board };
     const unsubBoard = game.subscribe((state) => board.render(state));
@@ -65,25 +77,30 @@ async function boot(): Promise<void> {
   };
 
   const showLanding = (): void => {
+    // Hero landing: no boxed card — the title and pills float directly over
+    // the comet field, like the referenced hero design.
     const screen = el(`
       <div class="screen">
-        <div class="card">
-          <h1 class="title">CATAN: STARFARERS</h1>
-          <p class="subtitle">Voyage into deep space. Command your fleet to 15 victory points.</p>
-          <button class="mt" id="single">Single Player</button>
-          <button class="mt secondary" id="online">Play Online</button>
+        <div class="hero">
+          <div class="hero-badge">A faithful digital voyage · 2–4 commanders</div>
+          <h1 class="hero-title"><span>CATAN</span><span class="hero-title-2">STARFARERS</span></h1>
+          <p class="hero-sub">Voyage into deep space. Command your fleet to 15 victory points.</p>
+          <div class="hero-actions">
+            <button id="single">Single Player</button>
+            <button class="secondary" id="online">Play Online</button>
+          </div>
         </div>
       </div>
     `);
     screen.querySelector("#single")!.addEventListener("click", () => {
+      ensureMenuBg();
       new NewGameMenu(app, startSingle, showLanding);
     });
     screen.querySelector("#online")!.addEventListener("click", () => {
+      ensureMenuBg();
       void startNetwork("online");
     });
-    // Aurora shader backdrop behind the menu card; it tears itself down the
-    // moment this screen is replaced (its canvas leaves the DOM).
-    new AuroraBg(screen);
+    ensureMenuBg();
     app.replaceChildren(screen);
   };
 
