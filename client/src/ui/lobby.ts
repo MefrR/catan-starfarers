@@ -1,5 +1,13 @@
 import { net, type NetMode } from "../net.js";
 import { type GameState, type LobbyState, type PlayerColor, PLAYER_COLORS } from "@starfarers/shared";
+import { shatter } from "./fx.js";
+
+const COLOR_HEX: Record<PlayerColor, string> = {
+  yellow: "#ffd23f",
+  red: "#ff5d5d",
+  blue: "#4fa8ff",
+  black: "#8a8fa6",
+};
 
 type StartHandler = (state: GameState, youId: string) => void;
 
@@ -119,31 +127,50 @@ export class LobbyUI {
     if (e) e.textContent = this.errorText;
   }
 
+  /** Connect screen, in the same open "mission setup" language as the
+   *  single-player menu: labelled rows on the comet field, an underline name
+   *  input, a glowing HOST CTA and a join-by-code row. */
   private renderConnect(): void {
     const screen = el(`
       <div class="screen">
-        <div class="card">
-          <h1 class="title">CATAN: STARFARERS</h1>
-          <p class="subtitle">${this.mode === "online" ? "Voyage into deep space — play online with friends anywhere." : "Voyage into deep space — play across your LAN."}</p>
-          <label>Your name</label>
-          <input type="text" id="name" placeholder="Commander" maxlength="16" />
-          <div class="row mt">
-            <button id="host">Host a game</button>
+        <div class="setup">
+          <div class="setup-head">
+            <div class="setup-kicker">${this.mode === "online" ? "Play online" : "Play on your LAN"}</div>
+            <h1 class="setup-title">JOIN THE VOYAGE</h1>
           </div>
-          <label class="mt">Join with a room code</label>
-          <div class="row">
-            <input type="text" id="code" placeholder="ABCD" maxlength="4" style="text-transform:uppercase" />
-            <button class="secondary" id="join">Join</button>
+
+          <div class="setup-row">
+            <div class="setup-label">Commander</div>
+            <div class="setup-ctrl">
+              <input type="text" id="name" class="setup-name" placeholder="Commander" maxlength="16" />
+            </div>
           </div>
-          <div class="error"></div>
-          ${this.onBack ? `<button class="mt secondary" id="back">← Back</button>` : ""}
+
+          <div class="setup-row">
+            <div class="setup-label">Join a room</div>
+            <div class="setup-ctrl">
+              <input type="text" id="code" class="setup-name setup-code" placeholder="ABCD" maxlength="4" />
+              <div class="seg"><button class="seg-opt" id="join">Join</button></div>
+            </div>
+          </div>
+
+          <div class="setup-launch">
+            <div class="glow-wrap">
+              <div class="glow-layer glow-far"><i></i></div>
+              <div class="glow-layer glow-near"><i></i></div>
+              <button class="glow-btn" id="host">HOST A GAME</button>
+            </div>
+            <div class="error"></div>
+            ${this.onBack ? `<button class="setup-back" id="back">← Back</button>` : ""}
+          </div>
         </div>
       </div>
     `);
     const name = () => (screen.querySelector("#name") as HTMLInputElement).value.trim();
     screen.querySelector("#back")?.addEventListener("click", () => this.onBack?.());
-    screen.querySelector("#host")!.addEventListener("click", () => {
-      net.send({ t: "createRoom", name: name() });
+    const hostBtn = screen.querySelector("#host") as HTMLElement;
+    hostBtn.addEventListener("click", () => {
+      shatter(hostBtn, "#39d8c8", () => net.send({ t: "createRoom", name: name() }));
     });
     screen.querySelector("#join")!.addEventListener("click", () => {
       const code = (screen.querySelector("#code") as HTMLInputElement).value.trim().toUpperCase();
@@ -163,77 +190,107 @@ export class LobbyUI {
 
     const screen = el(`
       <div class="screen">
-        <div class="card">
-          <h1 class="title">LOBBY</h1>
-          <p class="subtitle">Waiting for Starfarers to assemble…</p>
-          <div class="roomcode">${lobby.roomCode}</div>
-          <div class="lan-url">${shareUrl}</div>
-          <label class="mt">Crew (${lobby.players.length})</label>
-          <ul class="players">
-            ${lobby.players
-              .map(
-                (p) => `
-              <li class="${p.connected ? "" : "offline"}">
-                <span class="dot ${p.color}"></span>
-                <span>${escapeHtml(p.name)}</span>
-                <span class="badge">${p.isAI ? "AI" : p.isHost ? "HOST" : ""}${p.id === this.youId ? " · you" : ""}</span>
-                ${isHost && p.isAI ? `<button class="ai-remove" data-id="${p.id}" title="Remove this AI">✕</button>` : ""}
-              </li>`,
-              )
-              .join("")}
-          </ul>
-          ${isHost && lobby.players.length < 4 ? `<button class="mt secondary" id="addai">+ Add AI opponent</button>` : ""}
-          <label>Your color</label>
-          <div class="row" id="colors"></div>
-          ${isHost ? `<label class="mt">Map style</label><div class="row" id="mapstyle"></div>` : ""}
-          ${isHost ? `<label class="mt">Turn timer</label><div class="row" id="turntimer"></div>` : ""}
-          ${isHost ? `<button class="mt" id="start">Start game (${lobby.players.length} ${lobby.players.length === 1 ? "player" : "players"})</button>` : `<p class="subtitle mt">Waiting for the host to start…</p>`}
-          <button class="mt secondary" id="leave">← Leave room</button>
-          <div class="error">${this.errorText}</div>
+        <div class="setup">
+          <div class="setup-head">
+            <div class="setup-kicker">Room code — share it with your crew</div>
+            <h1 class="setup-title roomcode-title">${lobby.roomCode}</h1>
+            <div class="lan-url">${shareUrl}</div>
+          </div>
+
+          <div class="setup-row">
+            <div class="setup-label">Crew (${lobby.players.length})</div>
+            <div class="setup-ctrl setup-crew">
+              <ul class="players">
+                ${lobby.players
+                  .map(
+                    (p) => `
+                  <li class="${p.connected ? "" : "offline"}">
+                    <span class="dot ${p.color}"></span>
+                    <span>${escapeHtml(p.name)}</span>
+                    <span class="badge">${p.isAI ? "AI" : p.isHost ? "HOST" : ""}${p.id === this.youId ? " · you" : ""}</span>
+                    ${isHost && p.isAI ? `<button class="ai-remove" data-id="${p.id}" title="Remove this AI">✕</button>` : ""}
+                  </li>`,
+                  )
+                  .join("")}
+              </ul>
+              ${isHost && lobby.players.length < 4 ? `<div class="seg"><button class="seg-opt" id="addai">+ Add AI opponent</button></div>` : ""}
+            </div>
+          </div>
+
+          <div class="setup-row">
+            <div class="setup-label">Your color</div>
+            <div class="setup-ctrl"><div class="swatches" id="colors"></div></div>
+          </div>
+
+          ${isHost ? `
+          <div class="setup-row">
+            <div class="setup-label">Galaxy</div>
+            <div class="setup-ctrl"><div class="seg seg-wide" id="mapstyle"></div></div>
+          </div>
+          <div class="setup-row">
+            <div class="setup-label">Turn timer</div>
+            <div class="setup-ctrl"><div class="seg" id="turntimer"></div></div>
+          </div>` : ""}
+
+          <div class="setup-launch">
+            ${isHost
+              ? `<div class="glow-wrap">
+                   <div class="glow-layer glow-far"><i></i></div>
+                   <div class="glow-layer glow-near"><i></i></div>
+                   <button class="glow-btn" id="start">START GAME · ${lobby.players.length} ${lobby.players.length === 1 ? "PLAYER" : "PLAYERS"}</button>
+                 </div>`
+              : `<p class="sp-sub">Waiting for the host to start…</p>`}
+            <div class="error">${this.errorText}</div>
+            <button class="setup-back" id="leave">← Leave room</button>
+          </div>
         </div>
       </div>
     `);
 
+    // Color swatches: round orbs like the single-player menu; taken colors dim.
     const colorsRow = screen.querySelector("#colors")!;
     const used = new Map(lobby.players.map((p) => [p.color, p.id] as const));
     for (const c of PLAYER_COLORS) {
       const taken = used.has(c) && used.get(c) !== this.youId;
-      const btn = el(`<button class="secondary" ${taken ? "disabled" : ""} style="flex:0 0 auto;padding:8px"><span class="dot ${c}"></span></button>`);
-      btn.addEventListener("click", () => net.send({ t: "setColor", color: c as PlayerColor }));
+      const mine = me?.color === c;
+      const btn = el(
+        `<button class="swatch ${mine ? "selected" : ""}" ${taken ? "disabled" : ""} title="${taken ? "Taken" : c}" style="--sw:${COLOR_HEX[c]};${taken ? "opacity:0.3;cursor:not-allowed" : ""}"></button>`,
+      );
+      if (!taken) btn.addEventListener("click", () => net.send({ t: "setColor", color: c as PlayerColor }));
       colorsRow.appendChild(btn);
     }
 
+    // Segmented controls, identical to the single-player menu.
     if (isHost) {
-      const mapRow = screen.querySelector("#mapstyle")!;
-      const paintMap = (): void => {
-        mapRow.replaceChildren();
-        const opts: { fog: boolean; label: string }[] = [
-          { fog: false, label: "Charted" },
-          { fog: true, label: "Uncharted (fog)" },
-        ];
-        for (const o of opts) {
-          const sel = o.fog === this.fogMap;
+      const seg = (
+        host: Element,
+        options: { label: string; hint?: string; selected?: boolean; disabled?: boolean; pick?: () => void }[],
+      ): void => {
+        host.replaceChildren();
+        for (const o of options) {
           const b = el(
-            `<button class="secondary" style="flex:1;${sel ? "outline:2px solid var(--accent);" : ""}">${o.label}</button>`,
+            `<button class="seg-opt ${o.selected ? "on" : ""} ${o.pick ? "" : "seg-val"}" ${o.disabled || !o.pick ? "disabled" : ""}>${o.label}${o.hint ? `<span class="seg-hint">${o.hint}</span>` : ""}</button>`,
           );
-          b.addEventListener("click", () => { this.fogMap = o.fog; paintMap(); });
-          mapRow.appendChild(b);
+          if (o.pick && !o.disabled) b.addEventListener("click", o.pick);
+          host.appendChild(b);
         }
       };
+      const mapRow = screen.querySelector("#mapstyle")!;
+      const paintMap = (): void =>
+        seg(mapRow, [
+          { label: "Charted", hint: "Whole galaxy visible", selected: !this.fogMap, pick: () => { this.fogMap = false; paintMap(); } },
+          { label: "Uncharted", hint: "Fog — explore to reveal", selected: this.fogMap, pick: () => { this.fogMap = true; paintMap(); } },
+        ]);
       paintMap();
 
       const timerRow = screen.querySelector("#turntimer")!;
-      const paintTimer = (): void => {
-        timerRow.replaceChildren();
-        const off = el(`<button class="secondary" style="flex:0 0 auto;${this.turnSeconds === 0 ? "outline:2px solid var(--accent);" : ""}">Off</button>`);
-        off.addEventListener("click", () => { this.turnSeconds = 0; paintTimer(); });
-        const minus = el(`<button class="secondary" style="flex:0 0 auto" ${this.turnSeconds <= 15 ? "disabled" : ""}>−5s</button>`);
-        minus.addEventListener("click", () => { this.turnSeconds = Math.max(15, this.turnSeconds - 5); paintTimer(); });
-        const val = el(`<button class="secondary" style="flex:1" disabled>${this.turnSeconds === 0 ? "No limit" : this.turnSeconds + "s per turn"}</button>`);
-        const plus = el(`<button class="secondary" style="flex:0 0 auto" ${this.turnSeconds >= 180 ? "disabled" : ""}>+5s</button>`);
-        plus.addEventListener("click", () => { this.turnSeconds = this.turnSeconds === 0 ? 15 : Math.min(180, this.turnSeconds + 5); paintTimer(); });
-        timerRow.append(off, minus, val, plus);
-      };
+      const paintTimer = (): void =>
+        seg(timerRow, [
+          { label: "Off", selected: this.turnSeconds === 0, pick: () => { this.turnSeconds = 0; paintTimer(); } },
+          { label: "−5s", disabled: this.turnSeconds <= 15, pick: () => { this.turnSeconds = Math.max(15, this.turnSeconds - 5); paintTimer(); } },
+          { label: this.turnSeconds === 0 ? "No limit" : `${this.turnSeconds}s / turn` },
+          { label: "+5s", disabled: this.turnSeconds >= 180, pick: () => { this.turnSeconds = this.turnSeconds === 0 ? 15 : Math.min(180, this.turnSeconds + 5); paintTimer(); } },
+        ]);
       paintTimer();
     }
 
@@ -244,11 +301,14 @@ export class LobbyUI {
       ),
     );
 
-    screen.querySelector("#start")?.addEventListener("click", () => {
-      net.send({
-        t: "startGame",
-        config: { playerCount: lobby.players.length, fogMap: this.fogMap, turnSeconds: this.turnSeconds },
-      });
+    const startBtn = screen.querySelector("#start") as HTMLElement | null;
+    startBtn?.addEventListener("click", () => {
+      shatter(startBtn, "#39d8c8", () =>
+        net.send({
+          t: "startGame",
+          config: { playerCount: lobby.players.length, fogMap: this.fogMap, turnSeconds: this.turnSeconds },
+        }),
+      );
     });
 
     // Leave the room: drop our seat on the server, forget the saved session, and

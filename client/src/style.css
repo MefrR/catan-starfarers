@@ -2135,3 +2135,14 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 @media (max-width: 999px) {
   .minimap { display: none; }
 }
+
+/* === Online menu (connect + lobby), matched to the single-player setup. === */
+.setup-title.roomcode-title { letter-spacing: 0.32em; }
+.setup .lan-url { margin-top: 6px; font-size: 12px; }
+.setup input.setup-code {
+  flex: 0 0 120px; min-width: 120px; text-align: center;
+  text-transform: uppercase; letter-spacing: 0.3em; font-size: 22px;
+}
+.setup-crew { flex-direction: column; align-items: stretch; gap: 10px; }
+.setup-crew .players { margin: 0; width: 100%; }
+.setup-crew .players li { backdrop-filter: blur(6px); }
