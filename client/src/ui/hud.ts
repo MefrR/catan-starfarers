@@ -28,7 +28,7 @@ import {
 import type { GameDriver } from "../game/store.js";
 import type { BoardRenderer } from "../render/board.js";
 import { ChatBox } from "./chat.js";
-import { sfx } from "../audio.js";
+import { sfx, music } from "../audio.js";
 import { ShakerStreaks } from "../render/streaks.js";
 
 const el = (html: string): HTMLElement => {
@@ -149,9 +149,9 @@ export class HUD {
   private tickerEl: HTMLDivElement | null = null;
   private prevLogLen = -1;
   private prevLogLast: string | null = null;
-  /** V1: total piece count last render, to play the "build" thunk for ANY
-   *  player's new colony/ship/spaceport/trade station. */
-  private prevPieceCount = -1;
+  /** Y9: per-type piece counts last render, so each NEW piece (any player's)
+   *  plays its own sound identity (ship/colony/spaceport/station). */
+  private prevPieceCounts: { ships: number; colonies: number; ports: number; stations: number } | null = null;
   /** HUD-tools toggle: show rich hover info (descriptions/tooltips). Persisted. */
   private hoverInfoOn = true;
   /** HUD-tools toggle: idle 60s auto-recenter of the map. Persisted. */
@@ -253,7 +253,27 @@ export class HUD {
       this.autoRecenterOn = localStorage.getItem("sf_autoRecenter") !== "0";
     } catch { /* localStorage unavailable — keep defaults */ }
     this.board.setAutoRecenter(this.autoRecenterOn);
+
+    // Y10: minimap (large screens only — hidden by CSS under 1000px). Click
+    // anywhere on it to jump the camera there.
+    this.mini = document.createElement("canvas");
+    this.mini.className = "minimap";
+    this.mini.width = 180;
+    this.mini.height = 230;
+    document.body.appendChild(this.mini);
+    this.mini.addEventListener("click", (e) => {
+      const m = this.miniMapping;
+      if (!m) return;
+      const r = this.mini!.getBoundingClientRect();
+      const px = ((e.clientX - r.left) / r.width) * this.mini!.width;
+      const py = ((e.clientY - r.top) / r.height) * this.mini!.height;
+      this.board.centerOnBoardPoint((px - m.ox) / m.s, (py - m.oy) / m.s);
+    });
   }
+
+  /** Y10: the corner minimap canvas + its board→canvas mapping. */
+  private mini: HTMLCanvasElement | null = null;
+  private miniMapping: { s: number; ox: number; oy: number } | null = null;
 
   /** Floating colony/trade-ship chooser shown over the clicked green launch
    *  point (instead of in the center action bar). */
@@ -292,6 +312,8 @@ export class HUD {
     }
     this.tickerEl?.remove();
     this.tickerEl = null;
+    this.mini?.remove();
+    this.mini = null;
     this.root.replaceChildren();
     document
       .querySelectorAll(
@@ -820,14 +842,27 @@ export class HUD {
     const up = ps.lastUpgrade;
     if (up && up.seq > this.lastAnimatedUpgrade) {
       this.lastAnimatedUpgrade = up.seq;
-      sfx.play("build");
+      // Each upgrade has its own sonic identity — you can HEAR what was built.
+      sfx.play(up.kind === "booster" ? "buildBooster" : up.kind === "cannon" ? "buildCannon" : "buildPod");
       this.diceTimers.push(window.setTimeout(() => this.playUpgrade(up.playerId, up.kind), 120));
     }
-    // V1: a new piece appeared on the map (anyone's colony / spaceport / ship /
-    // trade station) — soft landing thunk. Count-based so it needs no new state.
-    const pieceCount = state.buildings.length + state.ships.length + state.tradeStations.length;
-    if (this.prevPieceCount >= 0 && pieceCount > this.prevPieceCount) sfx.play("build");
-    this.prevPieceCount = pieceCount;
+    // V1/Y9: a new piece appeared on the map (anyone's) — play that piece
+    // TYPE's own sound: launch swoosh for ships, settling chord for colonies,
+    // crowned chime for spaceports, docking coins for trade stations.
+    const counts = {
+      ships: state.ships.length,
+      colonies: state.buildings.filter((b) => b.kind === "colony").length,
+      ports: state.buildings.filter((b) => b.kind === "spaceport").length,
+      stations: state.tradeStations.length,
+    };
+    if (this.prevPieceCounts) {
+      const prev = this.prevPieceCounts;
+      if (counts.ships > prev.ships) sfx.play("buildShip");
+      if (counts.colonies > prev.colonies) sfx.play("buildColony");
+      if (counts.ports > prev.ports) sfx.play("buildPort");
+      if (counts.stations > prev.stations) sfx.play("buildStation");
+    }
+    this.prevPieceCounts = counts;
 
     // V2: turn handoff — when the turn passes TO the human, sweep a center
     // "Your turn!" splash + chime, and blink the tab title if backgrounded.
@@ -935,14 +970,17 @@ export class HUD {
           <span class="su" title="${upg.cannon} cannon${upg.cannon === 1 ? "" : "s"} (+combat strength)">${upgradeIco("cannon")}${upg.cannon}</span>
           <span class="su" title="${upg.freightPod} freight pod${upg.freightPod === 1 ? "" : "s"} (cargo / trade stations)">${upgradeIco("freightPod")}${upg.freightPod}</span>
         </div>`;
+      // Y7: a thin progress bar racing toward the target under every row.
+      const pct = Math.min(100, (p.victoryPoints / target) * 100);
       const row = el(`
         <div class="score-row ${isActive ? "active" : ""}" data-pid="${p.id}">
           <div class="score-main">
-            <span class="dot ${p.color}"></span>
+            <span class="avatar" title="${escapeHtml(p.name)}">${avatarSvg(p.color)}</span>
             <span class="pname">${escapeHtml(p.name)}</span>
             ${bonusBadge}
             <span class="vp" style="color:${COLOR_HEX[p.color]}">${p.victoryPoints}<span class="vp-target">/${target}</span></span>
           </div>
+          <div class="vp-bar"><i style="width:${pct.toFixed(1)}%;--pc:${COLOR_HEX[p.color]}"></i></div>
           ${meta}
           ${upgRow}
         </div>`);
@@ -1141,6 +1179,11 @@ export class HUD {
     // Floating tools: ⓘ costs/VP reference, 👁 hover-info toggle, ⌖ auto-recenter.
     screen.appendChild(this.buildToolsCluster());
 
+    // Y3: once-per-game round-4 setup choices (starting ship / bonus
+    // attachment) pop BIG in the center of the screen on the chooser's turn.
+    const setupPop = this.buildSetupPop(state, me, myTurn);
+    if (setupPop) screen.appendChild(setupPop);
+
     screen.appendChild(this.buildSidebar(state, me));
     screen.appendChild(scoreboard);
     screen.appendChild(bar);
@@ -1165,6 +1208,7 @@ export class HUD {
     this.syncDiscardOverlay(state, me);
     this.syncTurnTimer(state);
     this.syncGameOverOverlay(state);
+    this.drawMinimap(state);
 
     // Set-up framing: once per placement round, glide the camera onto the
     // starting-colonies area, fitted to the screen space NOT covered by the
@@ -1201,14 +1245,58 @@ export class HUD {
       if (it) pts.push(it);
     }
     if (pts.length === 0) return;
+    this.board.focusRegion(pts, this.visibleView());
+  }
+
+  /** The on-screen rect NOT covered by HUD panels (sidebar / bar / tools). */
+  private visibleView(): { left: number; top: number; right: number; bottom: number } {
     const sidebar = this.root.querySelector(".sidebar-left")?.getBoundingClientRect();
     const bar = this.root.querySelector(".actionbar")?.getBoundingClientRect();
-    this.board.focusRegion(pts, {
+    return {
       left: (sidebar ? sidebar.right : 0) + 14,
       top: 84, // below the exit button / event ticker
-      right: window.innerWidth - 64, // clear of the floating tools (ⓘ 👁 ⌖ ♪)
+      right: window.innerWidth - 64, // clear of the floating tools column
       bottom: (bar ? bar.top : window.innerHeight * 0.62) - 14,
-    });
+    };
+  }
+
+  /** Y8: cycle the camera through the player's fleet: 0 = frame everything I
+   *  own, then each of my ships in turn. Resets after 4s of no taps. */
+  private fleetCycle = 0;
+  private fleetCycleAt = 0;
+  private findMyFleet(): void {
+    const state = this.game.getState();
+    const myId = this.game.humanId;
+    const ships = state.ships.filter((s) => s.owner === myId);
+    const now = performance.now();
+    if (now - this.fleetCycleAt > 4000) this.fleetCycle = 0; // stale — start over
+    this.fleetCycleAt = now;
+    const view = this.visibleView();
+    if (this.fleetCycle === 0 || ships.length === 0) {
+      // Everything I own: ships + buildings + my docked trade stations' outposts.
+      const pts: { x: number; y: number }[] = [];
+      for (const s of ships) {
+        const it = state.intersections[s.intersectionId];
+        if (it) pts.push(it);
+      }
+      for (const b of state.buildings.filter((x) => x.owner === myId)) {
+        const it = state.intersections[b.intersectionId];
+        if (it) pts.push(it);
+      }
+      if (pts.length === 0) return;
+      this.board.focusRegion(pts, view);
+      this.fleetCycle = 1;
+      this.centerNote("Your fleet");
+      return;
+    }
+    const idx = (this.fleetCycle - 1) % ships.length;
+    const ship = ships[idx]!;
+    const it = state.intersections[ship.intersectionId];
+    if (it) {
+      this.board.focusRegion([it], view);
+      this.centerNote(`${ship.kind === "colonyShip" ? "Colony ship" : "Trade ship"} ${idx + 1} of ${ships.length}`);
+    }
+    this.fleetCycle++;
   }
 
   /** The timed step currently on the clock — shown to EVERY player. `mine` marks
@@ -1503,7 +1591,7 @@ export class HUD {
           <div class="go-row ${isWin ? "win" : ""}">
             <div class="go-row-head">
               <span class="go-rank">${i + 1}</span>
-              <span class="dot ${p.color}"></span>
+              <span class="avatar go-avatar">${avatarSvg(p.color)}</span>
               <span class="go-name" style="color:${pc}">${escapeHtml(p.name)}</span>
               <span class="go-vp" style="color:${pc}">${p.victoryPoints}<span class="go-vp-lbl">VP</span></span>
             </div>
@@ -1826,6 +1914,21 @@ export class HUD {
     });
     wrap.appendChild(sndBtn);
 
+    const musBtn = el(
+      `<button class="tool-btn ${music.enabled ? "active" : ""}" title="Ambient music: ${music.enabled ? "on (tap to turn off)" : "off (tap to turn on)"}">♫</button>`,
+    );
+    musBtn.addEventListener("click", () => {
+      music.setEnabled(!music.enabled);
+      this.rerender();
+    });
+    wrap.appendChild(musBtn);
+
+    // Y8: find my fleet — first tap frames everything you own; further taps
+    // cycle the camera through your ships one by one.
+    const fleetBtn = el(`<button class="tool-btn" title="Find my fleet (tap again to cycle ships)">⌕</button>`);
+    fleetBtn.addEventListener("click", () => this.findMyFleet());
+    wrap.appendChild(fleetBtn);
+
     // The reference popover hangs to the LEFT of the "i" button when open.
     if (this.showRef) {
       const pop = el(`<div class="ref-pop"></div>`);
@@ -1925,6 +2028,165 @@ export class HUD {
     upTile("cannon", "Cannon");
     upTile("freightPod", "Pod");
     return dock;
+  }
+
+  /** Y10: paint the corner minimap — planet clusters, outposts, every piece in
+   *  its owner's color, and the live viewport rectangle. Click-to-jump is wired
+   *  in the constructor via the stored board→canvas mapping. */
+  private drawMinimap(state: GameState): void {
+    const cv = this.mini;
+    if (!cv) return;
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+    const W = cv.width;
+    const H = cv.height;
+    // Board extents from the intersections (the authoritative geometry).
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const it of Object.values(state.intersections)) {
+      if (it.x < minX) minX = it.x;
+      if (it.x > maxX) maxX = it.x;
+      if (it.y < minY) minY = it.y;
+      if (it.y > maxY) maxY = it.y;
+    }
+    if (!isFinite(minX)) return;
+    const pad = 10;
+    const s = Math.min((W - pad * 2) / (maxX - minX), (H - pad * 2) / (maxY - minY));
+    const ox = pad - minX * s + (W - pad * 2 - (maxX - minX) * s) / 2;
+    const oy = pad - minY * s + (H - pad * 2 - (maxY - minY) * s) / 2;
+    this.miniMapping = { s, ox, oy };
+    const px = (x: number): number => x * s + ox;
+    const py = (y: number): number => y * s + oy;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = "rgba(6, 9, 18, 0.92)";
+    ctx.fillRect(0, 0, W, H);
+
+    // Planet clusters (per sector) + outposts.
+    const PLANET_HEX: Record<string, string> = {
+      red: "#ff5d5d", orange: "#ffa23f", blue: "#4fa8ff", green: "#57e389", multicolor: "#c98bff",
+    };
+    for (const sec of state.sectors) {
+      const sx = 1.5 * sec.q;
+      const sy = Math.sqrt(3) * (sec.r + sec.q / 2);
+      if (sec.kind === "outpost") {
+        ctx.fillStyle = sec.discovered ? "#9fd0ff" : "#3a4866";
+        ctx.beginPath();
+        ctx.moveTo(px(sx), py(sy) - 3.4);
+        ctx.lineTo(px(sx) + 3, py(sy));
+        ctx.lineTo(px(sx), py(sy) + 3.4);
+        ctx.lineTo(px(sx) - 3, py(sy));
+        ctx.fill();
+        continue;
+      }
+      sec.planets.forEach((pl, i) => {
+        const off = [
+          { x: 0, y: -0.55 },
+          { x: -0.5, y: 0.35 },
+          { x: 0.5, y: 0.35 },
+        ][i % 3]!;
+        ctx.fillStyle = !pl.explored
+          ? "#2e3a56"
+          : pl.special === "pirateBase"
+            ? "#ff7a6d"
+            : pl.special === "icePlanet"
+              ? "#bdefff"
+              : (PLANET_HEX[pl.color as string] ?? "#8aa0c8");
+        ctx.beginPath();
+        ctx.arc(px(sx + off.x), py(sy + off.y), 2.1, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    // Pieces in owner colors: buildings (squares), ships (dots), stations.
+    const ownerHex = new Map(state.players.map((p) => [p.id, COLOR_HEX[p.color]]));
+    for (const b of state.buildings) {
+      const it = state.intersections[b.intersectionId];
+      if (!it) continue;
+      ctx.fillStyle = ownerHex.get(b.owner) ?? "#fff";
+      const r = b.kind === "spaceport" ? 2.6 : 2;
+      ctx.fillRect(px(it.x) - r, py(it.y) - r, r * 2, r * 2);
+    }
+    for (const sh of state.ships) {
+      const it = state.intersections[sh.intersectionId];
+      if (!it) continue;
+      ctx.fillStyle = ownerHex.get(sh.owner) ?? "#fff";
+      ctx.beginPath();
+      ctx.arc(px(it.x), py(it.y), 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // The live viewport rectangle.
+    const vr = this.board.visibleBoardRect();
+    ctx.strokeStyle = "rgba(140, 190, 255, 0.85)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(px(vr.x0), py(vr.y0), (vr.x1 - vr.x0) * s, (vr.y1 - vr.y0) * s);
+  }
+
+  /** Y3: big center-screen chooser for the round-4 setup decisions (starting
+   *  ship + bonus attachment) — a once-per-game moment that deserves more
+   *  than small buttons in the bottom bar. Returns null when not applicable. */
+  private buildSetupPop(state: GameState, me: PlayerState, myTurn: boolean): HTMLElement | null {
+    const su = state.phaseState.setup;
+    if (state.phaseState.phase !== "setup" || !su || !myTurn || su.round !== 4) return null;
+
+    if (su.r4step === "ship" && !this.launchKind) {
+      const noSites = shipLaunchSites(me, state).length === 0;
+      const pop = el(`
+        <div class="setup-pop">
+          <div class="sp-title">Choose your starting ship</div>
+          <div class="sp-sub">It launches from an open point next to your new spaceport.</div>
+          <div class="sp-tiles"></div>
+        </div>`);
+      const tiles = pop.querySelector(".sp-tiles")!;
+      const tile = (kind: ShipKind, name: string, desc: string): void => {
+        const t = el(`
+          <button class="sp-tile" ${noSites ? "disabled" : ""}>
+            <span class="sp-ico">${shipIco(kind)}</span>
+            <span class="sp-name">${name}</span>
+            <span class="sp-desc">${desc}</span>
+          </button>`);
+        t.addEventListener("click", () => {
+          this.launchKind = kind;
+          this.mode = "setupShip";
+          this.rerender();
+        });
+        tiles.appendChild(t);
+      };
+      tile("colonyShip", "Colony Ship", "Settles new colonies on open double-planet points (+1 VP each).");
+      tile("tradeShip", "Trade Ship", "Docks at alien outposts for trade stations + friendship cards.");
+      return pop;
+    }
+
+    if (su.r4step === "bonus") {
+      const pop = el(`
+        <div class="setup-pop">
+          <div class="sp-title">Choose your bonus attachment</div>
+          <div class="sp-sub">A free mothership upgrade to start your voyage.</div>
+          <div class="sp-tiles"></div>
+        </div>`);
+      const tiles = pop.querySelector(".sp-tiles")!;
+      const DESC: Record<UpgradeKind, string> = {
+        booster: "+1 flight speed on every shake.",
+        cannon: "+1 combat — pirates beware.",
+        freightPod: "Cargo for trade stations & ice planets.",
+      };
+      const LABEL: Record<UpgradeKind, string> = { booster: "Booster", cannon: "Cannon", freightPod: "Freight Pod" };
+      const seen = new Set<string>();
+      for (const up of su.bonusPool ?? []) {
+        if (seen.has(up)) continue;
+        seen.add(up);
+        const t = el(`
+          <button class="sp-tile">
+            <span class="sp-ico">${upgradeIco(up)}</span>
+            <span class="sp-name">${LABEL[up]}</span>
+            <span class="sp-desc">${DESC[up]}</span>
+          </button>`);
+        t.addEventListener("click", () => this.act({ t: "setupBonus", upgrade: up }));
+        tiles.appendChild(t);
+      }
+      return pop;
+    }
+    return null;
   }
 
   /** Set up board click handlers appropriate to the current mode. */
@@ -2125,37 +2387,21 @@ export class HUD {
           );
           break;
         }
-        // Round 4: upgrade → place ship → take a bonus upgrade.
+        // Round 4: upgrade → place ship → take a bonus upgrade. The SHIP and
+        // BONUS choices pop as big center-screen modals (see buildSetupPop) —
+        // this once-per-game moment deserves the spotlight, not tiny buttons.
         if (su.round === 4) {
           if (su.r4step === "upgrade") {
             actions.appendChild(
               el(`<div class="waiting">Round 4 — click one of your colonies to upgrade it to a spaceport.</div>`),
             );
           } else if (su.r4step === "ship") {
-            const sites = shipLaunchSites(me, state);
-            const noSites = sites.length === 0;
             const hint = this.launchKind
               ? `Round 4 — click a glowing point next to your spaceport to launch your ${this.launchKind === "colonyShip" ? "colony" : "trade"} ship.`
-              : "Round 4 — choose a ship, then click an open point next to your spaceport.";
+              : "Round 4 — choose your starting ship.";
             actions.appendChild(el(`<div class="waiting">${hint}</div>`));
-            actions.appendChild(
-              btn("Colony Ship", () => { this.launchKind = "colonyShip"; this.mode = "setupShip"; this.rerender(); },
-                { disabled: noSites }),
-            );
-            actions.appendChild(
-              btn("Trade Ship", () => { this.launchKind = "tradeShip"; this.mode = "setupShip"; this.rerender(); },
-                { disabled: noSites, secondary: true }),
-            );
           } else if (su.r4step === "bonus") {
-            actions.appendChild(el(`<div class="waiting">Round 4 — take one bonus upgrade.</div>`));
-            const pool = su.bonusPool ?? [];
-            const seen = new Set<string>();
-            for (const up of pool) {
-              if (seen.has(up)) continue;
-              seen.add(up);
-              const label = up === "booster" ? "+Booster" : up === "cannon" ? "+Cannon" : "+Freight Pod";
-              actions.appendChild(btn(label, () => this.act({ t: "setupBonus", upgrade: up }), { secondary: up !== "booster" }));
-            }
+            actions.appendChild(el(`<div class="waiting">Round 4 — choose your bonus attachment.</div>`));
           }
         }
         break;
@@ -2598,7 +2844,9 @@ export class HUD {
       this.shownEncounter = { cardId: enc.cardId, subjectId: enc.subjectId, awaiting: enc.awaiting };
       this.shownConfirmCount = confirmCount;
       this.shownDuelSig = duelSig;
-      this.buildEncounterOverlay(state, enc.subjectId === me.id, me);
+      // Only a brand-new card plays the 3D flip reveal; mid-card updates
+      // (duel rolls, confirm tallies) re-render already face-up.
+      this.buildEncounterOverlay(state, enc.subjectId === me.id, me, !!isNew);
     }
 
     // Encounter resolved: animate the result for the subject, then drop overlay.
@@ -2622,13 +2870,40 @@ export class HUD {
     }
   }
 
-  private buildEncounterOverlay(state: GameState, mineToChoose: boolean, me: PlayerState): void {
+  private buildEncounterOverlay(state: GameState, mineToChoose: boolean, me: PlayerState, reveal = false): void {
     this.removeEncounterOverlay();
     const enc = state.phaseState.encounter!;
     const card = ENCOUNTER_CARDS[enc.cardId];
     const subject = state.players.find((p) => p.id === enc.subjectId)!;
-    const overlay = el(`<div class="encounter-overlay"><div class="encounter-card"></div></div>`);
+    // Y5: the card is a physical object — a 3D shell with an ornate card BACK
+    // that flips over to reveal the face (only on a fresh draw), then floats.
+    const overlay = el(`
+      <div class="encounter-overlay">
+        <div class="enc-3d ${reveal ? "flip" : "revealed"}">
+          <div class="enc-face enc-back">
+            <div class="eb-ring"></div>
+            <div class="eb-emblem">${shipIco()}</div>
+            <div class="eb-label">ENCOUNTER</div>
+            <div class="eb-num">№ ${enc.cardId}</div>
+          </div>
+          <div class="enc-face enc-front"><div class="encounter-card"></div></div>
+        </div>
+      </div>`);
     const cardEl = overlay.querySelector(".encounter-card") as HTMLElement;
+    // Crest: each card category carries its own emblem at the top of the face.
+    const crest =
+      card?.category === "merchant"
+        ? civAvatarSvg("merchants")
+        : card?.category === "traveler"
+          ? civAvatarSvg("travelers" as AlienCiv)
+          : card?.category === "pirate"
+            ? pirateGlyphSvg()
+            : card?.category === "bounty"
+              ? medalGlyphSvg()
+              : card?.category === "wearTear"
+                ? upgradeIco("freightPod")
+                : shipIco();
+    cardEl.appendChild(el(`<div class="enc-crest">${crest}</div>`));
     cardEl.appendChild(el(`<div class="enc-tag">Encounter</div>`));
     cardEl.appendChild(el(`<div class="enc-title">${escapeHtml(card?.title ?? "Encounter")}</div>`));
     cardEl.appendChild(el(`<div class="enc-text">${escapeHtml(card?.text ?? "")}</div>`));
@@ -3801,83 +4076,87 @@ function markerGlyphSvg(): string {
   return `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/></svg>`;
 }
 
-// Single source of truth for the in-game piece silhouettes. These SVGs mirror
-// the PixiJS pieces drawn on the board (drawShip / drawColony / drawSpaceport),
-// so a colony / spaceport / ship reads identically on the map, in the sidebar,
-// on the build buttons, and in the costs reference.
+// Shared ink colour for the piece-icon outlines (matches the board's dark navy).
 const PIECE_INK = "#0a0f1e";
 
-/** An upright isometric block (three shaded faces), base-centre (tx,ty). */
-function isoBoxSvg(tx: number, ty: number, hw: number, h: number): string {
-  const dh = hw * 0.5;
-  const f = (n: number): string => n.toFixed(1);
-  const top = `${f(tx - hw)},${f(ty - h)} ${f(tx)},${f(ty + dh - h)} ${f(tx + hw)},${f(ty - h)} ${f(tx)},${f(ty - dh - h)}`;
-  const left = `${f(tx - hw)},${f(ty)} ${f(tx)},${f(ty + dh)} ${f(tx)},${f(ty + dh - h)} ${f(tx - hw)},${f(ty - h)}`;
-  const right = `${f(tx)},${f(ty + dh)} ${f(tx + hw)},${f(ty)} ${f(tx + hw)},${f(ty - h)} ${f(tx)},${f(ty + dh - h)}`;
-  return `<polygon points="${left}" fill="currentColor" fill-opacity="0.55" stroke="${PIECE_INK}" stroke-width="0.4"/>
-    <polygon points="${right}" fill="currentColor" fill-opacity="0.85" stroke="${PIECE_INK}" stroke-width="0.4"/>
-    <polygon points="${top}" fill="currentColor" stroke="${PIECE_INK}" stroke-width="0.4"/>`;
-}
-
-/** A flat isometric hexagonal platform centred at (cx,cy). */
-function isoHexSvg(cx: number, cy: number, s: number): string {
-  const f = (n: number): string => n.toFixed(1);
-  const hex = (yy: number): string => {
-    const p: string[] = [];
-    for (let i = 0; i < 6; i++) {
-      const a = (Math.PI / 180) * (60 * i + 30);
-      p.push(`${f(cx + s * Math.cos(a))},${f(yy + s * 0.52 * Math.sin(a))}`);
-    }
-    return p.join(" ");
-  };
-  const t = s * 0.32;
-  return `<polygon points="${hex(cy + t)}" fill="currentColor" fill-opacity="0.55" stroke="${PIECE_INK}" stroke-width="0.4"/>
-    <polygon points="${hex(cy)}" fill="currentColor" stroke="${PIECE_INK}" stroke-width="0.4"/>`;
-}
-
-/** Isometric rocket on a pedestal — matches the board's drawShip. */
-function shipIco(kind?: "colonyShip" | "tradeShip"): string {
-  const pedestal =
-    kind === "tradeShip"
-      ? `<ellipse cx="12" cy="21" rx="4.6" ry="1.6" fill="currentColor" fill-opacity="0.6" stroke="${PIECE_INK}" stroke-width="0.4"/><rect x="8" y="17" width="8" height="4" rx="1" fill="currentColor" stroke="${PIECE_INK}" stroke-width="0.4"/>`
-      : isoHexSvg(12, 20, 5);
-  const detail =
-    kind === "tradeShip"
-      ? `<rect x="9.5" y="6.5" width="3.6" height="6" fill="${PIECE_INK}" opacity="0.4"/>`
-      : kind === "colonyShip"
-        ? `<circle cx="11" cy="9.5" r="1.9" fill="${PIECE_INK}" opacity="0.4"/>`
-        : "";
-  return `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="none">
-    ${pedestal}
-    <rect x="11" y="11" width="2" height="7" fill="currentColor" fill-opacity="0.55"/>
-    <polygon points="5,7 2.6,3.8 6,8" fill="currentColor" fill-opacity="0.7" stroke="${PIECE_INK}" stroke-width="0.4"/>
-    <polygon points="5,12.5 2.6,15.7 6,11.5" fill="currentColor" fill-opacity="0.7" stroke="${PIECE_INK}" stroke-width="0.4"/>
-    <rect x="4" y="6.6" width="12.5" height="6.4" rx="3.2" stroke="${PIECE_INK}" stroke-width="0.7"/>
-    <polygon points="16.5,6.6 20.8,9.8 16.5,13" fill="currentColor" fill-opacity="0.85" stroke="${PIECE_INK}" stroke-width="0.7"/>
-    ${detail}
+/** Y6: commander avatar — an original space-suit portrait tinted with the
+ *  player's color (helmet shell + reflective visor + collar), used in the
+ *  scoreboard, win screen and turn contexts instead of plain color dots. */
+function avatarSvg(color: PlayerColor): string {
+  const c = COLOR_HEX[color];
+  return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+    <circle cx="12" cy="12" r="11" fill="color-mix(in srgb, ${c} 22%, #0a0f1e)" stroke="${c}" stroke-width="1.3"/>
+    <path d="M5.5 12.2 a6.5 6.8 0 0 1 13 0 v2.2 a2 2 0 0 1 -2 2 h-9 a2 2 0 0 1 -2 -2 Z" fill="${c}" stroke="${PIECE_INK}" stroke-width="0.7"/>
+    <path d="M7.4 12 a4.6 4.8 0 0 1 9.2 0 v1.4 a1.4 1.4 0 0 1 -1.4 1.4 h-6.4 a1.4 1.4 0 0 1 -1.4 -1.4 Z" fill="#101728"/>
+    <path d="M8.4 11.2 a3.4 3 0 0 1 4.4 -2.4" stroke="#bfe0ff" stroke-width="1" stroke-linecap="round" opacity="0.8"/>
+    <path d="M7 17.4 q5 2.6 10 0 l0.6 2.2 q-5.6 2.8 -11.2 0 Z" fill="color-mix(in srgb, ${c} 70%, #fff)" stroke="${PIECE_INK}" stroke-width="0.6"/>
   </svg>`;
 }
 
-/** Colony: a hex platform topped with a small cluster of iso towers. */
+/**
+ * Y4 redesigned piece icons — each piece gets its OWN silhouette so they
+ * read at a glance even at 20px:
+ *   colony ship  = a VERTICAL rocket carrying a green habitat dome
+ *   trade ship   = a HORIZONTAL freighter stacked with gold cargo crates
+ *   (plain ship) = a small neutral shuttle
+ *   colony       = a big glass dome habitat on a pad
+ *   spaceport    = a tall control tower with a landing ring + beacon
+ */
+function shipIco(kind?: "colonyShip" | "tradeShip"): string {
+  if (kind === "colonyShip") {
+    // Upright settler rocket: habitat dome nose (green), body, legs, flame.
+    return `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="none">
+      <path d="M7.6 10.4 a4.4 4.4 0 0 1 8.8 0 Z" fill="#57e389" stroke="${PIECE_INK}" stroke-width="0.7"/>
+      <path d="M9.2 9.6 a2.8 2.6 0 0 1 5.4 0" fill="none" stroke="${PIECE_INK}" stroke-width="0.6" opacity="0.5"/>
+      <rect x="7.6" y="10.4" width="8.8" height="7.2" rx="1.4" fill="currentColor" stroke="${PIECE_INK}" stroke-width="0.7"/>
+      <circle cx="12" cy="13.6" r="1.5" fill="${PIECE_INK}" opacity="0.45"/>
+      <polygon points="7.6,14.4 4.6,19 7.6,17.6" fill="currentColor" fill-opacity="0.8" stroke="${PIECE_INK}" stroke-width="0.5"/>
+      <polygon points="16.4,14.4 19.4,19 16.4,17.6" fill="currentColor" fill-opacity="0.8" stroke="${PIECE_INK}" stroke-width="0.5"/>
+      <path d="M10 17.6 L12 21.6 L14 17.6 Z" fill="#ffd23f" stroke="${PIECE_INK}" stroke-width="0.5"/>
+    </svg>`;
+  }
+  if (kind === "tradeShip") {
+    // Horizontal cargo freighter: long hull, gold crates on deck, engine glow.
+    return `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="none">
+      <rect x="5.2" y="6.4" width="3.2" height="3.2" rx="0.6" fill="#ffd23f" stroke="${PIECE_INK}" stroke-width="0.6"/>
+      <rect x="9" y="6.4" width="3.2" height="3.2" rx="0.6" fill="#ffb13f" stroke="${PIECE_INK}" stroke-width="0.6"/>
+      <rect x="12.8" y="6.4" width="3.2" height="3.2" rx="0.6" fill="#ffd23f" stroke="${PIECE_INK}" stroke-width="0.6"/>
+      <path d="M3.5 10 H17.5 L21.5 12.6 L17.5 16.4 H3.5 Q2 13.2 3.5 10 Z" fill="currentColor" stroke="${PIECE_INK}" stroke-width="0.7"/>
+      <circle cx="18" cy="12.9" r="1.2" fill="${PIECE_INK}" opacity="0.45"/>
+      <rect x="1" y="11.4" width="2.4" height="3" rx="0.8" fill="#6fd0ff" stroke="${PIECE_INK}" stroke-width="0.5"/>
+      <path d="M4 18 H16" stroke="${PIECE_INK}" stroke-width="0.6" opacity="0.35"/>
+    </svg>`;
+  }
+  // Generic transport shuttle (supply count): small angled wedge ship.
+  return `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="none">
+    <path d="M3 13 L17 8.4 L21 12 L17 15.6 Z" fill="currentColor" stroke="${PIECE_INK}" stroke-width="0.7"/>
+    <circle cx="16.6" cy="12" r="1.1" fill="${PIECE_INK}" opacity="0.45"/>
+    <path d="M6 10.6 L3.4 7.8 M6 15.4 L3.4 18.2" stroke="currentColor" stroke-width="1.4"/>
+  </svg>`;
+}
+
+/** Colony: a wide glass dome habitat (teal glow) with an airlock tunnel. */
 function colonyIco(): string {
   return `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="none">
-    ${isoHexSvg(12, 17.5, 7)}
-    ${isoBoxSvg(12, 15, 3.4, 9)}
-    ${isoBoxSvg(7.6, 17, 2.6, 5.4)}
-    ${isoBoxSvg(16.4, 17.4, 2.4, 4.4)}
+    <ellipse cx="12" cy="18.6" rx="9.4" ry="2.4" fill="currentColor" fill-opacity="0.55" stroke="${PIECE_INK}" stroke-width="0.5"/>
+    <path d="M4.4 18.4 a7.6 7.4 0 0 1 15.2 0 Z" fill="currentColor" stroke="${PIECE_INK}" stroke-width="0.8"/>
+    <path d="M6.4 18.2 a5.6 5.6 0 0 1 11.2 0" fill="none" stroke="#9fe8ff" stroke-width="1" opacity="0.85"/>
+    <path d="M8.6 18 a3.4 3.6 0 0 1 6.8 0" fill="none" stroke="#9fe8ff" stroke-width="0.7" opacity="0.55"/>
+    <rect x="10.6" y="13.4" width="2.8" height="5" rx="0.7" fill="${PIECE_INK}" opacity="0.4"/>
+    <rect x="18.6" y="16.2" width="3.6" height="2.4" rx="1.2" fill="currentColor" fill-opacity="0.85" stroke="${PIECE_INK}" stroke-width="0.5"/>
   </svg>`;
 }
 
-/** Spaceport: a wider platform with a denser, taller tower cluster + beacon. */
+/** Spaceport: a tall control tower piercing a landing ring, beacon on top. */
 function spaceportIco(): string {
   return `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="none">
-    ${isoHexSvg(12, 19, 8.4)}
-    ${isoBoxSvg(8, 15.5, 2.6, 7)}
-    ${isoBoxSvg(16, 15.8, 2.4, 6)}
-    ${isoBoxSvg(12, 16.6, 3, 12)}
-    ${isoBoxSvg(6, 18.6, 2.2, 4.4)}
-    ${isoBoxSvg(17.5, 18.8, 2.4, 5.2)}
-    <circle cx="12" cy="4.4" r="1.6" fill="#ffd23f" stroke="${PIECE_INK}" stroke-width="0.6"/>
+    <ellipse cx="12" cy="19.4" rx="8.6" ry="2" fill="currentColor" fill-opacity="0.55" stroke="${PIECE_INK}" stroke-width="0.5"/>
+    <path d="M10.2 19.4 L11 7.4 H13 L13.8 19.4 Z" fill="currentColor" stroke="${PIECE_INK}" stroke-width="0.7"/>
+    <ellipse cx="12" cy="10.6" rx="8" ry="2.6" fill="none" stroke="#6fd0ff" stroke-width="1.2"/>
+    <ellipse cx="12" cy="10.6" rx="8" ry="2.6" fill="none" stroke="${PIECE_INK}" stroke-width="0.4" opacity="0.4"/>
+    <rect x="9.4" y="5" width="5.2" height="3" rx="1.5" fill="currentColor" stroke="${PIECE_INK}" stroke-width="0.7"/>
+    <circle cx="12" cy="3.4" r="1.3" fill="#ffd23f" stroke="${PIECE_INK}" stroke-width="0.5"/>
+    <path d="M12 4.7 V5" stroke="${PIECE_INK}" stroke-width="0.6"/>
   </svg>`;
 }
 

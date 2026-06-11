@@ -364,6 +364,28 @@ export class BoardRenderer {
     this.resetIdleTimer();
   }
 
+  /** The visible screen viewport expressed in BOARD coordinates — drives the
+   *  minimap's view rectangle. */
+  visibleBoardRect(): { x0: number; y0: number; x1: number; y1: number } {
+    const inv = (sx: number, sy: number): { x: number; y: number } => ({
+      x: ((sx - this.panX) / this.zoom - this.fit.ox) / this.fit.scale,
+      y: ((sy - this.panY) / this.zoom - this.fit.oy) / this.fit.scale,
+    });
+    const a = inv(0, 0);
+    const b = inv(window.innerWidth, window.innerHeight);
+    return { x0: a.x, y0: a.y, x1: b.x, y1: b.y };
+  }
+
+  /** Glide the camera so a BOARD point lands at the screen centre (minimap
+   *  click-to-jump). Zooms in a little if currently at the fitted view. */
+  centerOnBoardPoint(bx: number, by: number): void {
+    const z = Math.max(this.zoom, 1.5);
+    const cx = this.fit.ox + bx * this.fit.scale;
+    const cy = this.fit.oy + by * this.fit.scale;
+    this.animateViewTo(z, window.innerWidth / 2 - cx * z, window.innerHeight / 2 - cy * z, 420);
+    this.resetIdleTimer();
+  }
+
   /** User setting: when false, the idle auto-recenter is disabled (double-tap
    *  recenter still works). Toggled from the HUD tools. */
   autoRecenterEnabled = true;

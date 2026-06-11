@@ -2024,3 +2024,114 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   30% { opacity: 1; }
   100% { transform: rotate(var(--a)) scaleY(1.6); opacity: 0; }
 }
+
+/* === Y3: round-4 setup choices pop big in the center (once per game). === */
+.setup-pop {
+  position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%);
+  z-index: 95; pointer-events: auto;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 26px 30px 24px; border-radius: 22px;
+  background: linear-gradient(165deg, rgba(22, 30, 56, 0.97), rgba(8, 11, 22, 0.97));
+  border: 1px solid rgba(120, 170, 255, 0.3);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), 0 0 60px rgba(91, 140, 255, 0.12);
+  animation: spPop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+}
+@keyframes spPop {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+.sp-title { font-size: 22px; font-weight: 900; letter-spacing: 0.02em; }
+.sp-sub { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+.sp-tiles { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+.sp-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  width: 168px; padding: 18px 14px 14px; border-radius: 16px;
+  text-align: center;
+}
+.sp-tile .sp-ico { display: inline-flex; }
+.sp-tile .sp-ico svg { width: 46px; height: 46px; }
+.sp-tile .sp-name { font-size: 15px; font-weight: 900; letter-spacing: 0.04em; }
+.sp-tile .sp-desc { font-size: 11px; font-weight: 500; color: var(--muted); line-height: 1.4; white-space: normal; }
+.sp-tile:hover .sp-desc { color: var(--text); }
+
+/* === Y5: encounter card — 3D flip reveal + floating face. === */
+.encounter-overlay { perspective: 1300px; }
+.enc-3d {
+  position: relative;
+  transform-style: preserve-3d;
+}
+.enc-3d.flip { animation: encFlip 0.95s cubic-bezier(0.35, 0.7, 0.3, 1) both, encFloat 7s ease-in-out 1s infinite; }
+.enc-3d.revealed { animation: encFloat 7s ease-in-out infinite; transform: rotateY(360deg); }
+@keyframes encFlip {
+  0% { transform: rotateY(180deg) scale(0.82); }
+  55% { transform: rotateY(310deg) scale(1.04); }
+  100% { transform: rotateY(360deg) scale(1); }
+}
+@keyframes encFloat {
+  0%, 100% { transform: rotateY(360deg) translateY(0); }
+  50% { transform: rotateY(360deg) translateY(-7px); }
+}
+.enc-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.enc-face.enc-front { transform: rotateY(0deg); }
+.enc-face.enc-back {
+  position: absolute; inset: 0; z-index: 2;
+  transform: rotateY(180deg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle 1px at 22% 28%, rgba(255,255,255,0.5) 1px, transparent 1.6px),
+    radial-gradient(circle 1px at 72% 16%, rgba(255,255,255,0.35) 1px, transparent 1.6px),
+    radial-gradient(circle 1px at 82% 70%, rgba(255,255,255,0.4) 1px, transparent 1.6px),
+    radial-gradient(circle 1px at 30% 80%, rgba(255,255,255,0.3) 1px, transparent 1.6px),
+    linear-gradient(160deg, #1a2444, #0a0e1f);
+  border: 1px solid rgba(140, 185, 255, 0.45);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.7), inset 0 0 50px rgba(91, 140, 255, 0.12);
+}
+.eb-ring {
+  position: absolute; inset: 12px; border-radius: 12px;
+  border: 1px dashed rgba(140, 185, 255, 0.35);
+}
+.eb-emblem { color: #6fb3ff; opacity: 0.9; }
+.eb-emblem svg { width: 54px; height: 54px; }
+.eb-label { font-size: 14px; font-weight: 900; letter-spacing: 0.42em; color: #9fc0ff; }
+.eb-num { font-size: 11px; color: var(--muted); letter-spacing: 0.2em; }
+/* The crest medallion crowning the card face. */
+.enc-crest {
+  width: 54px; height: 54px; margin: -44px auto 4px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(160deg, #1c2848, #0b101f);
+  border: 2px solid rgba(140, 185, 255, 0.5);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6), 0 0 22px rgba(91, 140, 255, 0.25);
+}
+.enc-crest svg { width: 32px; height: 32px; }
+
+/* === Y6/Y7: avatars + VP progress bars in the scoreboard. === */
+.score-main .avatar { display: inline-flex; line-height: 0; flex: 0 0 auto; }
+.go-avatar svg { width: 26px; height: 26px; }
+.vp-bar {
+  height: 3.5px; border-radius: 999px; overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 0 2px;
+}
+.vp-bar i {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--pc) 55%, transparent), var(--pc));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--pc) 60%, transparent);
+  border-radius: 999px;
+  transition: width 0.6s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.scoreboard.compact .vp-bar { display: none; }
+
+/* === Y10: minimap — corner overview, large screens only. === */
+.minimap {
+  position: fixed; left: 14px; bottom: 14px; z-index: 40;
+  width: 180px; height: 230px;
+  border-radius: 12px; cursor: pointer;
+  border: 1px solid rgba(120, 160, 255, 0.25);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  background: rgba(6, 9, 18, 0.92);
+}
+.minimap:hover { border-color: rgba(140, 190, 255, 0.55); }
+@media (max-width: 999px) {
+  .minimap { display: none; }
+}
