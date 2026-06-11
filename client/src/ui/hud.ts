@@ -29,6 +29,7 @@ import type { GameDriver } from "../game/store.js";
 import type { BoardRenderer } from "../render/board.js";
 import { ChatBox } from "./chat.js";
 import { sfx } from "../audio.js";
+import { ShakerStreaks } from "../render/streaks.js";
 
 const el = (html: string): HTMLElement => {
   const t = document.createElement("template");
@@ -3167,20 +3168,9 @@ export class HUD {
     // R9: tint the shaker window in the active player's color so spectators can
     // tell at a glance whose mothership is shaking.
     const accent = COLOR_HEX[active.color] ?? "#ffd23f";
-    // Racing light streaks BEHIND the shaker stage: each picks its own lane,
-    // start offset and SPEED (wide spread, linear pace) so faster ones keep
-    // overtaking slower ones while the overlay is up. They live inside the
-    // overlay, so they appear and vanish with it.
-    const streaks = Array.from({ length: 16 }, () => {
-      const top = (4 + Math.random() * 92).toFixed(1);
-      const delay = (-Math.random() * 2.4).toFixed(2); // negative = mid-flight at reveal
-      const dur = (0.8 + Math.random() * 2.2).toFixed(2);
-      const scale = (0.4 + Math.random() * 1.0).toFixed(2);
-      return `<i class="ss-star" style="top:${top}%;animation-delay:${delay}s;animation-duration:${dur}s;--ss:${scale}"></i>`;
-    }).join("");
     const overlay = el(
       `<div class="shake-overlay">
-         <div class="shake-stars">${streaks}</div>
+         <div class="shake-stars"></div>
          <div class="shake-stage" style="--accent:${accent}">
            <div class="cs-title" style="color:${accent}">${escapeHtml(active.name)} shakes the mothership</div>
            <div class="cs-balls">${ballHtml}</div>
@@ -3189,6 +3179,10 @@ export class HUD {
        </div>`,
     );
     document.body.appendChild(overlay);
+    // Racing light streaks BEHIND the shaker stage (the verbatim shader from
+    // the owner's reference, lights only): screen-blended over the board, and
+    // it stops itself when the overlay is removed.
+    new ShakerStreaks(overlay.querySelector(".shake-stars") as HTMLElement);
     const stage = overlay.querySelector(".shake-stage") as HTMLElement;
     const ballEls = Array.from(overlay.querySelectorAll<HTMLElement>(".cs-ball"));
     const resultEl = overlay.querySelector(".cs-result") as HTMLElement;

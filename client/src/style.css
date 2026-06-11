@@ -1798,49 +1798,24 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 @keyframes heroDown { from { opacity: 0; transform: translateY(-18px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes heroUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
 
-/* === W5: racing light streaks behind the center shaker — long white-hot
-   trails speeding rightward at different paces, continuously looping and
-   overtaking one another (the referenced hero-streaks look, sans clouds). === */
+/* === W5: racing light streaks behind the center shaker — the verbatim hero
+   shader (lights only, no cloud background), screen-blended so the black
+   canvas vanishes and the racing lights glow over the live board. Fades in
+   and out with the overlay's lifetime. === */
 .shake-stars {
   position: absolute; inset: 0; overflow: hidden; pointer-events: none;
 }
-.ss-star {
-  position: absolute; left: -45vw;
-  width: 9px; height: 9px; border-radius: 50%;
-  background: #fff;
-  box-shadow:
-    0 0 8px 3px rgba(255, 255, 255, 0.95),
-    0 0 26px 10px rgba(190, 220, 255, 0.5),
-    0 0 60px 22px rgba(140, 185, 255, 0.18);
-  opacity: 0;
-  transform: scale(var(--ss, 1));
-  animation-name: ssFly;
-  /* Linear pace: the racing feel comes from streaks at different speeds
-     passing each other, not from each one easing. */
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-  will-change: transform, opacity;
+.shake-stars canvas {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  mix-blend-mode: screen;
+  animation: ssCanvas 2.5s ease both;
 }
-/* The long tapering trail behind the head. */
-.ss-star::before {
-  content: ""; position: absolute; right: 4px; top: 50%;
-  width: 34vw; height: 3px; transform: translateY(-50%);
-  background: linear-gradient(90deg, transparent, rgba(214, 232, 255, 0.55) 60%, rgba(255, 255, 255, 0.95));
-  border-radius: 3px;
-  filter: blur(0.4px);
-}
-/* A wider, softer halo trail under the bright core. */
-.ss-star::after {
-  content: ""; position: absolute; right: 0; top: 50%;
-  width: 26vw; height: 12px; transform: translateY(-50%);
-  background: linear-gradient(90deg, transparent, rgba(170, 205, 255, 0.16));
-  border-radius: 8px;
-}
-@keyframes ssFly {
-  0% { opacity: 0; transform: translateX(0) scale(var(--ss, 1)); }
-  8% { opacity: 1; }
-  92% { opacity: 1; }
-  100% { opacity: 0; transform: translateX(190vw) scale(var(--ss, 1)); }
+@keyframes ssCanvas {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 /* Small labeled Trade button beside the hand cards — makes the click-a-card
