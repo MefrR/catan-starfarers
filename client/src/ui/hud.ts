@@ -212,6 +212,9 @@ export class HUD {
    *  collapse/expand (the HUD re-renders wholesale on every state tick). */
   private lastSidebarCollapsed: boolean | null = null;
   private lastScoreCompact: boolean | null = null;
+  /** Last set-up round/step the camera framed, so each placement round zooms
+   *  the view onto the starting area exactly once (players can still pan). */
+  private lastSetupFocusKey = "";
 
   constructor(mount: HTMLElement, game: GameDriver, board: BoardRenderer) {
     this.root = mount;
@@ -1161,6 +1164,50 @@ export class HUD {
     this.syncDiscardOverlay(state, me);
     this.syncTurnTimer(state);
     this.syncGameOverOverlay(state);
+
+    // Set-up framing: once per placement round, glide the camera onto the
+    // starting-colonies area, fitted to the screen space NOT covered by the
+    // HUD — new players otherwise hunt for it under the bottom action bar.
+    const su = ps.setup;
+    if (ps.phase === "setup" && su && su.step === "place") {
+      const key = `setup:${su.round}:${su.r4step ?? ""}`;
+      if (key !== this.lastSetupFocusKey) {
+        this.lastSetupFocusKey = key;
+        // Measure the freshly-rendered HUD (bar/sidebar) on the next frame.
+        requestAnimationFrame(() => this.focusSetupArea(state));
+      }
+    } else if (ps.phase !== "setup" && this.lastSetupFocusKey) {
+      this.lastSetupFocusKey = "";
+    }
+  }
+
+  /** Zoom/pan the map so the whole starting area (legal colony sites + every
+   *  piece placed so far) fills the visible window between the HUD panels. */
+  private focusSetupArea(state: GameState): void {
+    const pts: { x: number; y: number }[] = [];
+    for (const id of catanianColonySites(state)) {
+      const it = state.intersections[id];
+      if (it) pts.push(it);
+    }
+    // During set-up every existing piece is in the starting area too — include
+    // them so the framed region stays stable as legal sites get used up.
+    for (const b of state.buildings) {
+      const it = state.intersections[b.intersectionId];
+      if (it) pts.push(it);
+    }
+    for (const s of state.ships) {
+      const it = state.intersections[s.intersectionId];
+      if (it) pts.push(it);
+    }
+    if (pts.length === 0) return;
+    const sidebar = this.root.querySelector(".sidebar-left")?.getBoundingClientRect();
+    const bar = this.root.querySelector(".actionbar")?.getBoundingClientRect();
+    this.board.focusRegion(pts, {
+      left: (sidebar ? sidebar.right : 0) + 14,
+      top: 84, // below the exit button / event ticker
+      right: window.innerWidth - 64, // clear of the floating tools (ⓘ 👁 ⌖ ♪)
+      bottom: (bar ? bar.top : window.innerHeight * 0.62) - 14,
+    });
   }
 
   /** The timed step currently on the clock — shown to EVERY player. `mine` marks

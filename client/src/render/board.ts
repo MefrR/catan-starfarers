@@ -289,35 +289,79 @@ export class BoardRenderer {
     this.panY = loY > hiY ? (loY + hiY) / 2 : Math.max(loY, Math.min(hiY, this.panY));
   }
 
-  /**
-   * Glide the view back to the fitted middle (zoom 1, centred) over ~380ms.
-   * Fired by a double-tap or after 10s of no map interaction so a lost or
-   * zoomed-in player is always returned to the whole map.
-   */
-  private animateRecenter(): void {
-    if (this.zoom === 1 && this.panX === 0 && this.panY === 0) return; // already there
+  /** Glide the view to a target zoom + pan over `dur` ms, then bake a crisp
+   *  re-render at the final zoom. Shared by recenter and region focus. */
+  private animateViewTo(zT: number, pxT: number, pyT: number, dur = 380): void {
+    if (this.zoom === zT && this.panX === pxT && this.panY === pyT) return; // already there
     cancelAnimationFrame(this.recenterAnim);
     const z0 = this.zoom;
     const px0 = this.panX;
     const py0 = this.panY;
     const t0 = performance.now();
-    const dur = 380;
     const ease = (t: number): number => 1 - Math.pow(1 - t, 3);
     const step = (now: number): void => {
       const t = Math.min(1, (now - t0) / dur);
       const e = ease(t);
-      this.zoom = z0 + (1 - z0) * e;
-      this.panX = px0 + (0 - px0) * e;
-      this.panY = py0 + (0 - py0) * e;
+      this.zoom = z0 + (zT - z0) * e;
+      this.panX = px0 + (pxT - px0) * e;
+      this.panY = py0 + (pyT - py0) * e;
       this.applyViewTransform();
       if (t < 1) {
         this.recenterAnim = requestAnimationFrame(step);
       } else {
         this.recenterAnim = 0;
-        if (this.last) this.render(this.last); // bake crisp at zoom 1
+        if (this.last) this.render(this.last); // bake crisp at the final zoom
       }
     };
     this.recenterAnim = requestAnimationFrame(step);
+  }
+
+  /**
+   * Glide the view back to the fitted middle (zoom 1, centred) over ~380ms.
+   * Fired by a double-tap or after 60s of no map interaction so a lost or
+   * zoomed-in player is always returned to the whole map.
+   */
+  private animateRecenter(): void {
+    this.animateViewTo(1, 0, 0, 380);
+  }
+
+  /**
+   * Frame a set of board-space points inside a given on-screen viewport rect
+   * (the area NOT covered by HUD panels), zooming in so the region fills it.
+   * Used to spotlight the starting colonies during the set-up rounds, which
+   * otherwise sit hidden under the bottom action bar on tall maps.
+   */
+  focusRegion(
+    points: { x: number; y: number }[],
+    view: { left: number; top: number; right: number; bottom: number },
+  ): void {
+    if (points.length === 0) return;
+    this.cancelInertia();
+    this.cancelZoomGlide();
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of points) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    // Breathing room around the region (board units).
+    const pad = 0.55;
+    const f = this.fit;
+    const x0 = f.ox + (minX - pad) * f.scale;
+    const x1 = f.ox + (maxX + pad) * f.scale;
+    const y0 = f.oy + (minY - pad) * f.scale;
+    const y1 = f.oy + (maxY + pad) * f.scale;
+    const availW = Math.max(80, view.right - view.left);
+    const availH = Math.max(80, view.bottom - view.top);
+    // Zoom so the region fills the available window. Must stay > 1: at the
+    // fitted zoom clampPan pins the pan to 0 and the framing couldn't move.
+    let z = Math.min(availW / Math.max(1, x1 - x0), availH / Math.max(1, y1 - y0));
+    z = Math.max(1.06, Math.min(z, BoardRenderer.MAX_ZOOM));
+    const cx = (x0 + x1) / 2;
+    const cy = (y0 + y1) / 2;
+    this.animateViewTo(z, (view.left + view.right) / 2 - cx * z, (view.top + view.bottom) / 2 - cy * z, 520);
+    this.resetIdleTimer();
   }
 
   /** User setting: when false, the idle auto-recenter is disabled (double-tap
