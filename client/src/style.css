@@ -627,12 +627,93 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow
 /* Fleet upgrade rows that carry a hover description. */
 .ms-stat-info { cursor: help; }
 
-/* Off-turn build palette: every option visible but grayed; still hoverable so
-   the player can read what each does while waiting. */
-.build-palette { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-.build-palette.off-turn { margin-top: 8px; opacity: 0.6; }
-.build-palette .is-disabled { cursor: help; filter: grayscale(0.55); }
-.build-palette .is-disabled:hover { opacity: 0.9; filter: grayscale(0.2); }
+/* === Build dock: six always-visible square tiles (icon-first, like the
+   resource cards). Active tiles carry a traveling light along the border —
+   a vanilla-CSS take on the "star button" (conic sweep masked to the rim). === */
+@property --bd-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+.build-dock {
+  display: flex; gap: 7px; justify-content: center; flex-wrap: nowrap;
+  margin-top: 2px;
+  /* The action bar is a wrapping flex row — claim a full row of our own. */
+  flex-basis: 100%;
+}
+.bd-tile {
+  position: relative; isolation: isolate;
+  width: clamp(52px, 11vw, 66px); height: clamp(52px, 11vw, 66px);
+  flex: 0 0 auto; padding: 0; border-radius: 14px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  color: var(--text);
+  background:
+    /* faint star-dot field inside each tile */
+    radial-gradient(circle 1px at 22% 28%, rgba(255,255,255,0.5) 1px, transparent 1.6px),
+    radial-gradient(circle 1px at 70% 18%, rgba(255,255,255,0.35) 1px, transparent 1.6px),
+    radial-gradient(circle 1px at 82% 64%, rgba(255,255,255,0.4) 1px, transparent 1.6px),
+    radial-gradient(circle 1px at 34% 78%, rgba(255,255,255,0.3) 1px, transparent 1.6px),
+    linear-gradient(165deg, rgba(26, 36, 64, 0.92), rgba(10, 14, 28, 0.92));
+  border: 1px solid rgba(120, 160, 255, 0.22);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  transition: transform 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.4), border-color 0.2s ease, box-shadow 0.2s ease, filter 0.25s ease;
+}
+/* Traveling border light on buildable tiles (the star-button sweep). */
+.bd-tile.ok::before {
+  content: ""; position: absolute; inset: -1px; z-index: -1; border-radius: inherit;
+  padding: 1.6px;
+  background: conic-gradient(
+    from var(--bd-angle),
+    transparent 0deg 290deg,
+    rgba(191, 224, 255, 0.95) 332deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: bdSweep 3s linear infinite;
+}
+@keyframes bdSweep { to { --bd-angle: 360deg; } }
+.bd-tile.ok {
+  cursor: pointer;
+  border-color: rgba(140, 185, 255, 0.55);
+  box-shadow: 0 6px 22px rgba(111, 179, 255, 0.18);
+}
+.bd-tile.ok:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(111, 179, 255, 0.3); }
+.bd-tile.ok:active { transform: translateY(0) scale(0.96); }
+.bd-tile.locked {
+  cursor: help; filter: grayscale(0.75) brightness(0.75); opacity: 0.75;
+}
+.bd-tile.locked:hover { filter: grayscale(0.35) brightness(0.9); opacity: 0.95; transform: none; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); }
+/* Free encounter trade ship: golden rim + golden sweep so it begs to be spent. */
+.bd-tile.free.ok { border-color: rgba(255, 210, 63, 0.65); }
+.bd-tile.free.ok::before {
+  background: conic-gradient(
+    from var(--bd-angle),
+    transparent 0deg 290deg,
+    rgba(255, 220, 110, 0.95) 332deg,
+    transparent 360deg
+  );
+}
+.bd-ico { display: inline-flex; line-height: 0; }
+.bd-ico svg { width: clamp(22px, 5vw, 28px); height: clamp(22px, 5vw, 28px); }
+.bd-name {
+  font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--muted);
+}
+.bd-tile.ok .bd-name { color: var(--text); }
+.bd-left {
+  position: absolute; top: -5px; right: -5px;
+  min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 900; color: #07101f;
+  background: linear-gradient(160deg, var(--accent), #8cc0ff);
+  border: 1px solid rgba(8, 12, 24, 0.8);
+}
+.bd-left.none { background: rgba(255, 255, 255, 0.18); color: var(--muted); }
+@media (max-width: 700px) {
+  .build-dock { gap: 5px; }
+}
 
 .actionbar {
   left: 50%; bottom: 16px; transform: translateX(-50%);

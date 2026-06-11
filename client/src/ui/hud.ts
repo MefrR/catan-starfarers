@@ -1086,13 +1086,16 @@ export class HUD {
       actions.appendChild(el(`<div class="waiting">Encounter in progress…</div>`));
     } else if (!myTurn) {
       actions.appendChild(el(`<div class="waiting">Waiting for ${escapeHtml(active.name)}…</div>`));
-      // The build options stay visible (grayed) so you can read what each does
-      // while you wait; they activate on your turn.
-      this.fillDisabledBuildPalette(actions, me);
     } else {
       this.fillHumanActions(actions, state, me);
     }
     bar.appendChild(actions);
+    // The build dock: always visible (every phase, every turn) so costs/uses
+    // are one hover away; tiles only activate on your build turn. Hidden during
+    // setup, where the build economy doesn't exist yet.
+    if (ps.phase !== "setup" && ps.phase !== "gameOver") {
+      bar.appendChild(this.buildDock(state, me));
+    }
     bar.appendChild(el(`<div class="hud-error"></div>`));
 
     // R6: top-left Exit button → confirm before leaving to the main menu.
@@ -1749,26 +1752,95 @@ export class HUD {
     return wrap;
   }
 
-  /** The full build palette, always visible but GRAYED OUT, shown while you wait
-   *  for another player. The buttons don't act (it isn't your turn) but hovering
-   *  still explains each option's cost + what it does. Uses a CSS class instead of
-   *  the disabled attribute so pointer/hover events still fire. */
-  private fillDisabledBuildPalette(actions: HTMLElement, me: PlayerState): void {
-    const palette = el(`<div class="build-palette off-turn"></div>`);
-    const label = (icon: string, name: string): string =>
-      `<span class="b-ico">${icon}</span><span class="b-name">${name}</span>`;
-    const add = (icon: string, name: string, cost: Partial<Record<Resource, number>>, uses: string): void => {
-      const b = el(`<button class="secondary is-disabled" aria-disabled="true">${label(icon, name)}</button>`);
-      this.attachCostTip(b, me, cost, uses);
-      palette.appendChild(b);
+  /**
+   * The always-visible build dock: six equal square tiles (Colony / Trade /
+   * Port / Boost / Cannon / Pod) styled like the resource cards — big icon,
+   * tiny label, count badge. Tiles LIGHT UP (animated border light) and become
+   * clickable only when you can actually build them on your trade & build turn
+   * (the Trade tile also lights in flight while a free encounter ship is
+   * waiting). Locked tiles stay visible and still show the full cost/uses
+   * popover on hover, so the palette doubles as an always-on reference.
+   */
+  private buildDock(state: GameState, me: PlayerState): HTMLElement {
+    const ps = state.phaseState;
+    const myTurn = this.game.isHumanTurn();
+    const afford = (cost: Partial<ResourceBag>): boolean =>
+      RESOURCES.every((r) => me.hand[r] >= (cost[r] ?? 0));
+    const blocked =
+      (ps.pendingDiscards?.[me.id] ?? 0) > 0 ||
+      !!ps.awaitingSteal ||
+      !!ps.pendingFriendship ||
+      !!ps.pendingTrade;
+    const buildPhase = myTurn && ps.phase === "tradeBuild" && !blocked;
+    const freeShips = ps.freeTradeShips?.[me.id] ?? 0;
+    const hasLaunch = shipLaunchSites(me, state).length > 0;
+    const transport = me.supply.transportShips;
+    const colonyCount = state.buildings.filter((b) => b.owner === me.id && b.kind === "colony").length;
+
+    const dock = el(`<div class="build-dock"></div>`);
+    const tile = (o: {
+      ico: string;
+      name: string;
+      left: number;
+      ok: boolean;
+      free?: boolean;
+      cost: Partial<ResourceBag>;
+      uses: string;
+      onClick: () => void;
+    }): void => {
+      const t = el(
+        `<button class="bd-tile ${o.ok ? "ok" : "locked"}${o.free ? " free" : ""}" aria-disabled="${!o.ok}">
+           <span class="bd-ico">${o.ico}</span>
+           <span class="bd-name">${o.name}</span>
+           <span class="bd-left ${o.left <= 0 ? "none" : ""}">${o.left}</span>
+         </button>`,
+      );
+      if (o.ok) t.addEventListener("click", o.onClick);
+      this.attachCostTip(
+        t,
+        me,
+        o.cost,
+        (o.free ? "<b>FREE</b> — granted by an encounter (no resource cost).<br>" : "") + o.uses,
+      );
+      dock.appendChild(t);
     };
-    add(shipIco("colonyShip"), "Colony Ship", BUILD_COSTS.colonyShip, BUILD_USES.colonyShip);
-    add(shipIco("tradeShip"), "Trade Ship", BUILD_COSTS.tradeShip, BUILD_USES.tradeShip);
-    add(spaceportIco(), "Spaceport", BUILD_COSTS.spaceport, BUILD_USES.spaceport);
-    add(upgradeIco("booster"), "Booster", BUILD_COSTS.booster, UPGRADE_USES.booster);
-    add(upgradeIco("cannon"), "Cannon", BUILD_COSTS.cannon, UPGRADE_USES.cannon);
-    add(upgradeIco("freightPod"), "Freight Pod", BUILD_COSTS.freightPod, UPGRADE_USES.freightPod);
-    actions.appendChild(palette);
+
+    tile({
+      ico: shipIco("colonyShip"), name: "Colony", left: transport,
+      cost: BUILD_COSTS.colonyShip, uses: BUILD_USES.colonyShip,
+      ok: buildPhase && afford(BUILD_COSTS.colonyShip) && hasLaunch && transport > 0,
+      onClick: () => { this.launchKind = "colonyShip"; this.mode = "launchShip"; this.rerender(); },
+    });
+    // The free encounter trade ship is also launchable mid-flight, so the tile
+    // lights up there too (the engine allows the build in that one case).
+    const freeOk =
+      freeShips > 0 && myTurn && !blocked && hasLaunch && transport > 0 &&
+      (ps.phase === "tradeBuild" || ps.phase === "flight");
+    tile({
+      ico: shipIco("tradeShip"), name: "Trade", left: transport, free: freeShips > 0,
+      cost: BUILD_COSTS.tradeShip, uses: BUILD_USES.tradeShip,
+      ok: freeOk || (buildPhase && afford(BUILD_COSTS.tradeShip) && hasLaunch && transport > 0),
+      onClick: () => { this.launchKind = "tradeShip"; this.mode = "launchShip"; this.rerender(); },
+    });
+    tile({
+      ico: spaceportIco(), name: "Port", left: colonyCount,
+      cost: BUILD_COSTS.spaceport, uses: BUILD_USES.spaceport,
+      ok: buildPhase && afford(BUILD_COSTS.spaceport) && colonyCount > 0,
+      onClick: () => { this.mode = "pickColony"; this.rerender(); },
+    });
+    const upTile = (k: UpgradeKind, name: string): void => {
+      const left = MAX_UPGRADES[k] - me.upgrades[k];
+      tile({
+        ico: upgradeIco(k), name, left,
+        cost: BUILD_COSTS[k], uses: UPGRADE_USES[k],
+        ok: buildPhase && afford(BUILD_COSTS[k]) && left > 0,
+        onClick: () => this.act({ t: "build", what: k }),
+      });
+    };
+    upTile("booster", "Boost");
+    upTile("cannon", "Cannon");
+    upTile("freightPod", "Pod");
+    return dock;
   }
 
   /** Set up board click handlers appropriate to the current mode. */
@@ -1947,24 +2019,6 @@ export class HUD {
       else b.addEventListener("click", onClick);
       return b;
     };
-    const afford = (cost: Partial<ResourceBag>): boolean =>
-      RESOURCES.every((r) => me.hand[r] >= (cost[r] ?? 0));
-    // Human-readable cost ("1 ore, 2 fuel") and the shortfall against my hand.
-    const costStr = (cost: Partial<ResourceBag>): string =>
-      RESOURCES.filter((r) => (cost[r] ?? 0) > 0).map((r) => `${cost[r]} ${r}`).join(", ");
-    const missingStr = (cost: Partial<ResourceBag>): string =>
-      RESOURCES.filter((r) => (cost[r] ?? 0) > me.hand[r])
-        .map((r) => `${(cost[r] ?? 0) - me.hand[r]} ${r}`)
-        .join(", ");
-    // Build a tooltip describing what a build needs and what's still missing.
-    const buildTip = (cost: Partial<ResourceBag>, extra?: string): string => {
-      const miss = missingStr(cost);
-      const parts = [`Requires: ${costStr(cost)}`];
-      if (miss) parts.push(`Missing: ${miss}`);
-      if (extra) parts.push(extra);
-      return parts.join("  ·  ");
-    };
-
     switch (ps.phase) {
       case "setup": {
         const su = ps.setup;
@@ -2037,100 +2091,9 @@ export class HUD {
         break;
 
       case "tradeBuild": {
-        // When a green launch point is clicked the colony/trade ship chooser
-        // appears on the MAP (see showLaunchPicker), not here in the center bar.
-        const hasColony = state.buildings.some((b) => b.owner === me.id && b.kind === "colony");
-        const hasLaunch = shipLaunchSites(me, state).length > 0;
-        const noTransport = me.supply.transportShips <= 0;
-        const freeTradeShips = state.phaseState.freeTradeShips?.[me.id] ?? 0;
-
-        // Colony / Trade ship: need resources, an open launch point, and a free
-        // transport ship in supply. Tell the player exactly which is missing.
-        const shipTip = (cost: Partial<ResourceBag>, kind: string): string => {
-          const blockers: string[] = [];
-          if (noTransport) blockers.push("no transport ships left (all in use)");
-          if (!hasLaunch) blockers.push("no open space point next to a spaceport");
-          return buildTip(cost, blockers.length ? `Can't build: ${blockers.join("; ")}` : `Launches a ${kind}.`);
-        };
-        // Each build button also gets a hover/click icon popover (Q5) showing,
-        // per resource, how much you have vs. need — green when satisfied, red
-        // when short — plus a header telling you if you can build it right now.
-        const addBuild = (b: HTMLElement, cost: Partial<ResourceBag>, extra?: string): HTMLElement => {
-          this.attachCostTip(b, me, cost, extra);
-          actions.appendChild(b);
-          return b;
-        };
-        // How many of each piece you have left to build, so the button shows both
-        // what the piece looks like (icon) and how many remain. Ships draw from
-        // your transport-ship pool; spaceports upgrade an existing colony; the
-        // three mothership upgrades each cap out at MAX_UPGRADES.
-        const transportLeft = me.supply.transportShips;
-        const colonyCount = state.buildings.filter((b) => b.owner === me.id && b.kind === "colony").length;
-        const boosterLeft = MAX_UPGRADES.booster - me.upgrades.booster;
-        const cannonLeft = MAX_UPGRADES.cannon - me.upgrades.cannon;
-        const freightLeft = MAX_UPGRADES.freightPod - me.upgrades.freightPod;
-        // Compose an icon + name + "N left" pill for a build button's label.
-        const buildLabel = (icon: string, name: string, left: number): string =>
-          `<span class="b-ico">${icon}</span><span class="b-name">${name}</span>` +
-          `<span class="b-left ${left <= 0 ? "none" : ""}" title="${left} left to build">${left}</span>`;
-        addBuild(
-          btn(buildLabel(shipIco("colonyShip"), "Colony Ship", transportLeft), () => { this.launchKind = "colonyShip"; this.mode = "launchShip"; this.render(state); }, {
-            disabled: !afford(BUILD_COSTS.colonyShip) || !hasLaunch || noTransport,
-            title: shipTip(BUILD_COSTS.colonyShip, "colony ship"),
-          }),
-          BUILD_COSTS.colonyShip,
-          BUILD_USES.colonyShip,
-        );
-        addBuild(
-          btn(buildLabel(shipIco("tradeShip"), freeTradeShips > 0 ? "Trade Ship (free)" : "Trade Ship", transportLeft), () => { this.launchKind = "tradeShip"; this.mode = "launchShip"; this.render(state); }, {
-            disabled: (!afford(BUILD_COSTS.tradeShip) && freeTradeShips <= 0) || !hasLaunch || noTransport,
-            title: freeTradeShips > 0
-              ? (noTransport ? "Can't build: no transport ships left (all in use)." : !hasLaunch ? "Can't build: no open space point next to a spaceport." : "Launch a FREE trade ship (no resource cost) — granted by an encounter.")
-              : shipTip(BUILD_COSTS.tradeShip, "trade ship"),
-          }),
-          BUILD_COSTS.tradeShip,
-          (freeTradeShips > 0 ? "<b>Free trade ship</b> — no resource cost (granted by an encounter).<br>" : "") + BUILD_USES.tradeShip,
-        );
-        addBuild(
-          btn(
-            buildLabel(spaceportIco(), "Spaceport", colonyCount),
-            () => { this.mode = "pickColony"; this.render(state); },
-            {
-              disabled: !afford(BUILD_COSTS.spaceport) || !hasColony,
-              secondary: true,
-              title: buildTip(
-                BUILD_COSTS.spaceport,
-                hasColony ? "Upgrades one of your colonies (+1 VP)." : "Can't build: you have no colony to upgrade.",
-              ),
-            },
-          ),
-          BUILD_COSTS.spaceport,
-          BUILD_USES.spaceport,
-        );
-        addBuild(
-          btn(buildLabel(upgradeIco("booster"), "Booster", boosterLeft), () => this.act({ t: "build", what: "booster" }), {
-            disabled: !afford(BUILD_COSTS.booster) || boosterLeft <= 0, secondary: true,
-            title: buildTip(BUILD_COSTS.booster, "+1 ship speed."),
-          }),
-          BUILD_COSTS.booster,
-          UPGRADE_USES.booster,
-        );
-        addBuild(
-          btn(buildLabel(upgradeIco("cannon"), "Cannon", cannonLeft), () => this.act({ t: "build", what: "cannon" }), {
-            disabled: !afford(BUILD_COSTS.cannon) || cannonLeft <= 0, secondary: true,
-            title: buildTip(BUILD_COSTS.cannon, "+1 combat / clears pirate bases."),
-          }),
-          BUILD_COSTS.cannon,
-          UPGRADE_USES.cannon,
-        );
-        addBuild(
-          btn(buildLabel(upgradeIco("freightPod"), "Freight Pod", freightLeft), () => this.act({ t: "build", what: "freightPod" }), {
-            disabled: !afford(BUILD_COSTS.freightPod) || freightLeft <= 0, secondary: true,
-            title: buildTip(BUILD_COSTS.freightPod, "Extra trade stations / terraforms ice planets."),
-          }),
-          BUILD_COSTS.freightPod,
-          UPGRADE_USES.freightPod,
-        );
+        // The six build options live in the always-visible build dock (the row
+        // of square tiles under the action bar) — they light up during this
+        // phase. The center bar keeps only the phase-specific actions.
         // Diplomat "Fame for Sale": pay 1 goods for 1 fame piece, once per turn.
         if (me.friendshipCards.includes("diplomats:fameForSale")) {
           const used = (ps.fameBoughtBy ?? []).includes(me.id);
