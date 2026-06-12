@@ -62,6 +62,26 @@ export interface GameDriver {
 /** AI move pacing (ms) so the human can watch opponents play. */
 const AI_DELAY = 750;
 
+/** localStorage key for the single-player autosave (one slot). */
+const SAVE_KEY = "sf_save1";
+
+interface SaveBlob {
+  v: 1;
+  state: GameState;
+  humanId: string;
+  aiIds: string[];
+  savedAt: number;
+}
+
+/** What the menu needs to offer "Resume voyage" without deserializing twice. */
+export interface SaveSummary {
+  savedAt: number;
+  rivals: string[];
+  /** The human's current VP, for the "you were at N VP" hook. */
+  myVp: number;
+  target: number;
+}
+
 /**
  * Single-player game driver. Holds the authoritative GameState locally, applies
  * the human's intents through the shared engine, and steps AI seats on a timer.
@@ -84,15 +104,83 @@ export class LocalGame {
     return this._devMode;
   }
 
-  constructor(seats: Seat[], config: Partial<GameConfig> = {}) {
+  constructor(seats: Seat[], config: Partial<GameConfig> = {}, restore?: SaveBlob) {
     this.id = ++LocalGame.activeId;
-    this.state = createGameState(
-      seats.map((s) => s.member),
-      config,
-    );
-    this.aiIds = new Set(seats.filter((s) => s.isAI).map((s) => s.member.id));
-    this.humanId = seats.find((s) => !s.isAI)?.member.id ?? seats[0]!.member.id;
+    if (restore) {
+      this.state = restore.state;
+      this.aiIds = new Set(restore.aiIds);
+      this.humanId = restore.humanId;
+    } else {
+      this.state = createGameState(
+        seats.map((s) => s.member),
+        config,
+      );
+      this.aiIds = new Set(seats.filter((s) => s.isAI).map((s) => s.member.id));
+      this.humanId = seats.find((s) => !s.isAI)?.member.id ?? seats[0]!.member.id;
+    }
+    this.persist(); // a fresh game claims the save slot immediately
     this.scheduleAI();
+  }
+
+  /** Rebuild the last autosaved single-player game, or null if none/finished. */
+  static resume(): LocalGame | null {
+    const blob = LocalGame.readSave();
+    return blob ? new LocalGame([], {}, blob) : null;
+  }
+
+  /** Menu peek at the save slot (without constructing a game). */
+  static savedGame(): SaveSummary | null {
+    const blob = LocalGame.readSave();
+    if (!blob) return null;
+    const me = blob.state.players.find((p) => p.id === blob.humanId);
+    return {
+      savedAt: blob.savedAt,
+      rivals: blob.state.players.filter((p) => p.id !== blob.humanId).map((p) => p.name),
+      myVp: me?.victoryPoints ?? 0,
+      target: blob.state.config.targetVictoryPoints,
+    };
+  }
+
+  static clearSave(): void {
+    try {
+      localStorage.removeItem(SAVE_KEY);
+    } catch {
+      /* storage unavailable — nothing to clear */
+    }
+  }
+
+  private static readSave(): SaveBlob | null {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return null;
+      const blob = JSON.parse(raw) as SaveBlob;
+      if (blob?.v !== 1 || !blob.state || !blob.humanId) return null;
+      if (blob.state.phaseState.phase === "gameOver") return null;
+      return blob;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Autosave after every state change; the slot empties itself on game over.
+   *  Best-effort: private browsing / full quota must never break the game. */
+  private persist(): void {
+    try {
+      if (this.state.phaseState.phase === "gameOver") {
+        localStorage.removeItem(SAVE_KEY);
+        return;
+      }
+      const blob: SaveBlob = {
+        v: 1,
+        state: this.state,
+        humanId: this.humanId,
+        aiIds: [...this.aiIds],
+        savedAt: Date.now(),
+      };
+      localStorage.setItem(SAVE_KEY, JSON.stringify(blob));
+    } catch {
+      /* best-effort */
+    }
   }
 
   getState(): GameState {
@@ -107,6 +195,7 @@ export class LocalGame {
 
   private emit(): void {
     if (this._devMode) this.topUpDev();
+    this.persist();
     for (const l of this.listeners) l(this.state);
   }
 

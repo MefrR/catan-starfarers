@@ -81,6 +81,20 @@ export class BoardRenderer {
 
   // Persistent FX overlay (build pulses) — survives wholesale re-renders.
   private fx = new Container();
+
+  // Z4: ambient board life — breathing planet halos, tiny orbiting motes and
+  // pulsing pirate/ice tokens. Rebuilt each render (the items live inside the
+  // wholesale-redrawn layers); one persistent ticker animates whatever the
+  // current render registered. Deterministic phases (from position), no RNG.
+  private ambientItems: {
+    g: Graphics;
+    kind: "halo" | "mote" | "special";
+    x: number;
+    y: number;
+    rad: number;
+    phase: number;
+    speed: number;
+  }[] = [];
   private prevPieces = new Set<string>();
   private piecesInit = false;
   // Q2: last-known board-space position of each ship, to animate moves.
@@ -143,6 +157,29 @@ export class BoardRenderer {
       if (e.target !== this.app.canvas) this.hideTip();
     }, true);
     this.installViewControls();
+
+    // Z4: the single ambient ticker. Skipped entirely for reduced-motion users
+    // (the board simply stays static — gameplay is identical).
+    if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      this.app.ticker.add(() => {
+        if (this.ambientItems.length === 0) return;
+        const t = performance.now();
+        for (const it of this.ambientItems) {
+          if (it.kind === "halo") {
+            // Breathe the glow halo: its draw alpha is the base; g.alpha scales it.
+            it.g.alpha = 0.72 + 0.32 * Math.sin(t * 0.0011 * it.speed + it.phase);
+          } else if (it.kind === "special") {
+            it.g.alpha = 0.86 + 0.14 * Math.sin(t * 0.0019 + it.phase);
+          } else {
+            // Mote on a tilted ellipse; it dims while on the far (upper) half.
+            const a = t * 0.00042 * it.speed + it.phase;
+            const sy = Math.sin(a);
+            it.g.position.set(it.x + Math.cos(a) * it.rad * 1.32, it.y + sy * it.rad * 0.42);
+            it.g.alpha = sy < 0 ? 0.3 : 0.85;
+          }
+        }
+      });
+    }
   }
 
   private positionTooltip(): void {
@@ -786,6 +823,7 @@ export class BoardRenderer {
     // (larger) canvas and end up shoved off to one side.
     this.ensureSize();
     this.root.removeChildren();
+    this.ambientItems.length = 0; // Z4: the new render re-registers its own
 
     const fit = this.computeTransform(state);
     this.fit = fit;
@@ -959,11 +997,16 @@ export class BoardRenderer {
         // reads as a blank "uncharted" disc with just an outline until a ship
         // reveals it (and the whole system) on arrival.
         const fill = planet.explored ? PLANET_FILL[planet.color] : 0x141d33;
+        // Z4: deterministic per-planet phase/speed (from its position) so the
+        // ambient motion is stable across re-renders — no RNG, no popping.
+        const phase = (px * 0.013 + py * 0.029) % (Math.PI * 2);
+        const speed = 0.75 + ((Math.abs(px * 7 + py * 13) % 100) / 100) * 0.6;
         if (planet.explored) {
-          // Soft glow halo so planets read against the starfield.
-          planetLayer.addChild(
-            new Graphics().circle(px, py, rad * 1.25).fill({ color: fill, alpha: 0.18 }),
-          );
+          // Soft glow halo so planets read against the starfield — Z4 makes it
+          // breathe gently (the ticker scales this Graphics' alpha).
+          const halo = new Graphics().circle(px, py, rad * 1.25).fill({ color: fill, alpha: 0.18 });
+          planetLayer.addChild(halo);
+          this.ambientItems.push({ g: halo, kind: "halo", x: px, y: py, rad, phase, speed });
         }
         const disc = new Graphics()
           .circle(px, py, rad)
@@ -1000,6 +1043,16 @@ export class BoardRenderer {
         // Resource glyph (PDF-style): ore=hexagon, carbon=subdivided triangle, etc.
         if (planet.explored) {
           this.drawResourceGlyph(planetLayer, PLANET_RESOURCE[planet.color], px, py, rad * 0.62);
+          // Z4: a tiny mote orbiting the planet on a tilted ellipse — dims on
+          // the far half. Skipped on pirate/ice tokens to keep them readable.
+          if (planet.special === "none") {
+            const mote = new Graphics()
+              .circle(0, 0, Math.max(1.4, rad * 0.08))
+              .fill({ color: 0xdfe9ff, alpha: 0.85 });
+            mote.position.set(px + rad * 1.32, py);
+            planetLayer.addChild(mote);
+            this.ambientItems.push({ g: mote, kind: "mote", x: px, y: py, rad, phase: phase * 1.7 + 1, speed });
+          }
         } else {
           // Face-down planet: a featureless disc with a "?". Uses the exact same
           // "?" colour as a disguised outpost so the two are indistinguishable
@@ -1011,12 +1064,13 @@ export class BoardRenderer {
         // under the fog until the planet is charted (P3).
         if (planet.explored && planet.special !== "none") {
           const isPirate = planet.special === "pirateBase";
-          planetLayer.addChild(
-            new Graphics()
-              .circle(px, py, rad * 0.92)
-              .fill({ color: isPirate ? 0x2a0a0a : 0x0a2a33, alpha: 0.86 })
-              .stroke({ color: isPirate ? 0xff5a4d : 0x7fe0ff, width: 2 }),
-          );
+          const token = new Graphics()
+            .circle(px, py, rad * 0.92)
+            .fill({ color: isPirate ? 0x2a0a0a : 0x0a2a33, alpha: 0.86 })
+            .stroke({ color: isPirate ? 0xff5a4d : 0x7fe0ff, width: 2 });
+          planetLayer.addChild(token);
+          // Z4: the threat token smolders — a slow menacing alpha pulse.
+          this.ambientItems.push({ g: token, kind: "special", x: px, y: py, rad, phase, speed });
           planetLayer.addChild(
             this.label(isPirate ? "☠" : "❄", px, py - rad * 0.12, rad * 0.8, isPirate ? 0xff7a6d : 0xbdefff, true),
           );

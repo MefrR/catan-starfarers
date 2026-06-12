@@ -132,6 +132,15 @@ export function createGameState(
     encounterDiscard: [],
     config: cfg,
     log: ["Set-up phase — each player rolls for the starting position. Roll the dice!"],
+    stats: {
+      vpHistory: Object.fromEntries(players.map((p) => [p.id, [] as number[]])),
+      resourcesGained: Object.fromEntries(players.map((p) => [p.id, 0])),
+      encountersFaced: Object.fromEntries(players.map((p) => [p.id, 0])),
+      piratesDefeated: Object.fromEntries(players.map((p) => [p.id, 0])),
+      icePlanetsTerraformed: Object.fromEntries(players.map((p) => [p.id, 0])),
+      tradesCompleted: Object.fromEntries(players.map((p) => [p.id, 0])),
+      distanceFlown: Object.fromEntries(players.map((p) => [p.id, 0])),
+    },
   };
   recomputeVp(state);
   return state;

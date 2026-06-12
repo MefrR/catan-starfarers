@@ -12,6 +12,7 @@ import {
   RESOURCES,
   type BallColor,
   type GameState,
+  type GameStats,
   type Planet,
   type PlayerState,
   type Resource,
@@ -330,6 +331,18 @@ export function colonyEstablishBlock(
   return null;
 }
 
+/** Z2: best-effort stat bump — `stats` is optional on states saved before it existed. */
+function bumpStat(
+  state: GameState,
+  key: Exclude<keyof GameStats, "vpHistory">,
+  playerId: string,
+  n = 1,
+): void {
+  const s = state.stats;
+  if (!s) return;
+  s[key][playerId] = (s[key][playerId] ?? 0) + n;
+}
+
 /** Clear a special token: flip it to a +1 VP conquest medal and assign a number. */
 function clearSpecial(
   state: GameState,
@@ -341,6 +354,7 @@ function clearSpecial(
   const wasPirate = planet.special === "pirateBase";
   planet.special = "none";
   player.victoryMedals += 1;
+  bumpStat(state, wasPirate ? "piratesDefeated" : "icePlanetsTerraformed", player.id);
   if (planet.number == null) planet.number = [3, 4, 5, 9, 10, 11][Math.floor(rng() * 6)]!;
   // Signal the client to fly the token + VP medal from the planet to the player.
   state.phaseState.lastClearedSpecial = {
@@ -487,6 +501,7 @@ function distributeProduction(state: GameState, rolled: number, rng: Rng): void 
         const bonusGot = bonus > 0 ? Math.max(0, got - yieldPer) : 0;
         gains.push(`${owner.name} +${got} ${res}`);
         producedAny.add(owner.id);
+        bumpStat(state, "resourcesGained", owner.id, got);
         state.phaseState.lastProduction!.push({
           owner: owner.id,
           intersectionId: b.intersectionId,
@@ -666,6 +681,12 @@ function resolveSpecialsForPlayerShips(state: GameState, player: PlayerState, rn
 
 function endTurn(state: GameState): void {
   recomputeVp(state);
+  // Z2: one VP snapshot per player per completed turn — the win-screen chart.
+  if (state.stats) {
+    for (const p of state.players) {
+      (state.stats.vpHistory[p.id] ??= []).push(p.victoryPoints);
+    }
+  }
   const finished = activePlayer(state);
   if (finished.victoryPoints >= state.config.targetVictoryPoints) {
     state.phaseState.phase = "gameOver";
@@ -1271,6 +1292,7 @@ export function applyIntent(
       const giveStr = giving.map((g) => `${intent.give[g]} ${g}`).join(" + ");
       const takeStr = taking.map((r) => `${intent.take[r]} ${r}`).join(" + ");
       log(state, `${me.name} traded ${giveStr} for ${takeStr}.`);
+      bumpStat(state, "tradesCompleted", me.id);
       return { state };
     }
 
@@ -1385,6 +1407,8 @@ export function applyIntent(
       ps.pendingTrade = undefined;
       ps.lastTrade = { fromId: me.id, toId: partner.id, seq: (ps.lastTrade?.seq ?? 0) + 1 };
       log(state, `${me.name} and ${partner.name} completed a trade.`);
+      bumpStat(state, "tradesCompleted", me.id);
+      bumpStat(state, "tradesCompleted", partner.id);
       return { state };
     }
 
@@ -1468,6 +1492,7 @@ export function applyIntent(
       if (!ps.shake) return fail(input, "Shake the mothership first.");
       const err = doMoveShip(state, me, intent.shipId, intent.path, rng);
       if (err) return fail(input, err);
+      bumpStat(state, "distanceFlown", me.id, intent.path.length);
       return { state };
     }
 

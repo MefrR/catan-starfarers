@@ -1021,6 +1021,10 @@ export function beginEncounter(state: GameState, subjectId: PlayerId, rng: Rng):
     return;
   }
   const card = ENCOUNTER_CARDS[cardId]!;
+  // Z2: stats — the subject faced an encounter (optional on older saves).
+  if (state.stats) {
+    state.stats.encountersFaced[subjectId] = (state.stats.encountersFaced[subjectId] ?? 0) + 1;
+  }
   state.phaseState.phase = "encounter";
   state.phaseState.encounter = {
     cardId,

@@ -17,6 +17,11 @@ const COLOR_HEX: Record<string, string> = {
 /** The secret code that toggles dev mode (unlimited build + cards). */
 const DEV_CODE = "warp9";
 
+/** Z5: one-tap table-banter reactions (multiplayer only). Sent as a marked
+ *  chat line so the existing relay carries them with zero server changes. */
+const EMOTES = ["👍", "😄", "😮", "🤔", "😈"];
+const EMOTE_PREFIX = "::emote::";
+
 /** Short canned lines an AI rival fires back so single-player chat feels alive
  *  (and demonstrates the unread-dot pulse when the panel is closed). */
 const AI_LINES = [
@@ -87,12 +92,40 @@ export class ChatBox {
 
     // Clicking anywhere outside the open panel (and not on the toggle) closes it.
     this.outside = (e: PointerEvent) => {
-      if (!this.open) return;
       const t = e.target as Node;
+      // Z5: clicking away also folds the emote strip.
+      if (
+        this.emoteStrip?.classList.contains("open") &&
+        !this.emoteStrip.contains(t) &&
+        !this.emoteToggle?.contains(t)
+      ) {
+        this.emoteStrip.classList.remove("open");
+      }
+      if (!this.open) return;
       if (this.panel.contains(t) || this.toggle.contains(t)) return;
       this.setOpen(false);
     };
     document.addEventListener("pointerdown", this.outside, true);
+
+    // Z5: quick-emote strip (multiplayer only) — one-tap reactions that float
+    // up from the sender's scoreboard row on EVERY player's screen.
+    if (game.isMultiplayer) {
+      this.emoteToggle = el(`<button class="emote-toggle" title="Quick reactions">😄</button>`);
+      this.emoteStrip = el(
+        `<div class="emote-strip">${EMOTES.map((e) => `<button class="emote-btn">${e}</button>`).join("")}</div>`,
+      );
+      this.emoteStrip.querySelectorAll(".emote-btn").forEach((b) => {
+        b.addEventListener("click", () => {
+          net.send({ t: "chat", text: EMOTE_PREFIX + b.textContent });
+          this.emoteStrip!.classList.remove("open");
+        });
+      });
+      this.emoteToggle.addEventListener("click", () =>
+        this.emoteStrip!.classList.toggle("open"),
+      );
+      document.body.appendChild(this.emoteToggle);
+      document.body.appendChild(this.emoteStrip);
+    }
 
     // Multiplayer: relay real chat between players. The server echoes every line
     // (including our own) so all clients render the same log; the unread dot only
@@ -101,6 +134,11 @@ export class ChatBox {
       this.offNet = net.on((msg) => {
         if (msg.t !== "chat") return;
         const mine = msg.fromId === this.game.humanId;
+        // Z5: a quick emote floats from the sender's scoreboard row — no log line.
+        if (msg.text.startsWith(EMOTE_PREFIX)) {
+          this.floatEmote(msg.fromId, msg.text.slice(EMOTE_PREFIX.length));
+          return;
+        }
         // A fling ("name <3", "ass to name", "shit to name") aimed at a player:
         // if it's addressed to ME, the emoji rains on MY screen. All see the line.
         const fling = parseFling(msg.text);
@@ -122,6 +160,9 @@ export class ChatBox {
   private outside: ((e: PointerEvent) => void) | null = null;
   /** Unsubscribe from network chat (multiplayer only). */
   private offNet: (() => void) | null = null;
+  /** Z5: quick-emote controls (multiplayer only). */
+  private emoteToggle: HTMLElement | null = null;
+  private emoteStrip: HTMLElement | null = null;
 
   destroy(): void {
     this.replyTimers.forEach((t) => window.clearTimeout(t));
@@ -132,7 +173,32 @@ export class ChatBox {
     this.offNet = null;
     this.toggle.remove();
     this.panel.remove();
-    document.querySelectorAll(".heart-fx").forEach((n) => n.remove());
+    this.emoteToggle?.remove();
+    this.emoteStrip?.remove();
+    document.querySelectorAll(".heart-fx, .emote-float").forEach((n) => n.remove());
+  }
+
+  /** Z5: float a reaction up from the sender's scoreboard row (falls back to
+   *  bottom-center when the scoreboard is collapsed / the row isn't visible). */
+  private floatEmote(fromId: string, emoji: string): void {
+    const row = document.querySelector(`.score-row[data-pid="${fromId}"]`);
+    const r = row?.getBoundingClientRect();
+    const x = r ? r.left - 14 : window.innerWidth / 2;
+    const y = r ? r.top + r.height / 2 : window.innerHeight - 160;
+    const f = el(`<div class="emote-float"></div>`);
+    f.textContent = emoji;
+    f.style.left = `${x}px`;
+    f.style.top = `${y}px`;
+    document.body.appendChild(f);
+    f.animate(
+      [
+        { transform: "translate(-100%, -50%) scale(0.4)", opacity: 0 },
+        { transform: "translate(-100%, -90%) scale(1.5)", opacity: 1, offset: 0.25 },
+        { transform: "translate(-100%, -340%) scale(1.1)", opacity: 0.9, offset: 0.8 },
+        { transform: "translate(-100%, -420%) scale(0.9)", opacity: 0 },
+      ],
+      { duration: 2100, easing: "cubic-bezier(0.2, 0.8, 0.4, 1)" },
+    ).onfinish = (): void => f.remove();
   }
 
   private setOpen(open: boolean): void {

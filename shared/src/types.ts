@@ -358,6 +358,23 @@ export interface EncounterState {
   wearTearChoices?: Record<PlayerId, UpgradeKind>;
 }
 
+/** Z2: per-player aggregates that tell the story of the game on the win screen.
+ *  All records are keyed by player id. Optional on GameState so saves from
+ *  before this field simply skip the chart. */
+export interface GameStats {
+  /** VP snapshot per player, appended after every completed turn. */
+  vpHistory: Record<PlayerId, number[]>;
+  /** Resources gained from production (incl. friendship bonuses). */
+  resourcesGained: Record<PlayerId, number>;
+  encountersFaced: Record<PlayerId, number>;
+  piratesDefeated: Record<PlayerId, number>;
+  icePlanetsTerraformed: Record<PlayerId, number>;
+  /** Bank + player trades completed (both partners count). */
+  tradesCompleted: Record<PlayerId, number>;
+  /** Total intersections flown across by their ships. */
+  distanceFlown: Record<PlayerId, number>;
+}
+
 // --- Full authoritative game state ---
 export interface GameState {
   id: string;
@@ -376,6 +393,7 @@ export interface GameState {
   encounterDiscard: number[];
   config: GameConfig;
   log: string[];
+  stats?: GameStats;
 }
 
 export interface GameConfig {

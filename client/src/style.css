@@ -229,7 +229,7 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .screen button::after {
   content: none;
 }
-.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove):not(.seg-opt):not(.swatch):not(.glow-btn):not(.setup-back) {
+.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove):not(.seg-opt):not(.swatch):not(.glow-btn):not(.setup-back):not(.hero-resume):not(.hero-tutorial) {
   background: linear-gradient(92deg, rgba(91, 140, 255, 0.28), rgba(57, 216, 200, 0.24));
   color: #eaf2ff;
   border: 1px solid rgba(120, 190, 255, 0.42);
@@ -237,7 +237,7 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   overflow: visible;
   backdrop-filter: blur(6px);
 }
-.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove):not(.seg-opt):not(.swatch):not(.glow-btn):not(.setup-back):hover {
+.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove):not(.seg-opt):not(.swatch):not(.glow-btn):not(.setup-back):not(.hero-resume):not(.hero-tutorial):hover {
   border-color: rgba(98, 224, 205, 0.8);
   box-shadow: 0 0 22px rgba(57, 216, 200, 0.28);
 }
@@ -1252,6 +1252,29 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .go-sub { color: var(--muted); font-size: 14px; margin-top: 3px; }
 .go-standings { margin-top: 20px; display: flex; flex-direction: column; gap: 12px; }
 
+/* Z2: the story of the game — VP-over-time chart + superlative chips. */
+.go-story {
+  margin-top: 18px; padding: 14px 14px 12px; border-radius: 14px;
+  background: rgba(10, 16, 34, 0.55);
+  border: 1px solid rgba(120, 170, 255, 0.16);
+}
+.go-story-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  color: rgba(170, 195, 235, 0.7); margin-bottom: 8px;
+}
+.go-chart { width: 100%; height: auto; display: block; }
+.go-chips {
+  display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 10px;
+}
+.go-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; color: rgba(214, 226, 252, 0.85);
+  padding: 4px 10px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.go-chip-emo { font-size: 13px; }
+
 /* A standings card: header (rank/name/VP) + a per-source VP breakdown. */
 .go-row {
   display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 14px;
@@ -1517,6 +1540,66 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 }
 
 /* ---- F2: chat box (toggle + unread pulse) ---- */
+/* Z5: quick-emote button stacked above the chat toggle (multiplayer only),
+   with a horizontal strip of one-tap reactions that unfolds to its left. */
+.emote-toggle {
+  position: fixed;
+  right: 16px;
+  bottom: 72px;
+  z-index: 70;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(16, 20, 36, 0.9);
+  font-size: 22px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.emote-toggle:hover { transform: scale(1.08); border-color: rgba(255, 210, 63, 0.5); }
+.emote-strip {
+  position: fixed;
+  right: 72px;
+  bottom: 76px;
+  z-index: 70;
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: rgba(12, 16, 32, 0.92);
+  border: 1px solid rgba(120, 170, 255, 0.25);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(10px) scale(0.92);
+  transform-origin: right center;
+  transition: opacity 0.16s ease, transform 0.16s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.emote-strip.open { opacity: 1; pointer-events: auto; transform: translateX(0) scale(1); }
+.emote-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 0.1s ease, background 0.1s ease;
+}
+.emote-btn:hover { transform: scale(1.25); background: rgba(255, 255, 255, 0.08); }
+.emote-float {
+  position: fixed;
+  z-index: 95;
+  font-size: 34px;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.55));
+}
+
 .chat-toggle {
   position: fixed;
   right: 16px;
@@ -1703,6 +1786,16 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 /* The center-screen toasts/overlays ease rather than snap. */
 .map-tooltip { transition: opacity 0.15s ease; }
 
+/* Z3: "what can I do?" nudge — a soft gold breathing glow on the one action
+   that's currently both legal and sensible. The 3s delay means it only shows
+   after the player has been idle (the HUD re-renders on every state change,
+   restarting the animation), so it never nags an active player. */
+@keyframes hintPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 210, 63, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 210, 63, 0.16), 0 0 20px rgba(255, 210, 63, 0.38); }
+}
+.hint-pulse { animation: hintPulse 1.8s ease-in-out 3s infinite; }
+
 /* Respect users (and test runners) that ask for less motion: collapse all
    decorative animation to instant states. Gameplay still works identically. */
 @media (prefers-reduced-motion: reduce) {
@@ -1829,6 +1922,83 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   animation: heroUp 0.8s ease-out 0.6s both;
 }
 .hero-actions button { min-width: 180px; padding: 14px 26px; font-size: 16px; }
+/* Z1: autosave chip — a quiet gold ghost pill under the main actions that
+   continues the last single-player voyage. Hidden when the slot is empty. */
+.hero-resume {
+  display: inline-flex; flex-direction: column; align-items: center; gap: 2px;
+  margin-top: 18px; padding: 10px 26px;
+  background: rgba(255, 210, 63, 0.07);
+  border: 1px solid rgba(255, 210, 63, 0.35);
+  border-radius: 999px; color: #ffe9a8; cursor: pointer;
+  backdrop-filter: blur(6px);
+  animation: heroUp 0.8s ease-out 0.75s both;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+.hero-resume:hover {
+  border-color: rgba(255, 210, 63, 0.75);
+  box-shadow: 0 0 22px rgba(255, 210, 63, 0.22);
+  transform: translateY(-1px);
+}
+.hero-resume-title { font-size: 15px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.hero-resume-sub { font-size: 12px; color: rgba(255, 233, 168, 0.72); font-weight: 400; }
+/* Z6: quiet text link under the hero actions that starts the guided game. */
+.hero-tutorial {
+  margin-top: 14px; padding: 6px 12px;
+  background: none; border: none; cursor: pointer;
+  color: rgba(190, 208, 240, 0.75); font-size: 13.5px;
+  text-decoration: underline; text-underline-offset: 4px;
+  text-decoration-color: rgba(190, 208, 240, 0.3);
+  animation: heroUp 0.8s ease-out 0.85s both;
+  transition: color 0.15s ease;
+}
+.hero-tutorial:hover { color: #ffe9a8; text-decoration-color: rgba(255, 233, 168, 0.5); }
+
+/* Z6: the coach bubble + spotlight ring of the guided first game. */
+.tut-bubble button::before,
+.tut-bubble button::after {
+  content: none; /* no star-button layers inside the coach bubble */
+}
+.tut-bubble {
+  position: fixed; z-index: 96; width: min(340px, calc(100vw - 20px));
+  padding: 14px 16px 12px; border-radius: 16px;
+  background: linear-gradient(165deg, rgba(26, 34, 60, 0.97), rgba(12, 17, 36, 0.97));
+  border: 1px solid rgba(255, 210, 63, 0.45);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6), 0 0 24px rgba(255, 210, 63, 0.12);
+  transition: left 0.35s cubic-bezier(0.2, 0.9, 0.3, 1), top 0.35s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.tut-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+.tut-badge {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.18em;
+  color: #ffd23f; background: rgba(255, 210, 63, 0.12);
+  border: 1px solid rgba(255, 210, 63, 0.3);
+  padding: 2px 8px; border-radius: 999px;
+}
+.tut-count { font-size: 11px; color: rgba(170, 195, 235, 0.6); }
+.tut-text { font-size: 13.5px; line-height: 1.55; color: rgba(226, 236, 255, 0.95); }
+.tut-text b { color: #ffe9a8; }
+.tut-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 8px; }
+.tut-next {
+  padding: 7px 18px; border-radius: 999px; border: none; cursor: pointer;
+  background: linear-gradient(92deg, #ffd23f, #ffb13f); color: #221a04;
+  font-weight: 700; font-size: 13px;
+}
+.tut-next:hover { filter: brightness(1.08); }
+.tut-skip {
+  padding: 6px 10px; background: none; border: none; cursor: pointer;
+  color: rgba(170, 195, 235, 0.55); font-size: 12px; margin-left: auto;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.tut-skip:hover { color: rgba(226, 236, 255, 0.85); }
+@keyframes tutRing {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 210, 63, 0.5), 0 0 18px rgba(255, 210, 63, 0.25); }
+  50% { box-shadow: 0 0 0 7px rgba(255, 210, 63, 0.12), 0 0 26px rgba(255, 210, 63, 0.4); }
+}
+.tut-ring {
+  position: fixed; z-index: 94; pointer-events: none; display: none;
+  border: 2px solid rgba(255, 210, 63, 0.8); border-radius: 16px;
+  animation: tutRing 1.5s ease-in-out infinite;
+  transition: left 0.3s ease, top 0.3s ease, width 0.3s ease, height 0.3s ease;
+}
 @keyframes heroDown { from { opacity: 0; transform: translateY(-18px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes heroUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
 

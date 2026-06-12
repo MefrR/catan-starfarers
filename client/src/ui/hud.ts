@@ -1620,6 +1620,7 @@ export class HUD {
           <div class="go-trophy">🏆</div>
           <div class="go-title" style="color:${winner ? COLOR_HEX[winner.color] : "#fff"}">${escapeHtml(winner?.name ?? "?")} wins!</div>
           <div class="go-sub">Reached ${winner?.victoryPoints ?? state.config.targetVictoryPoints} victory points</div>
+          ${this.buildGameStory(state)}
           <div class="go-standings">${rows}</div>
           <div class="go-actions">${footer}</div>
         </div>
@@ -1634,6 +1635,71 @@ export class HUD {
     });
     document.body.appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add("show"));
+  }
+
+  /** Z2: the "story of the game" — a VP-over-time chart plus superlative chips
+   *  (farthest flier, master trader, …) derived from the engine's stats. */
+  private buildGameStory(state: GameState): string {
+    const st = state.stats;
+    if (!st) return "";
+    const series = state.players.map((p) => ({ p, vps: st.vpHistory[p.id] ?? [] }));
+    const maxLen = Math.max(0, ...series.map((s) => s.vps.length));
+    if (maxLen < 3) return ""; // too short a game to chart
+    const target = state.config.targetVictoryPoints;
+    const maxVp = Math.max(target, ...series.flatMap((s) => s.vps), 1);
+    const W = 560;
+    const H = 170;
+    const L = 30; // left gutter for the VP axis labels
+    const x = (i: number): number => L + (i / (maxLen - 1)) * (W - L - 14);
+    const y = (v: number): number => H - 22 - (v / maxVp) * (H - 40);
+    // Horizontal guides at every 5 VP + the target line.
+    let grid = "";
+    for (let v = 5; v <= maxVp; v += 5) {
+      const isTarget = v === target;
+      grid += `<line x1="${L}" y1="${y(v)}" x2="${W - 14}" y2="${y(v)}" stroke="${isTarget ? "rgba(255,210,63,0.45)" : "rgba(140,180,255,0.14)"}" stroke-width="1" ${isTarget ? `stroke-dasharray="5 4"` : ""}/>
+               <text x="${L - 6}" y="${y(v) + 3.5}" text-anchor="end" font-size="10" fill="${isTarget ? "rgba(255,225,130,0.9)" : "rgba(170,195,235,0.55)"}">${v}</text>`;
+    }
+    const lines = series
+      .map(({ p, vps }) => {
+        if (vps.length === 0) return "";
+        const c = COLOR_HEX[p.color];
+        const pts = vps.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+        const last = vps[vps.length - 1]!;
+        return `<polyline points="${pts}" fill="none" stroke="${c}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" opacity="0.92"/>
+                <circle cx="${x(vps.length - 1).toFixed(1)}" cy="${y(last).toFixed(1)}" r="4" fill="${c}"/>`;
+      })
+      .join("");
+    const chart = `
+      <svg class="go-chart" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" aria-label="Victory points over the game">
+        ${grid}${lines}
+        <text x="${(L + W - 14) / 2}" y="${H - 6}" text-anchor="middle" font-size="10" fill="rgba(170,195,235,0.55)">turns →</text>
+      </svg>`;
+
+    // Superlatives: best player per metric (only when someone actually scored it).
+    const best = (rec: Record<string, number>): { p: (typeof state.players)[number]; n: number } | null => {
+      let top: { p: (typeof state.players)[number]; n: number } | null = null;
+      for (const p of state.players) {
+        const n = rec[p.id] ?? 0;
+        if (n > 0 && (!top || n > top.n)) top = { p, n };
+      }
+      return top;
+    };
+    const chips: string[] = [];
+    const chip = (got: { p: (typeof state.players)[number]; n: number } | null, emoji: string, label: (n: number) => string): void => {
+      if (!got) return;
+      chips.push(
+        `<span class="go-chip"><span class="go-chip-emo">${emoji}</span><b style="color:${COLOR_HEX[got.p.color]}">${escapeHtml(got.p.name)}</b> ${label(got.n)}</span>`,
+      );
+    };
+    const pl = (n: number, w: string): string => `${n} ${w}${n === 1 ? "" : "s"}`;
+    chip(best(st.resourcesGained), "🏭", (n) => `top producer · ${pl(n, "resource")}`);
+    chip(best(st.distanceFlown), "🚀", (n) => `farthest flier · ${pl(n, "sector")}`);
+    chip(best(st.tradesCompleted), "🤝", (n) => `master trader · ${pl(n, "trade")}`);
+    chip(best(st.encountersFaced), "🛸", (n) => `most encounters · ${n}`);
+    chip(best(st.piratesDefeated), "⚔️", (n) => `pirate hunter · ${pl(n, "base")}`);
+    chip(best(st.icePlanetsTerraformed), "❄️", (n) => `terraformer · ${pl(n, "world")}`);
+    const chipsHtml = chips.length ? `<div class="go-chips">${chips.join("")}</div>` : "";
+    return `<div class="go-story"><div class="go-story-title">The story of the game</div>${chart}${chipsHtml}</div>`;
   }
 
   /** Left sidebar: mothership illustration + upgrade counts, shaker balls, trade. */
@@ -2027,6 +2093,16 @@ export class HUD {
     upTile("booster", "Boost");
     upTile("cannon", "Cannon");
     upTile("freightPod", "Pod");
+    // Z3: nudge the single most valuable lit tile (port 2 VP > ships > upgrades)
+    // — the pulse only becomes visible after a few idle seconds (CSS delay).
+    const tiles = [...dock.querySelectorAll<HTMLElement>(".bd-tile")];
+    for (const i of [2, 0, 1, 3, 4, 5]) {
+      const t = tiles[i];
+      if (t?.classList.contains("ok")) {
+        t.classList.add("hint-pulse");
+        break;
+      }
+    }
     return dock;
   }
 
@@ -2352,6 +2428,23 @@ export class HUD {
     this.render(state); // re-render to show establish buttons + highlights
   }
 
+  /** Z3: can the player afford ANY build right now? Mirrors the dock's
+   *  per-tile conditions — used to decide whether to nudge "End build" instead. */
+  private anyAffordableBuild(state: GameState, me: PlayerState): boolean {
+    const afford = (cost: Partial<ResourceBag>): boolean =>
+      RESOURCES.every((r) => me.hand[r] >= (cost[r] ?? 0));
+    const hasLaunch = shipLaunchSites(me, state).length > 0;
+    const transport = me.supply.transportShips;
+    const colonyCount = state.buildings.filter((b) => b.owner === me.id && b.kind === "colony").length;
+    if (afford(BUILD_COSTS.colonyShip) && hasLaunch && transport > 0) return true;
+    if (afford(BUILD_COSTS.tradeShip) && hasLaunch && transport > 0) return true;
+    if (afford(BUILD_COSTS.spaceport) && colonyCount > 0) return true;
+    for (const k of ["booster", "cannon", "freightPod"] as const) {
+      if (afford(BUILD_COSTS[k]) && MAX_UPGRADES[k] - me.upgrades[k] > 0) return true;
+    }
+    return false;
+  }
+
   private fillHumanActions(actions: HTMLElement, state: GameState, me: PlayerState): void {
     const ps = state.phaseState;
     const btn = (
@@ -2416,6 +2509,7 @@ export class HUD {
             (rollBtn as HTMLButtonElement).disabled = true;
             this.act({ t: "rollDice" });
           });
+          rollBtn.classList.add("hint-pulse"); // Z3: nudge after a few idle seconds
           actions.appendChild(rollBtn);
         }
         break;
@@ -2439,13 +2533,21 @@ export class HUD {
             }),
           );
         }
-        actions.appendChild(btn("End build → Shake", () => this.endBuildAndShake()));
+        {
+          const endBtn = btn("End build → Shake", () => this.endBuildAndShake());
+          // Z3: when nothing is affordable, the sensible move is to fly — nudge
+          // it. (When something IS affordable, the dock tile gets the nudge.)
+          if (!this.anyAffordableBuild(state, me)) endBtn.classList.add("hint-pulse");
+          actions.appendChild(endBtn);
+        }
         break;
       }
 
       case "flight": {
         if (!ps.shake) {
-          actions.appendChild(btn("Shake mothership", () => this.act({ t: "shakeMothership" })));
+          const shakeBtn = btn("Shake mothership", () => this.act({ t: "shakeMothership" }));
+          shakeBtn.classList.add("hint-pulse"); // Z3
+          actions.appendChild(shakeBtn);
           break;
         }
         const speed = ps.moveBudget ?? ps.shake.speed;
@@ -2495,6 +2597,7 @@ export class HUD {
         // settle a colony / dock at an outpost without re-selecting it.
         const myShips = state.ships.filter((s) => s.owner === me.id);
         let establishAvailable = false;
+        let establishHinted = false; // Z3: nudge the first ready Establish action
         for (const s of myShips) {
           const inter = state.intersections[s.intersectionId]!;
           if (s.kind === "colonyShip" && inter.adjacentPlanets.length === 2 &&
@@ -2516,24 +2619,24 @@ export class HUD {
               wrap.addEventListener("click", () => this.centerNote(block));
               actions.appendChild(wrap);
             } else {
-              actions.appendChild(
-                btn("Establish Colony", () => {
-                  this.act({ t: "establishColony", shipId: s.id }, { center: true });
-                  this.resetSelection();
-                  this.rerender(); // re-wire the board so another ship can move
-                }),
-              );
+              const eb = btn("Establish Colony", () => {
+                this.act({ t: "establishColony", shipId: s.id }, { center: true });
+                this.resetSelection();
+                this.rerender(); // re-wire the board so another ship can move
+              });
+              if (!establishHinted) { eb.classList.add("hint-pulse"); establishHinted = true; }
+              actions.appendChild(eb);
             }
           }
           if (s.kind === "tradeShip" && inter.dockingPointOf) {
             establishAvailable = true;
-            actions.appendChild(
-              btn("Establish Trade Station", () => {
-                this.act({ t: "establishTradeStation", shipId: s.id, dock: freeDock(state, inter.id) }, { center: true });
-                this.resetSelection();
-                this.rerender(); // re-wire the board so another ship can move
-              }),
-            );
+            const tb = btn("Establish Trade Station", () => {
+              this.act({ t: "establishTradeStation", shipId: s.id, dock: freeDock(state, inter.id) }, { center: true });
+              this.resetSelection();
+              this.rerender(); // re-wire the board so another ship can move
+            });
+            if (!establishHinted) { tb.classList.add("hint-pulse"); establishHinted = true; }
+            actions.appendChild(tb);
           }
         }
 

@@ -5,8 +5,9 @@ import { shatter, warpTransition } from "./ui/fx.js";
 import { BoardRenderer } from "./render/board.js";
 import { NewGameMenu, type LaunchOptions } from "./ui/menu.js";
 import { HUD } from "./ui/hud.js";
+import { TutorialDriver } from "./ui/tutorial.js";
 import { LocalGame } from "./game/store.js";
-import type { GameDriver } from "./game/store.js";
+import type { GameDriver, Seat } from "./game/store.js";
 
 const el = (html: string): HTMLElement => {
   const t = document.createElement("template");
@@ -35,7 +36,7 @@ async function boot(): Promise<void> {
     menuBg = null;
   };
 
-  const mountGame = (game: GameDriver): void => {
+  const mountGame = (game: GameDriver, opts: { tutorial?: boolean } = {}): void => {
     // The warp flash covers the menu→board swap, then fades off the live game.
     warpTransition(() => {
       teardownGame?.();
@@ -45,10 +46,13 @@ async function boot(): Promise<void> {
       const unsubBoard = game.subscribe((state) => board.render(state));
       app.replaceChildren(); // clear the menu; HUD mounts its own overlay
       const hud = new HUD(app, game, board);
+      // Z6: the guided first game attaches its coach bubble over the live HUD.
+      const tut = opts.tutorial ? new TutorialDriver(game) : null;
       // The canvas resizes to the window asynchronously; recenter once layout
       // has settled so the map is always centered regardless of window size.
       requestAnimationFrame(() => board.recenter());
       teardownGame = (): void => {
+        tut?.destroy();
         unsubBoard();
         hud.destroy();
         teardownGame = null;
@@ -59,6 +63,23 @@ async function boot(): Promise<void> {
   const startSingle = (opts: LaunchOptions): void => {
     const game = new LocalGame(opts.seats, opts.config);
     mountGame(game);
+  };
+
+  // Z6: the guided first game — a fixed friendly setup (you vs one easy rival,
+  // fully charted map) with the coach bubble walking the opening turns.
+  const startTutorial = (): void => {
+    const seats: Seat[] = [
+      {
+        member: { id: crypto.randomUUID(), name: "Commander", color: "yellow", connected: true },
+        isAI: false,
+      },
+      {
+        member: { id: crypto.randomUUID(), name: "Orion (Blue)", color: "blue", connected: true },
+        isAI: true,
+      },
+    ];
+    const game = new LocalGame(seats, { aiDifficulty: "easy", fogMap: false });
+    mountGame(game, { tutorial: true });
   };
 
   // Multiplayer is lazy-loaded so the single-player path never opens a socket.
@@ -83,6 +104,13 @@ async function boot(): Promise<void> {
   const showLanding = (): void => {
     // Hero landing: no boxed card — the title and pills float directly over
     // the comet field, like the referenced hero design.
+    const saved = LocalGame.savedGame();
+    const resumeHtml = saved
+      ? `<button class="hero-resume" id="resume">
+           <span class="hero-resume-title">Resume Voyage</span>
+           <span class="hero-resume-sub">${saved.myVp}/${saved.target} VP vs ${saved.rivals.join(", ")}</span>
+         </button>`
+      : "";
     const screen = el(`
       <div class="screen">
         <div class="hero">
@@ -93,6 +121,8 @@ async function boot(): Promise<void> {
             <button id="single">Single Player</button>
             <button class="secondary" id="online">Play Online</button>
           </div>
+          ${resumeHtml}
+          <button class="hero-tutorial" id="tutorial">✦ First flight? Take the guided tutorial</button>
         </div>
       </div>
     `);
@@ -105,6 +135,20 @@ async function boot(): Promise<void> {
     online.addEventListener("click", () => {
       ensureMenuBg();
       shatter(online, "#39d8c8", () => void startNetwork("online"));
+    });
+    const tutorial = screen.querySelector("#tutorial") as HTMLElement;
+    tutorial.addEventListener("click", () => {
+      ensureMenuBg();
+      shatter(tutorial, "#ffd23f", () => startTutorial());
+    });
+    const resume = screen.querySelector("#resume") as HTMLElement | null;
+    resume?.addEventListener("click", () => {
+      const game = LocalGame.resume();
+      if (!game) {
+        resume.remove(); // slot vanished/corrupt — drop the button quietly
+        return;
+      }
+      shatter(resume, "#ffd23f", () => mountGame(game));
     });
     ensureMenuBg();
     app.replaceChildren(screen);
