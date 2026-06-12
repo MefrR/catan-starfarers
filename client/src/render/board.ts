@@ -1659,6 +1659,9 @@ export class BoardRenderer {
     r: number,
     color: number,
   ): void {
+    // Per owner feedback the redesigned ships read too big on the map:
+    // 20% smaller on desktop, 30% smaller on small screens.
+    r *= window.innerWidth < 1000 ? 0.7 : 0.8;
     const ink = 0x0a0f1e;
     const dark = tint(color, -0.28) >>> 0;
     if (kind === "colonyShip") {
