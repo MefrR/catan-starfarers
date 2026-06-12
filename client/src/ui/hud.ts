@@ -50,6 +50,8 @@ const COLOR_HEX: Record<PlayerColor, string> = {
   red: "#ff5d5d",
   blue: "#4fa8ff",
   black: "#8a8fa6",
+  green: "#52d273",
+  white: "#e9eef7",
 };
 
 const CIV_LABEL: Record<AlienCiv, string> = {
@@ -207,8 +209,12 @@ export class HUD {
   /** Whether the center-screen game-over results overlay is already shown. */
   private gameOverShown = false;
   /** R1/R2: collapse toggles for the side panels on small screens. */
-  private sidebarCollapsed = true;
-  private scoreCompact = true;
+  // AA3: panels start OPEN on large screens (plenty of room) and collapsed on
+  // small ones, where they'd otherwise cover most of the board.
+  private sidebarCollapsed = window.innerWidth < 1000;
+  private scoreCompact = window.innerWidth < 1000;
+  /** AA4: small screens fold the side tools behind a "⋯" expander. */
+  private toolsExpanded = false;
   /** Previous toggle states, to play a slide animation ONLY on an actual
    *  collapse/expand (the HUD re-renders wholesale on every state tick). */
   private lastSidebarCollapsed: boolean | null = null;
@@ -462,14 +468,21 @@ export class HUD {
       this.tickerEl.className = "event-ticker";
       document.body.appendChild(this.tickerEl);
     }
-    for (const line of fresh.slice(-3)) {
+    // AA4: at most TWO lines on screen; an older line that gets pushed out
+    // fades early instead of lingering (already-fading lines don't count).
+    for (const line of fresh.slice(-2)) {
       const entry = el(`<div class="et-entry">${escapeHtml(line)}</div>`);
       this.tickerEl.appendChild(entry);
-      while (this.tickerEl.children.length > 3) this.tickerEl.firstElementChild?.remove();
+      const live = [...this.tickerEl.children].filter((c) => !c.classList.contains("out"));
+      while (live.length > 2) {
+        const old = live.shift() as HTMLElement;
+        old.classList.add("out");
+        window.setTimeout(() => old.remove(), 350);
+      }
       window.setTimeout(() => {
         entry.classList.add("out");
         window.setTimeout(() => entry.remove(), 350);
-      }, 4500);
+      }, 3000);
     }
   }
 
@@ -781,6 +794,10 @@ export class HUD {
       this.lastAnimatedRoll = rc;
       sfx.play("dice");
       this.playDiceRoll(ps.lastRoll[0], ps.lastRoll[1]);
+      // AA1: once the dice have landed, pulse every planet number that pays
+      // on this roll so players can see at a glance where production came from.
+      const rolled = ps.lastRoll[0] + ps.lastRoll[1];
+      this.diceTimers.push(window.setTimeout(() => this.board.pulseRolledNumber(rolled), 850));
     }
     const me0 = state.players.find((p) => p.id === this.game.humanId)!;
     if (rc > this.lastAnimatedGains) {
@@ -1948,6 +1965,23 @@ export class HUD {
     iBtn.addEventListener("click", () => { this.showRef = !this.showRef; this.rerender(); });
     wrap.appendChild(iBtn);
 
+    // AA4: on small screens the stack collapses to ⓘ + a "⋯" expander so the
+    // tools don't eat a whole edge of the phone screen.
+    const small = window.innerWidth < 1000;
+    if (small) {
+      const more = el(
+        `<button class="tool-btn ${this.toolsExpanded ? "active" : ""}" title="${this.toolsExpanded ? "Hide tools" : "More tools"}">⋯</button>`,
+      );
+      more.addEventListener("click", () => {
+        this.toolsExpanded = !this.toolsExpanded;
+        this.rerender();
+      });
+      wrap.appendChild(more);
+    }
+    const extra = (b: HTMLElement): void => {
+      if (!small || this.toolsExpanded) wrap.appendChild(b);
+    };
+
     const hoverBtn = el(
       `<button class="tool-btn ${this.hoverInfoOn ? "active" : ""}" title="Hover info: ${this.hoverInfoOn ? "on (tap to hide)" : "off (tap to show)"}">👁</button>`,
     );
@@ -1957,7 +1991,7 @@ export class HUD {
       if (!this.hoverInfoOn) this.costPop.classList.remove("show");
       this.rerender();
     });
-    wrap.appendChild(hoverBtn);
+    extra(hoverBtn);
 
     const recBtn = el(
       `<button class="tool-btn ${this.autoRecenterOn ? "active" : ""}" title="Auto-recenter map (60s idle): ${this.autoRecenterOn ? "on" : "off"}">⌖</button>`,
@@ -1968,7 +2002,7 @@ export class HUD {
       this.board.setAutoRecenter(this.autoRecenterOn);
       this.rerender();
     });
-    wrap.appendChild(recBtn);
+    extra(recBtn);
 
     const sndBtn = el(
       `<button class="tool-btn ${sfx.muted ? "" : "active"}" title="Sound effects: ${sfx.muted ? "off (tap to enable)" : "on (tap to mute)"}">♪</button>`,
@@ -1978,7 +2012,7 @@ export class HUD {
       if (!sfx.muted) sfx.play("trade"); // tiny confirmation blip when enabling
       this.rerender();
     });
-    wrap.appendChild(sndBtn);
+    extra(sndBtn);
 
     const musBtn = el(
       `<button class="tool-btn ${music.enabled ? "active" : ""}" title="Ambient music: ${music.enabled ? "on (tap to turn off)" : "off (tap to turn on)"}">♫</button>`,
@@ -1987,13 +2021,13 @@ export class HUD {
       music.setEnabled(!music.enabled);
       this.rerender();
     });
-    wrap.appendChild(musBtn);
+    extra(musBtn);
 
     // Y8: find my fleet — first tap frames everything you own; further taps
     // cycle the camera through your ships one by one.
     const fleetBtn = el(`<button class="tool-btn" title="Find my fleet (tap again to cycle ships)">⌕</button>`);
     fleetBtn.addEventListener("click", () => this.findMyFleet());
-    wrap.appendChild(fleetBtn);
+    extra(fleetBtn);
 
     // The reference popover hangs to the LEFT of the "i" button when open.
     if (this.showRef) {

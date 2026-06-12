@@ -20,6 +20,8 @@ const OWNER_FILL: Record<PlayerColor, number> = {
   red: 0xd8453a,
   blue: 0x3d7fd6,
   black: 0x2a2d3a,
+  green: 0x3fbf6e,
+  white: 0xdfe6f0,
 };
 
 /** Per-civ outpost colour + display name (mirrors the printed OUTPOSTS art). */
@@ -44,6 +46,8 @@ const OWNER_NAME: Record<PlayerColor, string> = {
   red: "Red",
   blue: "Blue",
   black: "Black",
+  green: "Green",
+  white: "White",
 };
 
 /** Shift a hex colour toward white (f>0) or black (f<0); f in [-1,1]. */
@@ -88,7 +92,7 @@ export class BoardRenderer {
   // current render registered. Deterministic phases (from position), no RNG.
   private ambientItems: {
     g: Graphics;
-    kind: "halo" | "mote" | "special";
+    kind: "halo" | "mote" | "special" | "spin";
     x: number;
     y: number;
     rad: number;
@@ -170,6 +174,9 @@ export class BoardRenderer {
             it.g.alpha = 0.72 + 0.32 * Math.sin(t * 0.0011 * it.speed + it.phase);
           } else if (it.kind === "special") {
             it.g.alpha = 0.86 + 0.14 * Math.sin(t * 0.0019 + it.phase);
+          } else if (it.kind === "spin") {
+            // AA6: outpost energy ring — a slow, stately rotation.
+            it.g.rotation = t * 0.00022 * it.speed + it.phase;
           } else {
             // Mote on a tilted ellipse; it dims while on the far (upper) half.
             const a = t * 0.00042 * it.speed + it.phase;
@@ -909,13 +916,19 @@ export class BoardRenderer {
         const civ = sector.outpostCiv ?? "";
         const style = CIV_STYLE[civ];
         const color = style?.color ?? 0xe8c24a;
-        this.drawOutpost(planetLayer, ocx, ocy, scale, color);
-        this.drawCivIcon(planetLayer, ocx, ocy, scale, civ, color);
+        // AA6: the station now spans the whole 3-hex triangle — pass the three
+        // hex centres so the lobes land exactly over their hexes.
+        const lobePts = tri.map(([hq, hr]) => ({
+          x: tx(1.5 * hq),
+          y: ty(Math.sqrt(3) * (hr + hq / 2)),
+        }));
+        this.drawOutpost(planetLayer, ocx, ocy, lobePts, scale, color);
+        this.drawCivIcon(planetLayer, ocx, ocy, scale * 1.5, civ, color);
         planetLayer.addChild(
           this.label(
             style?.name ?? "Outpost",
             ocx,
-            ocy + scale * 0.78,
+            ocy + scale * 0.72,
             10,
             style?.color ?? 0xe8d59a,
           ),
@@ -926,7 +939,7 @@ export class BoardRenderer {
           : `<b>Outpost</b><br>Dock a trade ship here`;
         const hot = new Graphics();
         planetLayer.addChild(hot);
-        this.attachTip(hot, new Circle(ocx, ocy, scale * 0.4), tip);
+        this.attachTip(hot, new Circle(ocx, ocy, scale * 0.55), tip);
         continue;
       }
       if (sector.kind === "emptyCluster") {
@@ -1388,6 +1401,49 @@ export class BoardRenderer {
     this.piecesInit = true;
   }
 
+  /** AA1: when production dice land, every planet whose number pays on this
+   *  roll pulses once — a gold ring ripple + soft flash over the disc, so the
+   *  table can see at a glance where this turn's resources came from. */
+  pulseRolledNumber(rolled: number): void {
+    const state = this.last;
+    if (!state || rolled === 7) return;
+    for (const sector of state.sectors) {
+      for (const planet of sector.planets) {
+        if (!planet.explored || planet.special !== "none" || planet.number == null) continue;
+        // 2 also pays on 11 and 3 on 12 (the printed two-number chips).
+        const pays =
+          planet.number === rolled ||
+          (planet.number === 2 && rolled === 11) ||
+          (planet.number === 3 && rolled === 12);
+        if (pays) this.spawnNumberPulse(planet.x, planet.y);
+      }
+    }
+  }
+
+  private spawnNumberPulse(bx: number, by: number): void {
+    const cx = this.fit.ox + bx * this.fit.scale;
+    const cy = this.fit.oy + by * this.fit.scale;
+    const s = this.fit.scale;
+    const g = new Graphics();
+    this.fx.addChild(g);
+    const start = performance.now();
+    const dur = 900;
+    const tick = (): void => {
+      const t = (performance.now() - start) / dur;
+      if (t >= 1) {
+        this.app.ticker.remove(tick);
+        g.destroy();
+        return;
+      }
+      const e = 1 - Math.pow(1 - t, 3);
+      g.clear();
+      g.circle(cx, cy, s * (0.64 + e * 0.5))
+        .stroke({ color: 0xffd23f, width: 4 * (1 - t) + 1, alpha: 0.9 * (1 - t) });
+      g.circle(cx, cy, s * 0.62).fill({ color: 0xffd23f, alpha: 0.2 * (1 - t) });
+    };
+    this.app.ticker.add(tick);
+  }
+
   /** Expanding owner-coloured rings + sparkle burst at a board position
    *  (fit-space): a double ripple plus a handful of radiating sparks, so a new
    *  piece lands with a satisfying pop instead of a single thin ring. */
@@ -1700,34 +1756,81 @@ export class BoardRenderer {
    * teal connector struts, echoing the printed outpost tokens. The civ emblem is
    * layered on top by `drawCivIcon`.
    */
-  private drawOutpost(layer: Container, cx: number, cy: number, scale: number, color: number): void {
-    const navy = 0x18253f;
-    const navyHi = 0x24365a;
-    const edge = 0x0a1222;
+  /**
+   * AA6: the outpost station, redrawn at full size in the spirit of the
+   * printed boards — a dark tri-lobe plate spanning the whole 3-hex triangle,
+   * cyan circuit lines radiating from the hub, twin glowing docking rings on
+   * every lobe, and a slowly rotating energy ring around the central emblem
+   * (original vector work; the printed art is referenced for feel only).
+   */
+  private drawOutpost(
+    layer: Container,
+    cx: number,
+    cy: number,
+    lobes: { x: number; y: number }[],
+    scale: number,
+    color: number,
+  ): void {
+    const navy = 0x16223c;
+    const navyHi = 0x223456;
+    const edge = 0x080f1f;
     const teal = 0x3fd0d6;
     const node = tint(color, 0.35);
     const station = new Graphics();
-    const lobeDist = scale * 0.4;
-    const lobeR = scale * 0.34;
-    // Three rounded lobes around the hub (trefoil silhouette).
-    for (let i = 0; i < 3; i++) {
-      const a = (-Math.PI / 2) + (Math.PI * 2 * i) / 3;
-      station.circle(cx + Math.cos(a) * lobeDist, cy + Math.sin(a) * lobeDist, lobeR);
-    }
-    station.circle(cx, cy, scale * 0.32);
-    station.fill({ color: navy }).stroke({ color: edge, width: 2 });
-    // Hub highlight.
-    station.circle(cx, cy, scale * 0.3).fill({ color: navyHi, alpha: 0.5 });
 
-    // Docking nodes: two per lobe on the outer arc, with teal struts to the hub.
-    // Positions come from the shared helper so trade-station pips / docked ships
-    // land exactly on these same nodes.
-    for (const { x: nx, y: ny } of this.dockNodePositions(cx, cy, scale)) {
-      this.strokeLine(station, cx, cy, nx, ny, scale * 0.03, teal, 0.85);
-      station.circle(nx, ny, scale * 0.1).fill({ color: edge }).stroke({ color: node, width: 1.4 });
-      station.circle(nx, ny, scale * 0.045).fill({ color: node });
+    // Solid body: the triangle plate between the three hex centres + a big
+    // rounded lobe over each hex — the trefoil silhouette of the printed board.
+    const lobeR = scale * 0.58;
+    if (lobes.length === 3) {
+      station.poly(lobes.flatMap((l) => [l.x, l.y]));
+    }
+    for (const l of lobes) station.circle(l.x, l.y, lobeR);
+    station.circle(cx, cy, scale * 0.52);
+    station.fill({ color: navy }).stroke({ color: edge, width: 3 });
+    // Soft top sheen on each lobe so the plate reads as moulded, not flat.
+    for (const l of lobes) {
+      station.circle(l.x - lobeR * 0.18, l.y - lobeR * 0.2, lobeR * 0.74).fill({ color: navyHi, alpha: 0.35 });
+      station.circle(l.x, l.y, lobeR * 0.92).stroke({ color: navyHi, width: 1.2, alpha: 0.5 });
+    }
+
+    // Cyan circuit lines: hub → each lobe, with a midway pulse node.
+    for (const l of lobes) {
+      this.strokeLine(station, cx, cy, l.x, l.y, scale * 0.035, teal, 0.7);
+      station.circle((cx + l.x) / 2, (cy + l.y) / 2, scale * 0.05).fill({ color: teal, alpha: 0.9 });
+    }
+
+    // Twin docking rings per lobe, sitting on the outer arc (away from the hub).
+    for (const l of lobes) {
+      const away = Math.atan2(l.y - cy, l.x - cx);
+      for (const off of [-0.62, 0.62]) {
+        const a = away + off;
+        const nx = l.x + Math.cos(a) * lobeR * 0.55;
+        const ny = l.y + Math.sin(a) * lobeR * 0.55;
+        station.circle(nx, ny, scale * 0.15).fill({ color: edge }).stroke({ color: node, width: 2 });
+        station.circle(nx, ny, scale * 0.07).fill({ color: node });
+      }
     }
     layer.addChild(station);
+
+    // Center emblem pad: a breathing civ-colour glow under the icon…
+    const pad = new Graphics().circle(cx, cy, scale * 0.5).fill({ color, alpha: 0.16 });
+    layer.addChild(pad);
+    const phase = (cx * 0.011 + cy * 0.023) % (Math.PI * 2);
+    this.ambientItems.push({ g: pad, kind: "halo", x: cx, y: cy, rad: scale * 0.5, phase, speed: 0.9 });
+
+    // …and the rotating energy ring: four glowing arc segments drawn around
+    // the Graphics' own origin so the ambient ticker can spin it in place.
+    const ring = new Graphics();
+    const ringR = scale * 0.46;
+    for (let i = 0; i < 4; i++) {
+      const a0 = (Math.PI / 2) * i + 0.18;
+      const a1 = a0 + Math.PI / 2 - 0.36;
+      ring.moveTo(Math.cos(a0) * ringR, Math.sin(a0) * ringR).arc(0, 0, ringR, a0, a1);
+    }
+    ring.stroke({ color: tint(color, 0.2), width: 2.2, alpha: 0.85 });
+    ring.position.set(cx, cy);
+    layer.addChild(ring);
+    this.ambientItems.push({ g: ring, kind: "spin", x: cx, y: cy, rad: ringR, phase, speed: 1 });
   }
 
   /**

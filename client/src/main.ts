@@ -47,7 +47,7 @@ async function boot(): Promise<void> {
       app.replaceChildren(); // clear the menu; HUD mounts its own overlay
       const hud = new HUD(app, game, board);
       // Z6: the guided first game attaches its coach bubble over the live HUD.
-      const tut = opts.tutorial ? new TutorialDriver(game) : null;
+      const tut = opts.tutorial ? new TutorialDriver(game, board) : null;
       // The canvas resizes to the window asynchronously; recenter once layout
       // has settled so the map is always centered regardless of window size.
       requestAnimationFrame(() => board.recenter());

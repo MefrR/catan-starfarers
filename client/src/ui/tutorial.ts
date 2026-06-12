@@ -1,5 +1,6 @@
 import type { GameState } from "@starfarers/shared";
 import type { GameDriver } from "../game/store.js";
+import type { BoardRenderer } from "../render/board.js";
 
 const el = (html: string): HTMLElement => {
   const t = document.createElement("template");
@@ -14,6 +15,14 @@ const actionBtn = (txt: string): HTMLElement | null =>
     (b.textContent ?? "").includes(txt),
   ) ?? null;
 
+/** Find a Fleet-sidebar section by its title ("Mothership", "Shaker", …). */
+const sideSec = (title: string): Element | null => {
+  for (const sec of document.querySelectorAll(".side-sec")) {
+    if (sec.querySelector(".side-title")?.textContent?.includes(title)) return sec;
+  }
+  return null;
+};
+
 interface TutStep {
   /** The coaching text shown in the bubble (kept short and concrete). */
   text: string;
@@ -26,32 +35,66 @@ interface TutStep {
   /** Until this is true the bubble shows a "watch your rivals" waiting line
    *  (used for steps that only make sense on the player's own turn). */
   ready?: (s: GameState, my: boolean) => boolean;
+  /** One-shot side effect on step entry (e.g. fly the camera somewhere). */
+  enter?: (s: GameState) => void;
 }
 
 /**
- * Z6: "First Flight" — a guided first game. A floating coach bubble + a pulsing
- * spotlight ring walk a brand-new player through their first turns: setup
- * placement, production, building, the shake, flying and settling. Steps
- * advance automatically by watching the game state; the player can skip at any
- * time. Interjections handle the two surprise moments (encounter card, discard
- * on a 7) whenever they strike.
+ * Z6/AA2: "First Flight" — a fully guided first game. A floating coach bubble
+ * + a pulsing spotlight ring walk a brand-new player through EVERYTHING:
+ * setup placement, production, the hand, trading, the build dock, the shaker,
+ * flying & settling, outposts, pirate bases / ice planets and the race to 15.
+ * Steps advance automatically by watching the game state; encounter cards and
+ * forced discards interject whenever they strike; skippable at any time.
  */
 export class TutorialDriver {
   private game: GameDriver;
+  private board: BoardRenderer | null;
   private bubble: HTMLElement;
   private ring: HTMLElement;
   private idx = 0;
+  private enteredIdx = -1;
+  /** Once a step's ready() has been true it stays "armed" — the phase moving
+   *  on must complete the step, not bounce it back to the waiting line. */
+  private readyLatched = false;
   private unsub: () => void;
   private timer: number;
   private dead = false;
   private readonly steps: TutStep[];
 
-  constructor(game: GameDriver) {
+  constructor(game: GameDriver, board?: BoardRenderer) {
     this.game = game;
+    this.board = board ?? null;
+
+    /** Frame a set of board-space points (camera glide), if the board is wired. */
+    const frame = (pts: { x: number; y: number }[]): void => {
+      if (!this.board || pts.length === 0) return;
+      this.board.focusRegion(pts, {
+        left: 90,
+        top: 90,
+        right: window.innerWidth - 90,
+        bottom: window.innerHeight - 300,
+      });
+    };
+    const outpostPoints = (s: GameState): { x: number; y: number }[] => {
+      const o = s.sectors.find((x) => x.kind === "outpost");
+      if (!o) return [];
+      return [{ x: 1.5 * o.q + 0.5, y: Math.sqrt(3) * (o.r + o.q / 2 + 0.5) }];
+    };
+    const threatPoints = (s: GameState): { x: number; y: number }[] => {
+      const pts: { x: number; y: number }[] = [];
+      for (const sec of s.sectors) {
+        for (const p of sec.planets) {
+          if (p.special !== "none") pts.push({ x: p.x, y: p.y });
+        }
+      }
+      return pts.slice(0, 2);
+    };
+
     this.steps = [
       {
         manual: true,
-        text: `<b>Welcome aboard, commander!</b><br>This guided first flight walks you through your opening turns. The goal: be first to <b>15 victory points</b> by settling colonies, docking at alien outposts and surviving deep space. Skip anytime.`,
+        text: `<b>Welcome aboard, commander!</b><br>This guided first flight walks you through the whole game. The goal: be first to <b>15 victory points</b> by settling colonies, befriending alien outposts and braving deep space. Skip anytime.`,
       },
       {
         text: `First, everyone rolls for the starting order. Press <b>🎲 Roll for starting position</b>.`,
@@ -59,41 +102,69 @@ export class TutorialDriver {
         done: (s) => s.phaseState.phase !== "setup" || s.phaseState.setup?.step !== "rollStart",
       },
       {
-        text: `These are the <b>Catanian home colonies</b>. For 4 rounds, click a <b>glowing site</b> to place a colony — a site touching two planets produces <b>both</b> resources. In round 4 you'll also pick a spaceport, your first ship and a bonus attachment (big center-screen choices).`,
+        text: `These are the <b>Catanian home colonies</b>. For 4 rounds, click a <b>glowing site</b> to place a colony — a site touching two planets produces <b>both</b> resources, and the number chip is how often a planet pays (6 &amp; 8 pay most). In round 4 you'll also pick a spaceport, your first ship and a bonus attachment.`,
         done: (s) => s.phaseState.phase !== "setup",
       },
       {
         ready: (s, my) => my && s.phaseState.phase === "production",
-        text: `Your turn opens with <b>production</b>. Roll the dice — every planet showing that number pays resources to the colonies built next to it.`,
+        text: `Your turn opens with <b>production</b>. Roll the dice — every planet showing that number flashes gold and pays resources to the colonies built next to it. (A <b>7</b> pays nothing and forces big hands to discard!)`,
         anchor: () => actionBtn("Roll dice"),
         done: (s, my) => my && s.phaseState.phase !== "production",
       },
       {
         ready: (s, my) => my && s.phaseState.phase === "tradeBuild",
         manual: true,
-        text: `These cards are your <b>resources</b>. Ore, fuel, carbon, food and trade goods pay for everything. The <b>⇄</b> button trades with the bank (3:1, food 2:1) or with rivals.`,
+        text: `These cards are your <b>resources</b>: ore, fuel, carbon, food and trade goods pay for everything you build. The <b>⇄</b> button trades with the bank (3:1, food 2:1) or face-to-face with your rivals — trading is often the fastest way to finish a build.`,
         anchor: () => document.querySelector(".hand"),
       },
       {
-        text: `The <b>build dock</b>: lit tiles are affordable right now — hover any tile to see its cost and what it does. Colony ships settle new worlds (1 VP); spaceports double production (2 VP). Build if you like, then press <b>End build → Shake</b>.`,
+        manual: true,
+        text: `The <b>build dock</b>: lit tiles are affordable right now; hover any tile to see its cost and what it does. <b>Colony ships</b> settle new worlds (1 VP). <b>Trade ships</b> dock at outposts. <b>Ports</b> double a colony's production (2 VP). <b>Boosters</b> add speed, <b>cannons</b> add combat, <b>pods</b> add cargo.`,
         anchor: () => document.querySelector(".build-dock"),
-        done: (s, my) => my && s.phaseState.phase === "flight",
       },
       {
-        ready: (s, my) => my && s.phaseState.phase === "flight" && !s.phaseState.shake,
-        text: `<b>Flight phase!</b> Shake the mothership — the balls that fall out set your fleet's <b>speed</b> (and combat strength). A <b>black ball</b> means an encounter in deep space…`,
+        text: `Build something if you like, then press <b>End build → Shake</b> to launch into the flight phase.`,
+        anchor: () => actionBtn("End build"),
+        done: (s, my) => my && (s.phaseState.phase === "flight" || s.phaseState.phase === "encounter"),
+      },
+      {
+        // Armed in flight OR mid-encounter (End build → Shake auto-shakes, and
+        // a black ball can throw the player straight into an encounter).
+        ready: (s, my) => my && (s.phaseState.phase === "flight" || s.phaseState.phase === "encounter"),
+        manual: true,
+        text: `Meet the <b>shaker</b> — your mothership. Shaking it spills two balls: their total is your fleet's <b>speed</b> this turn, and in fights it's your <b>combat strength</b>. Boosters and cannons you've built add to those. And if a <b>black ball</b> falls out… something waits for you in deep space.`,
+        anchor: () => sideSec("Shaker") ?? sideSec("Mothership"),
+      },
+      {
+        ready: (s, my) => my && s.phaseState.phase === "flight",
+        text: `Now press <b>Shake mothership</b> and see what the galaxy deals you. (Already shaken? Then you're cleared for flight.)`,
         anchor: () => actionBtn("Shake mothership"),
         done: (s) => !!s.phaseState.shake || s.phaseState.phase === "encounter",
       },
       {
         ready: (s, my) => my && s.phaseState.phase === "flight" && !!s.phaseState.shake,
-        text: `Now fly: <b>click one of your ships</b>, then a <b>green node</b> to move it. Park a colony ship between two planets and press <b>Establish Colony</b> to settle (+1 VP). Trade ships dock at alien outposts for friendship cards.`,
+        text: `Now fly: <b>click one of your ships</b>, then a <b>green node</b> to move it. Park a colony ship between two planets and press <b>Establish Colony</b> (+1 VP). You can split your speed across several moves.`,
         done: (s, my) =>
           !my || s.ships.some((sh) => sh.owner === this.game.humanId && sh.movedThisTurn),
       },
       {
         manual: true,
-        text: `That's the whole loop: <b>produce → build → fly</b>. Your score lives here — first to <b>15 VP</b> wins. The ⌕ button finds your fleet, ⓘ shows costs, and hovering anything explains it. Good luck out there, commander! 🚀`,
+        enter: (s) => frame(outpostPoints(s)),
+        text: `See this station? It's an <b>alien outpost</b>. Fly a <b>trade ship</b> to its docking point to earn a <b>friendship card</b> (a permanent power — extra production, better trade rates, free upgrades…) and compete for the civ's <b>friendship marker</b>, worth <b>+2 VP</b> to whoever has the most trade stations there.`,
+      },
+      {
+        manual: true,
+        enter: (s) => frame(threatPoints(s)),
+        text: `Deep space also bites back. <b>☠ Pirate bases</b> and <b>❄ ice planets</b> block a planet from producing or being settled. Beat a pirate base with enough <b>cannons</b>, or terraform an ice planet with enough <b>freight pods</b> — each one you clear becomes a <b>+1 VP</b> conquest medal, permanently yours.`,
+      },
+      {
+        manual: true,
+        enter: () => this.board?.recenter(),
+        text: `One more thing: when your shake spills a <b>black ball</b>, you draw an <b>encounter card</b> — merchants, pirates, travelers, ships in distress. Read it and choose: generosity, courage and greed all lead to different fortunes. Encounters can win you fame, resources, even free ships… or cost you dearly.`,
+      },
+      {
+        manual: true,
+        text: `That's the whole loop: <b>produce → trade &amp; build → shake &amp; fly</b>. Your score lives here — first to <b>15 VP</b> wins. The ⌕ button finds your fleet, ⓘ shows costs, and hovering anything explains it. The galaxy is yours, commander — good luck! 🚀`,
         anchor: () => document.querySelector(".score-rows"),
       },
     ];
@@ -120,7 +191,7 @@ export class TutorialDriver {
     // The HUD swaps DOM nodes on every render — re-resolve the anchor and
     // recheck conditions on a steady tick so the spotlight never goes stale.
     this.timer = window.setInterval(() => this.evaluate(this.game.getState()), 500);
-    this.paint(this.game.getState());
+    this.evaluate(this.game.getState());
   }
 
   destroy(): void {
@@ -134,39 +205,44 @@ export class TutorialDriver {
 
   private advance(): void {
     this.idx++;
+    this.readyLatched = false;
     if (this.idx >= this.steps.length) {
       this.destroy();
       return;
     }
-    this.paint(this.game.getState());
+    this.evaluate(this.game.getState());
   }
 
   private evaluate(s: GameState): void {
     if (this.dead) return;
-    if (s.phaseState.phase === "gameOver") {
-      this.destroy();
-      return;
+    // A rendering hiccup must never kill the tour — the interval would die
+    // silently and the tutorial would appear to "stop".
+    try {
+      if (s.phaseState.phase === "gameOver") {
+        this.destroy();
+        return;
+      }
+      const step = this.steps[this.idx];
+      if (!step) {
+        this.destroy();
+        return;
+      }
+      const my = this.game.isHumanTurn();
+      if (step.ready?.(s, my)) this.readyLatched = true;
+      const armed = !step.ready || this.readyLatched;
+      if (!step.manual && step.done && armed && step.done(s, my)) {
+        this.advance();
+        return;
+      }
+      this.paint(s, step, my);
+    } catch {
+      /* keep ticking */
     }
-    const step = this.steps[this.idx];
-    if (!step) {
-      this.destroy();
-      return;
-    }
-    const my = this.game.isHumanTurn();
-    if (!step.manual && step.done && (!step.ready || step.ready(s, my)) && step.done(s, my)) {
-      this.advance();
-      return;
-    }
-    this.paint(s);
   }
 
   /** Render the current step (or an interjection / waiting line) and place the
    *  bubble + spotlight ring against the freshly-resolved anchor. */
-  private paint(s: GameState): void {
-    if (this.dead) return;
-    const step = this.steps[this.idx];
-    if (!step) return;
-    const my = this.game.isHumanTurn();
+  private paint(s: GameState, step: TutStep, my: boolean): void {
     const textEl = this.bubble.querySelector(".tut-text") as HTMLElement;
     const nextBtn = this.bubble.querySelector(".tut-next") as HTMLElement;
     const count = this.bubble.querySelector(".tut-count") as HTMLElement;
@@ -188,11 +264,17 @@ export class TutorialDriver {
     }
 
     // Waiting line while the step isn't relevant yet (rivals are playing).
-    if (step.ready && !step.ready(s, my)) {
+    if (step.ready && !this.readyLatched && !step.ready(s, my)) {
       textEl.innerHTML = `⏳ Watch your rivals take their turns — yours is coming up…`;
       nextBtn.style.display = "none";
       this.place(null);
       return;
+    }
+
+    // One-shot entry effect (camera framing), now that the step is live.
+    if (this.enteredIdx !== this.idx) {
+      this.enteredIdx = this.idx;
+      step.enter?.(s);
     }
 
     textEl.innerHTML = step.text;

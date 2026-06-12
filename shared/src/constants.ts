@@ -64,7 +64,7 @@ export const DISCARD_LIMIT = 7;
 /** Hand size requiring discard with Diplomat "Reduced Tribute" card. */
 export const DISCARD_LIMIT_REDUCED_TRIBUTE = 12;
 
-export const PLAYER_COLORS: PlayerColor[] = ["yellow", "red", "blue", "black"];
+export const PLAYER_COLORS: PlayerColor[] = ["yellow", "red", "blue", "black", "green", "white"];
 
 /** 2d6 roll frequency (out of 36) for probability display. */
 export const ROLL_FREQUENCY: Record<number, number> = {

@@ -155,7 +155,7 @@ export interface TradeStation {
 
 // --- Players ---
 export type PlayerId = string;
-export type PlayerColor = "yellow" | "red" | "blue" | "black";
+export type PlayerColor = "yellow" | "red" | "blue" | "black" | "green" | "white";
 
 export interface PlayerState {
   id: PlayerId;

@@ -19,6 +19,8 @@ const COLOR_NAME: Record<PlayerColor, string> = {
   red: "Red",
   blue: "Blue",
   black: "Black",
+  green: "Green",
+  white: "White",
 };
 
 const COLOR_HEX: Record<PlayerColor, string> = {
@@ -26,6 +28,8 @@ const COLOR_HEX: Record<PlayerColor, string> = {
   red: "#ff5d5d",
   blue: "#4fa8ff",
   black: "#8a8fa6",
+  green: "#52d273",
+  white: "#e9eef7",
 };
 
 const AI_NAMES = ["Nova", "Orion", "Vega", "Lyra", "Atlas", "Cygnus"];

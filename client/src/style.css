@@ -385,9 +385,11 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 
 /* --- Left sidebar: mothership + shaker + trade --- */
 .sidebar-left {
-  left: 16px; top: 16px;
+  /* AA5: sits BELOW the fixed exit ✕ (top-left 16px + 34px tall) so the X
+     never floats over the Fleet header. */
+  left: 16px; top: 60px;
   width: 216px;
-  max-height: calc(100vh - 32px);
+  max-height: calc(100vh - 76px);
   padding: 14px;
   display: flex; flex-direction: column; gap: 14px;
   overflow-y: auto;
@@ -1499,15 +1501,27 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   border: 1px solid color-mix(in srgb, var(--danger) 65%, transparent);
 }
 
-/* R3 + small-screen tightening: shrink the center action bar and panels. */
+/* R3 + small-screen tightening: shrink the center action bar and panels.
+   AA4: squeeze HARD vertically — on phones the bar was eating half the screen,
+   so every row inside it (hand cards, dock tiles, buttons) flattens. */
 @media (max-width: 860px) {
   .actionbar {
-    gap: 8px; padding: 8px 10px; max-width: 96vw; bottom: 10px;
+    gap: 4px; padding: 6px 8px; max-width: 96vw; bottom: 8px;
     border-radius: 12px;
   }
-  .actionbar button { padding: 7px 10px; font-size: 13px; }
-  .actionbar button .b-ico svg { width: 15px; height: 15px; }
-  .actionbar button .b-name { font-size: 12px; }
+  .actionbar button { padding: 6px 10px; font-size: 12px; }
+  .actionbar button .b-ico svg { width: 14px; height: 14px; }
+  .actionbar button .b-name { font-size: 11px; }
+  /* Flatter resource cards: smaller glyph, tighter padding. */
+  .hand { gap: 5px; }
+  .res-card { width: 42px; padding: 4px 3px 3px; border-radius: 8px; }
+  .res-card .res-glyph svg { width: 22px; height: 22px; }
+  .res-card .res-name { font-size: 8px; }
+  /* Flatter build dock tiles. */
+  .bd-tile { width: 46px; height: 46px; border-radius: 11px; }
+  .bd-ico svg { width: 19px; height: 19px; }
+  .bd-name { font-size: 7.5px; }
+  .build-dock { gap: 4px; }
   .scoreboard { top: 10px; right: 10px; min-width: 0; padding: 9px 9px 8px; }
   .sidebar-left { left: 10px; top: 56px; width: 180px; padding: 10px; }
   /* M3: when expanded, the Fleet panel must not run under the bottom action
@@ -1841,8 +1855,9 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   pointer-events: none; max-width: min(480px, 70vw);
 }
 .et-entry {
-  padding: 7px 14px; border-radius: 999px;
-  font-size: 12.5px; font-weight: 600; color: var(--text); text-align: center;
+  /* AA4: compact pills — the ticker is a whisper, not a billboard. */
+  padding: 5px 12px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; color: var(--text); text-align: center;
   background: rgba(10, 14, 28, 0.88);
   border: 1px solid rgba(120, 160, 255, 0.25);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
@@ -1856,7 +1871,7 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 @media (max-width: 700px) {
   /* Keep the ticker clear of the exit button + scoreboard on small screens. */
   .event-ticker { top: 56px; max-width: 86vw; }
-  .et-entry { font-size: 11.5px; padding: 6px 11px; }
+  .et-entry { font-size: 10px; padding: 4px 10px; }
 }
 
 /* === W2: panel toggle animation — plays only when the player collapses or

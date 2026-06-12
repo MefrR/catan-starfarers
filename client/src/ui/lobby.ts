@@ -7,6 +7,8 @@ const COLOR_HEX: Record<PlayerColor, string> = {
   red: "#ff5d5d",
   blue: "#4fa8ff",
   black: "#8a8fa6",
+  green: "#52d273",
+  white: "#e9eef7",
 };
 
 type StartHandler = (state: GameState, youId: string) => void;
