@@ -3067,7 +3067,12 @@ export class HUD {
       if (iAmSubject || iAmOpp) {
         if (iAmOpp) cardEl.querySelector(".enc-text")!.textContent = "You act as the rival — shake your mothership!";
         const b = el(`<button>🎲 Shake the mothership</button>`);
-        b.addEventListener("click", () => this.act({ t: "encounterShake" }));
+        b.addEventListener("click", () => {
+          // One shake per dueller: disable instantly so a fast double-tap (or
+          // multiplayer latency) can't fire a second, rejected shake.
+          (b as HTMLButtonElement).disabled = true;
+          this.act({ t: "encounterShake" });
+        });
         choices.appendChild(b);
       } else {
         choices.appendChild(el(`<div class="enc-wait">Waiting for both motherships to shake…</div>`));
