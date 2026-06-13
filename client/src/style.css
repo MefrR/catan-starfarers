@@ -1968,6 +1968,85 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 }
 .hero-tutorial:hover { color: #ffe9a8; text-decoration-color: rgba(255, 233, 168, 0.5); }
 
+/* === AB3: account chip (top-right of the landing) + profile page. === */
+.acct-chip { position: fixed; top: 16px; right: 16px; z-index: 40; }
+.acct-btn {
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 7px 14px 7px 8px; border-radius: 999px; cursor: pointer;
+  background: rgba(10, 16, 34, 0.62); color: #eaf2ff;
+  border: 1px solid rgba(120, 170, 255, 0.28); backdrop-filter: blur(8px);
+  font-size: 14px; transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.acct-btn:hover { border-color: rgba(98, 224, 205, 0.7); box-shadow: 0 0 18px rgba(57, 216, 200, 0.22); }
+.acct-btn.signin { padding: 8px 16px; }
+.acct-btn .g-mark {
+  display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 7px;
+  border-radius: 50%; background: #fff; color: #4285f4; font-weight: 900; font-size: 12px;
+}
+.acct-avatar {
+  display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+  font-size: 12px; font-weight: 800; color: #0a0f1e;
+  background: var(--ac, #4fa8ff); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15) inset;
+}
+.acct-avatar.big { width: 56px; height: 56px; font-size: 22px; }
+.acct-name { font-weight: 600; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.acct-overlay {
+  position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
+  background: rgba(2, 4, 10, 0.6); backdrop-filter: blur(4px);
+  opacity: 0; transition: opacity 0.2s ease;
+}
+.acct-overlay.show { opacity: 1; }
+.acct-card {
+  position: relative; width: min(420px, 94vw); padding: 26px 26px 22px; border-radius: 20px;
+  background: linear-gradient(165deg, rgba(22, 30, 56, 0.98), rgba(8, 11, 22, 0.98));
+  border: 1px solid rgba(120, 170, 255, 0.28); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
+  transform: translateY(8px) scale(0.97); transition: transform 0.25s cubic-bezier(0.2, 1, 0.3, 1);
+}
+.acct-overlay.show .acct-card { transform: translateY(0) scale(1); }
+.acct-close {
+  position: absolute; top: 12px; right: 12px; width: 30px; height: 30px; border-radius: 9px;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #cfe0ff; cursor: pointer; font-size: 14px;
+}
+.acct-close:hover { background: rgba(255, 255, 255, 0.12); }
+.acct-head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+.acct-card-title { font-size: 18px; font-weight: 800; }
+.acct-card-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.acct-field { display: block; margin-bottom: 16px; }
+.acct-label {
+  display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--muted); font-weight: 700; margin-bottom: 7px;
+}
+.acct-input {
+  width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px;
+  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(120, 170, 255, 0.25);
+  color: #eaf2ff; font-size: 15px; font-family: inherit;
+}
+.acct-input:focus { outline: none; border-color: rgba(98, 224, 205, 0.7); }
+.acct-swatches { display: flex; gap: 10px; flex-wrap: wrap; }
+.acct-swatch {
+  width: 34px; height: 34px; border-radius: 50%; cursor: pointer; padding: 0;
+  background: var(--sw); border: 2px solid transparent; transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.acct-swatch:hover { transform: scale(1.12); }
+.acct-swatch.selected { border-color: #fff; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.2); }
+.acct-actions { display: flex; gap: 10px; margin-top: 22px; }
+.acct-save {
+  flex: 1; padding: 11px; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 14px;
+  background: linear-gradient(92deg, #39d8c8, #52e8a0); color: #06231d; border: none;
+}
+.acct-save:disabled { opacity: 0.5; cursor: default; background: rgba(255, 255, 255, 0.1); color: var(--muted); }
+.acct-signout {
+  padding: 11px 16px; border-radius: 10px; cursor: pointer; font-size: 14px;
+  background: rgba(255, 93, 93, 0.1); color: #ff9a9a; border: 1px solid rgba(255, 93, 93, 0.35);
+}
+.acct-signout:hover { background: rgba(255, 93, 93, 0.18); }
+.acct-stats-soon {
+  margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12.5px; color: var(--muted); text-align: center;
+}
+
 /* Z6: the coach bubble + spotlight ring of the guided first game. */
 .tut-bubble button::before,
 .tut-bubble button::after {

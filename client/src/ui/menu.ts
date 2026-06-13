@@ -7,6 +7,7 @@ import {
 } from "@starfarers/shared";
 import type { Seat } from "../game/store.js";
 import { shatter } from "./fx.js";
+import { auth } from "../auth.js";
 
 const el = (html: string): HTMLElement => {
   const t = document.createElement("template");
@@ -55,6 +56,9 @@ export class NewGameMenu {
   private aiDifficulty: AiDifficulty = "normal";
   private turnSeconds = 0; // 0 = no turn timer
 
+  /** When signed in, default the commander name to the profile's display name. */
+  private defaultName = "Commander";
+
   constructor(
     mount: HTMLElement,
     onLaunch: (opts: LaunchOptions) => void,
@@ -63,6 +67,13 @@ export class NewGameMenu {
     this.root = mount;
     this.onLaunch = onLaunch;
     this.onBack = onBack;
+    // AB4: seed the commander identity from the signed-in profile so your name
+    // and favorite color are pre-filled (you can still change them per game).
+    const profile = auth.currentProfile();
+    if (profile) {
+      this.defaultName = profile.displayName;
+      this.color = profile.favoriteColor;
+    }
     this.render();
   }
 
@@ -236,6 +247,9 @@ export class NewGameMenu {
       shatter(launchBtn, "#39d8c8", () => this.onLaunch(opts));
     });
     screen.querySelector("#back")?.addEventListener("click", () => this.onBack?.());
+
+    // AB4: prefill the commander name from the signed-in profile.
+    (screen.querySelector("#name") as HTMLInputElement).value = this.defaultName;
 
     this.root.replaceChildren(screen);
   }

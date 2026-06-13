@@ -1,6 +1,7 @@
 import { net, type NetMode } from "../net.js";
 import { type GameState, type LobbyState, type PlayerColor, PLAYER_COLORS } from "@starfarers/shared";
 import { shatter } from "./fx.js";
+import { auth } from "../auth.js";
 
 const COLOR_HEX: Record<PlayerColor, string> = {
   yellow: "#ffd23f",
@@ -64,6 +65,8 @@ export class LobbyUI {
   private onReset: (() => void) | undefined;
   private started = false;
   private mode: NetMode;
+  /** AB4: apply the signed-in favorite color once, when it's free. */
+  private appliedFavColor = false;
 
   constructor(
     mount: HTMLElement,
@@ -92,6 +95,7 @@ export class LobbyUI {
         this.lobby = msg.lobby;
         this.errorText = "";
         saveSession({ roomCode: msg.lobby.roomCode, playerId: msg.youId });
+        this.applyFavoriteColor();
         if (msg.lobby.started) {
           this.root.replaceChildren(); // board takes over
         } else {
@@ -169,6 +173,9 @@ export class LobbyUI {
       </div>
     `);
     const name = () => (screen.querySelector("#name") as HTMLInputElement).value.trim();
+    // AB4: prefill the commander name from the signed-in profile.
+    const profile = auth.currentProfile();
+    if (profile) (screen.querySelector("#name") as HTMLInputElement).value = profile.displayName;
     screen.querySelector("#back")?.addEventListener("click", () => this.onBack?.());
     const hostBtn = screen.querySelector("#host") as HTMLElement;
     hostBtn.addEventListener("click", () => {
@@ -180,6 +187,20 @@ export class LobbyUI {
       net.send({ t: "joinRoom", roomCode: code, name: name() });
     });
     this.root.replaceChildren(screen);
+  }
+
+  /** AB4: once in the pre-game lobby, switch to the signed-in player's favorite
+   *  color if it's still available (and not already theirs). One-shot. */
+  private applyFavoriteColor(): void {
+    if (this.appliedFavColor) return;
+    const lobby = this.lobby;
+    const profile = auth.currentProfile();
+    if (!lobby || lobby.started || !profile) return;
+    this.appliedFavColor = true; // attempt only once per lobby session
+    const me = lobby.players.find((p) => p.id === this.youId);
+    if (!me || me.color === profile.favoriteColor) return;
+    const taken = lobby.players.some((p) => p.id !== this.youId && p.color === profile.favoriteColor);
+    if (!taken) net.send({ t: "setColor", color: profile.favoriteColor });
   }
 
   private renderLobby(): void {

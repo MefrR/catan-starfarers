@@ -6,6 +6,8 @@ import { BoardRenderer } from "./render/board.js";
 import { NewGameMenu, type LaunchOptions } from "./ui/menu.js";
 import { HUD } from "./ui/hud.js";
 import { TutorialDriver } from "./ui/tutorial.js";
+import { mountAccountChip } from "./ui/account.js";
+import { auth } from "./auth.js";
 import { LocalGame } from "./game/store.js";
 import type { GameDriver, Seat } from "./game/store.js";
 
@@ -150,10 +152,16 @@ async function boot(): Promise<void> {
       }
       shatter(resume, "#ffd23f", () => mountGame(game));
     });
+    // Account chip (top-right) — sign-in / profile. Renders nothing when
+    // Supabase isn't configured, so the hero is unchanged until accounts exist.
+    mountAccountChip(screen);
     ensureMenuBg();
     app.replaceChildren(screen);
   };
 
+  // Resolve any existing session (and consume an OAuth redirect) before the
+  // first paint, so the account chip + menu prefills show the right state.
+  await auth.whenReady();
   showLanding();
 }
 

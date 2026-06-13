@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@starfarers/shared": "*",
+    "@supabase/supabase-js": "^2.108.1",
     "pixi.js": "^8.6.6",
     "socket.io-client": "^4.8.1"
   },

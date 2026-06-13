@@ -2,7 +2,10 @@ node_modules/
 dist/
 *.tsbuildinfo
 .DS_Store
+# env files (Supabase keys, server secrets) — never commit any of these
 .env
+.env.*
+!.env.example
 # extracted rulebook text (regenerated from PDFs)
 rulebook.txt
 almanac.txt
