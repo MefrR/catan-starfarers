@@ -6,6 +6,8 @@ dist/
 .env
 .env.*
 !.env.example
+# downloaded Google OAuth client-secret JSON — must never be committed
+client_secret_*.json
 # extracted rulebook text (regenerated from PDFs)
 rulebook.txt
 almanac.txt

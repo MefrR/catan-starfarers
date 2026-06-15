@@ -1991,6 +1991,9 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .acct-avatar.big { width: 56px; height: 56px; font-size: 22px; }
 .acct-name { font-weight: 600; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Flat buttons inside the account card — no traveling-star layers. */
+.acct-card button::before,
+.acct-card button::after { content: none; }
 .acct-overlay {
   position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
   background: rgba(2, 4, 10, 0.6); backdrop-filter: blur(4px);
