@@ -1815,7 +1815,13 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
    control. Greyed (and inert) when it isn't your turn. */
 .primary-act::before, .primary-act::after { content: none; } /* no star layers */
 .primary-act {
-  position: absolute; left: 50%; bottom: calc(100% + 12px); transform: translateX(-50%);
+  /* Fixed to the viewport (NOT a child of the transformed action bar, which
+     could push it off-screen). Its `bottom` is set by JS to sit just above the
+     bar's measured top, clamped to stay on screen. */
+  position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%); z-index: 60;
+  /* The screen root is pointer-events:none (so the board canvas gets taps); the
+     button must opt BACK IN or clicks fall through to the canvas. */
+  pointer-events: auto;
   display: flex; flex-direction: column; align-items: center; gap: 1px;
   min-width: 200px; padding: 11px 30px; border-radius: 14px; cursor: pointer;
   background: linear-gradient(165deg, #ffd23f, #ff9e2c);
@@ -1823,7 +1829,7 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   box-shadow: 0 10px 30px rgba(255, 158, 44, 0.4), 0 0 0 4px rgba(255, 210, 63, 0.12);
   animation: paBreathe 2.4s ease-in-out infinite;
   transition: transform 0.12s ease, box-shadow 0.15s ease, filter 0.15s ease;
-  white-space: nowrap; z-index: 2;
+  white-space: nowrap;
 }
 .primary-act:hover { transform: translateX(-50%) translateY(-2px); filter: brightness(1.06); }
 .primary-act:active { transform: translateX(-50%) translateY(0); }
@@ -1840,7 +1846,7 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   50% { box-shadow: 0 12px 38px rgba(255, 158, 44, 0.55), 0 0 0 7px rgba(255, 210, 63, 0.18); }
 }
 @media (max-width: 860px) {
-  .primary-act { min-width: 0; padding: 9px 22px; bottom: calc(100% + 8px); }
+  .primary-act { min-width: 0; padding: 9px 22px; } /* `bottom` is set by JS */
   .pa-label { font-size: 14px; }
 }
 

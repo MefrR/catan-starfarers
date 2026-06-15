@@ -1192,9 +1192,13 @@ export class HUD {
     // AD6: the phase's PRIMARY action (Roll / Shake / End build / End turn) is
     // lifted OUT of the cluttered button row into one bold button floating just
     // above the center box — distinct, unmissable, and grayed when it's not
-    // your turn so players always know "the one button to press".
+    // your turn so players always know "the one button to press". It's appended
+    // to the (untransformed) screen root, NOT the action bar, so its
+    // position:fixed anchors to the viewport (the bar has a CSS transform that
+    // would otherwise trap it). positionPrimaryButton() then sits it just above
+    // the bar's measured top.
     const primaryBtn = this.buildPrimaryButton(state);
-    if (primaryBtn) bar.appendChild(primaryBtn);
+    if (primaryBtn) screen.appendChild(primaryBtn);
 
     // R6: top-left Exit button → confirm before leaving to the main menu.
     const exitBtn = el(`<button class="exit-menu" title="Exit to main menu">✕</button>`);
@@ -1235,6 +1239,9 @@ export class HUD {
     this.syncTurnTimer(state);
     this.syncGameOverOverlay(state);
     this.drawMinimap(state);
+    // AD6: sit the floating primary button just above the action bar's top,
+    // measured after layout settles (and clamped to stay on screen).
+    requestAnimationFrame(() => this.positionPrimaryButton());
 
     // Set-up framing: glide the camera onto the starting-colonies area exactly
     // ONCE, when placement first begins (not every round) — new players
@@ -2465,6 +2472,18 @@ export class HUD {
     this.moveTargets =
       remaining > 0 ? reachable(state, ship.intersectionId, remaining) : new Map();
     this.render(state); // re-render to show establish buttons + highlights
+  }
+
+  /** AD6: place the fixed primary button just above the action bar's measured
+   *  top edge, clamped so it always stays on screen (the bar can be tall). */
+  private positionPrimaryButton(): void {
+    const pa = this.root.querySelector(".primary-act") as HTMLElement | null;
+    const barEl = this.root.querySelector(".actionbar") as HTMLElement | null;
+    if (!pa || !barEl) return;
+    const br = barEl.getBoundingClientRect();
+    let bottom = window.innerHeight - br.top + 8;
+    bottom = Math.max(8, Math.min(bottom, window.innerHeight - 70));
+    pa.style.bottom = `${bottom}px`;
   }
 
   /** AD6: describe the phase's single primary action for the floating button. */
