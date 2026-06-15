@@ -229,7 +229,7 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .screen button::after {
   content: none;
 }
-.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove):not(.seg-opt):not(.swatch):not(.glow-btn):not(.setup-back):not(.hero-resume):not(.hero-tutorial) {
+.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove):not(.seg-opt):not(.swatch):not(.glow-btn):not(.setup-back):not(.hero-resume):not(.hero-tutorial):not(.menu-music) {
   background: linear-gradient(92deg, rgba(91, 140, 255, 0.28), rgba(57, 216, 200, 0.24));
   color: #eaf2ff;
   border: 1px solid rgba(120, 190, 255, 0.42);
@@ -237,7 +237,7 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   overflow: visible;
   backdrop-filter: blur(6px);
 }
-.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove):not(.seg-opt):not(.swatch):not(.glow-btn):not(.setup-back):not(.hero-resume):not(.hero-tutorial):hover {
+.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove):not(.seg-opt):not(.swatch):not(.glow-btn):not(.setup-back):not(.hero-resume):not(.hero-tutorial):not(.menu-music):hover {
   border-color: rgba(98, 224, 205, 0.8);
   box-shadow: 0 0 22px rgba(57, 216, 200, 0.28);
 }
@@ -2119,6 +2119,20 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 
 /* === AB3: account chip (top-right of the landing) + profile page. === */
 .acct-chip { position: fixed; top: 16px; right: 16px; z-index: 40; }
+/* Main-menu music toggle (top-left). */
+.menu-music {
+  position: fixed; top: 16px; left: 16px; z-index: 40;
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px 8px 12px;
+  border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 700;
+  background: rgba(16, 22, 38, 0.7); border: 1px solid rgba(120, 160, 240, 0.28);
+  color: #cdd8ef; backdrop-filter: blur(6px);
+}
+.menu-music::before, .menu-music::after { content: none; }
+.menu-music .mm-ico { font-size: 16px; line-height: 1; }
+.menu-music.on { color: #aee6ff; border-color: rgba(120, 200, 255, 0.5); }
+.menu-music.off { color: var(--muted); }
+.menu-music.off .mm-ico { opacity: 0.6; }
+.menu-music:hover { filter: brightness(1.12); border-color: rgba(150, 200, 255, 0.6); }
 .acct-btn {
   display: inline-flex; align-items: center; gap: 9px;
   padding: 7px 14px 7px 8px; border-radius: 999px; cursor: pointer;

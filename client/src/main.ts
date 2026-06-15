@@ -12,6 +12,7 @@ import { presence, type RoomInvite } from "./presence.js";
 import { recordLocalGame, recordOnlineGame } from "./social.js";
 import { LocalGame } from "./game/store.js";
 import type { GameDriver, Seat } from "./game/store.js";
+import { music } from "./audio.js";
 
 const el = (html: string): HTMLElement => {
   const t = document.createElement("template");
@@ -219,6 +220,22 @@ async function boot(): Promise<void> {
       }
       shatter(resume, "#ffd23f", () => mountGame(game));
     });
+    // Music toggle (top-left): turn the ambient soundtrack on/off from the menu.
+    const musicBtn = el(
+      `<button class="menu-music ${music.enabled ? "on" : "off"}" title="${music.enabled ? "Music on — tap to turn off" : "Music off — tap to turn on"}">
+         <span class="mm-ico">${music.enabled ? "♫" : "♪"}</span>
+         <span class="mm-label">${music.enabled ? "Music on" : "Music off"}</span>
+       </button>`,
+    );
+    musicBtn.addEventListener("click", () => {
+      music.setEnabled(!music.enabled);
+      musicBtn.classList.toggle("on", music.enabled);
+      musicBtn.classList.toggle("off", !music.enabled);
+      musicBtn.title = music.enabled ? "Music on — tap to turn off" : "Music off — tap to turn on";
+      (musicBtn.querySelector(".mm-ico") as HTMLElement).textContent = music.enabled ? "♫" : "♪";
+      (musicBtn.querySelector(".mm-label") as HTMLElement).textContent = music.enabled ? "Music on" : "Music off";
+    });
+    screen.appendChild(musicBtn);
     // Account chip (top-right) — sign-in / profile. Renders nothing when
     // Supabase isn't configured, so the hero is unchanged until accounts exist.
     mountAccountChip(screen);
