@@ -108,7 +108,7 @@ const BUILD_USES: Record<"colonyShip" | "tradeShip" | "spaceport", string> = {
   colonyShip:
     "<b>Colony ship</b><br>Fly it out and establish a <b>colony</b> on an open point touching two planets (<b>+1 VP</b>, and you collect from those planets on production).",
   tradeShip:
-    "<b>Trade ship</b><br>Fly it to an outpost and dock to open a <b>trade station</b> (<b>+1 VP</b>, a friendship card, and the <b>+2 VP</b> marker if you hold the most stations there).",
+    "<b>Trade ship</b><br>Fly it to an outpost and dock to open a <b>trade station</b> — it earns a <b>friendship card</b> and the <b>+2 VP</b> marker if you hold the most stations there (the station itself is worth no VP).",
   spaceport:
     "<b>Spaceport</b><br>Upgrades one of your colonies for <b>+1 extra VP</b> and lets you launch new ships from the open points beside it.",
 };
@@ -1658,7 +1658,6 @@ export class HUD {
       .map((p, i) => {
         const colonies = state.buildings.filter((b) => b.owner === p.id && b.kind === "colony").length;
         const ports = state.buildings.filter((b) => b.owner === p.id && b.kind === "spaceport").length;
-        const stations = state.tradeStations.filter((t) => t.owner === p.id).length;
         const markers = p.friendshipMarkers.length;
         const medals = p.victoryMedals; // pirate/ice conquest medals (+1 VP each)
         const fame = p.fameMedalPieces; // ½ VP each (every 2 pieces = 1 VP)
@@ -1670,7 +1669,6 @@ export class HUD {
         const vpSrc: { ico: string; n: number; label: string; vp: number; sub: string; c: string }[] = [
           { ico: colonyIco(), n: colonies, label: "Colonies", vp: colonies, sub: "1 VP each", c: pc },
           { ico: spaceportIco(), n: ports, label: "Spaceports", vp: ports * 2, sub: "2 VP each", c: pc },
-          { ico: shipIco("tradeShip"), n: stations, label: "Trade stations", vp: stations, sub: "1 VP each", c: pc },
           { ico: markerGlyphSvg(), n: markers, label: "Friendship markers", vp: markers * 2, sub: "2 VP each", c: "#7ad0ff" },
           { ico: medalGlyphSvg(), n: medals, label: "Conquest medals", vp: medals, sub: "pirate / ice · 1 VP each", c: "#57e389" },
           { ico: fameGlyphSvg(), n: fame, label: "Fame medal pieces", vp: Math.floor(fame / 2), sub: "½ VP each", c: "#ffd23f" },
@@ -2025,7 +2023,6 @@ export class HUD {
     const vpRows: [string, string][] = [
       ["Colony", `${VP.colony}`],
       ["Spaceport", `${VP.spaceport}`],
-      ["Trade station", "1"],
       ["Friendship marker", `${VP.friendshipMarker}`],
       ["Fame medal piece", "½"],
       ["2 fame pieces", `${VP.fameMedalPair}`],

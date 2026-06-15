@@ -247,7 +247,8 @@ export function recomputeVp(state: GameState): void {
       if (b.owner !== p.id) continue;
       vp += b.kind === "spaceport" ? VP.spaceport : VP.colony;
     }
-    vp += state.tradeStations.filter((t) => t.owner === p.id).length; // 1 each
+    // Trade stations are NOT worth VP themselves — they earn a friendship card
+    // and (when you hold the most at an outpost) its +2 VP friendship marker.
     vp += p.friendshipMarkers.length * VP.friendshipMarker;
     vp += p.victoryMedals; // pirate-base / ice-planet conquest medals
     vp += Math.floor(p.fameMedalPieces / 2) * VP.fameMedalPair;
