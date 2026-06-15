@@ -501,10 +501,16 @@ function clampOffer(ctx: EncounterCtx): number {
   return Math.max(0, Math.min(3, n));
 }
 
-/** The committed 0-3 offer, capped to what the subject can actually pay. */
+/**
+ * The committed offer, capped to what the subject can actually pay. No one may
+ * offer NOTHING when they have something to give — the minimum real offer is 1
+ * (the "offer nothing" option is removed from the UI; this enforces it
+ * authoritatively too). A subject with an empty hand can only offer 0.
+ */
 function offerWithinHand(ctx: EncounterCtx): number {
   const total = RESOURCES.reduce((s, r) => s + ctx.subject.hand[r], 0);
-  return Math.min(clampOffer(ctx), total);
+  if (total <= 0) return 0;
+  return Math.max(1, Math.min(clampOffer(ctx), total));
 }
 
 /** Wear & Tear: remove one upgrade from every player above a threshold. */

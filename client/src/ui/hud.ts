@@ -1546,7 +1546,8 @@ export class HUD {
     } else if (enc.awaiting === "confirm") {
       this.act({ t: "encounterChoice", choice: 0 });
     } else if (enc.awaiting === "number") {
-      this.act({ t: "encounterChoice", choice: Math.floor(Math.random() * 4) });
+      // Never auto-offer nothing: pick 1..3 (the engine caps to what's in hand).
+      this.act({ t: "encounterChoice", choice: Math.floor(Math.random() * 3) + 1 });
     } else {
       this.act({ t: "encounterChoice", choice: Math.random() < 0.5 });
     }
@@ -3016,8 +3017,9 @@ export class HUD {
     btns.appendChild(bankBtn);
     // Offer-to-players button. R14: keep this available even when the offer also
     // qualifies as a bank trade, so the player can still choose to shop the deal to
-    // other players rather than the supply. Only hide it when there's nothing set.
-    if (giveN + wantN > 0) {
+    // other players rather than the supply. Requires BOTH sides — you can't offer
+    // something for nothing (or ask for something while giving nothing).
+    if (giveN > 0 && wantN > 0) {
       const offer = el(`<button class="${bankTrade ? "secondary" : ""}">Offer to players</button>`);
       offer.addEventListener("click", () => {
         this.act({ t: "proposeTrade", give: { ...this.pGive }, want: { ...this.pWant } });
@@ -3421,15 +3423,25 @@ export class HUD {
         choices.appendChild(b);
       } else if (enc.awaiting === "number") {
         // P6d: the *outcome* is hidden — show only the choice itself (how much
-        // you offer). What you gain or lose is a surprise revealed after you pick.
+        // you offer). You must offer SOMETHING — there is no "offer nothing".
+        // Options run 1..min(3, what you hold); an empty hand can only offer 0.
         choices.classList.add("col");
-        for (const n of [0, 1, 2, 3]) {
-          const label = n === 0 ? "Offer nothing" : `Offer ${n}`;
+        const handTotal = RESOURCES.reduce((s, r) => s + subject.hand[r], 0);
+        const maxOffer = Math.min(3, handTotal);
+        if (maxOffer <= 0) {
           const b = el(
-            `<button class="secondary enc-opt"><span class="eo-n">${n}</span><span class="eo-hint">${label}</span></button>`,
+            `<button class="secondary enc-opt"><span class="eo-n">0</span><span class="eo-hint">You have nothing to offer</span></button>`,
           );
-          b.addEventListener("click", () => this.act({ t: "encounterChoice", choice: n }));
+          b.addEventListener("click", () => this.act({ t: "encounterChoice", choice: 0 }));
           choices.appendChild(b);
+        } else {
+          for (let n = 1; n <= maxOffer; n++) {
+            const b = el(
+              `<button class="secondary enc-opt"><span class="eo-n">${n}</span><span class="eo-hint">Offer ${n}</span></button>`,
+            );
+            b.addEventListener("click", () => this.act({ t: "encounterChoice", choice: n }));
+            choices.appendChild(b);
+          }
         }
       } else {
         // P6d: plain Yes / No — outcome stays secret until the player commits.
@@ -3461,8 +3473,8 @@ export class HUD {
       } else if (enc.awaiting === "number") {
         // Spectators see the OUTCOME of each offer (the "answer") — the chooser does not.
         choices.classList.add("col");
-        for (const n of [0, 1, 2, 3]) {
-          const hint = card?.choiceHints?.[n] ?? (n === 0 ? "Offer nothing" : `Offer ${n}`);
+        for (let n = 1; n <= 3; n++) {
+          const hint = card?.choiceHints?.[n] ?? `Offer ${n}`;
           choices.appendChild(
             el(`<button class="secondary enc-opt" disabled><span class="eo-n">${n}</span><span class="eo-hint">${escapeHtml(hint)}</span></button>`),
           );
