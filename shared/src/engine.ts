@@ -348,6 +348,47 @@ function bumpStat(
   s[key][playerId] = (s[key][playerId] ?? 0) + n;
 }
 
+/**
+ * Execute a player-to-player swap (proposer gives `give`, receives `want`),
+ * clear the pending offer and record it. Returns an error string if the deal is
+ * invalid (one-sided, same-for-same, or either side can no longer cover it).
+ * Shared by `finalizeTrade` (proposer accepts a counter) and `respondTrade`
+ * (a plain accept settles immediately so the trade window closes by itself).
+ */
+function settleTrade(
+  state: GameState,
+  proposer: PlayerState,
+  partner: PlayerState,
+  give: Partial<Record<Resource, number>>,
+  want: Partial<Record<Resource, number>>,
+): string | undefined {
+  const gTot = RESOURCES.reduce((s, r) => s + (give[r] ?? 0), 0);
+  const wTot = RESOURCES.reduce((s, r) => s + (want[r] ?? 0), 0);
+  if (gTot === 0 || wTot === 0) return "A trade must give and want something — no one-sided gifts.";
+  for (const r of RESOURCES) {
+    if ((give[r] ?? 0) > 0 && (want[r] ?? 0) > 0)
+      return "A trade can't swap a resource for the same resource.";
+  }
+  for (const r of RESOURCES) {
+    if ((give[r] ?? 0) > proposer.hand[r]) return "You can no longer cover that offer.";
+    if ((want[r] ?? 0) > partner.hand[r]) return "They can no longer cover that offer.";
+  }
+  for (const r of RESOURCES) {
+    const g = give[r] ?? 0;
+    const w = want[r] ?? 0;
+    proposer.hand[r] -= g;
+    partner.hand[r] += g;
+    partner.hand[r] -= w;
+    proposer.hand[r] += w;
+  }
+  state.phaseState.pendingTrade = undefined;
+  state.phaseState.lastTrade = { fromId: proposer.id, toId: partner.id, seq: (state.phaseState.lastTrade?.seq ?? 0) + 1 };
+  log(state, `${proposer.name} and ${partner.name} completed a trade.`);
+  bumpStat(state, "tradesCompleted", proposer.id);
+  bumpStat(state, "tradesCompleted", partner.id);
+  return undefined;
+}
+
 /** Clear a special token: flip it to a +1 VP conquest medal and assign a number. */
 function clearSpecial(
   state: GameState,
@@ -1366,12 +1407,14 @@ export function applyIntent(
         });
         log(state, `${me.name} counters the trade.`);
       } else {
-        // Plain accept: the responder must be able to cover what the proposer wants.
-        for (const r of RESOURCES) {
-          if ((offer.want[r] ?? 0) > me.hand[r]) return fail(input, "You can't cover the requested cards.");
-        }
-        responses.push({ playerId, kind: "accept" });
-        log(state, `${me.name} accepts the trade.`);
+        // Plain accept of the offer AS-IS settles the trade immediately — the
+        // proposer already consented to these exact terms, so there's nothing
+        // left to confirm and the trade window closes by itself for everyone.
+        const proposer = state.players.find((p) => p.id === offer.fromId);
+        if (!proposer) return fail(input, "The proposer left the game.");
+        const err = settleTrade(state, proposer, me, offer.give, offer.want);
+        if (err) return fail(input, err);
+        return { state };
       }
       offer.responses = responses;
       return { state };
@@ -1388,32 +1431,8 @@ export function applyIntent(
       // A counter overrides the original deal (still from the proposer's perspective).
       const give = resp.kind === "counter" ? (resp.give ?? {}) : offer.give;
       const want = resp.kind === "counter" ? (resp.want ?? {}) : offer.want;
-      // Reject one-sided deals (a counter could have emptied a side).
-      const gTot = RESOURCES.reduce((s, r) => s + (give[r] ?? 0), 0);
-      const wTot = RESOURCES.reduce((s, r) => s + (want[r] ?? 0), 0);
-      if (gTot === 0 || wTot === 0)
-        return fail(input, "A trade must give and want something — no one-sided gifts.");
-      for (const r of RESOURCES) {
-        if ((give[r] ?? 0) > 0 && (want[r] ?? 0) > 0)
-          return fail(input, "A trade can't swap a resource for the same resource.");
-      }
-      for (const r of RESOURCES) {
-        if ((give[r] ?? 0) > me.hand[r]) return fail(input, "You can no longer cover that offer.");
-        if ((want[r] ?? 0) > partner.hand[r]) return fail(input, "They can no longer cover that offer.");
-      }
-      for (const r of RESOURCES) {
-        const g = give[r] ?? 0;
-        const w = want[r] ?? 0;
-        me.hand[r] -= g;
-        partner.hand[r] += g;
-        partner.hand[r] -= w;
-        me.hand[r] += w;
-      }
-      ps.pendingTrade = undefined;
-      ps.lastTrade = { fromId: me.id, toId: partner.id, seq: (ps.lastTrade?.seq ?? 0) + 1 };
-      log(state, `${me.name} and ${partner.name} completed a trade.`);
-      bumpStat(state, "tradesCompleted", me.id);
-      bumpStat(state, "tradesCompleted", partner.id);
+      const err = settleTrade(state, me, partner, give, want);
+      if (err) return fail(input, err);
       return { state };
     }
 

@@ -829,6 +829,21 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   padding: 12px 18px; flex-wrap: wrap; justify-content: center;
   max-width: min(720px, 96vw);
 }
+/* Collapsible center bar: a slim edge handle folds it down to just the
+   resource hand while you're spectating; on your turn it springs back open. */
+.bar-toggle {
+  position: absolute; top: -15px; left: 50%; transform: translateX(-50%);
+  width: 52px; height: 17px; padding: 0; border-radius: 9px 9px 0 0;
+  display: flex; align-items: center; justify-content: center; overflow: visible;
+  font-size: 12px; line-height: 1; font-weight: 800; color: var(--muted);
+  background: rgba(18, 26, 46, 0.96); border: 1px solid rgba(160, 195, 255, 0.28); border-bottom: none;
+  cursor: pointer; z-index: 2;
+}
+.bar-toggle::before, .bar-toggle::after { content: none; }
+.bar-toggle:hover { color: var(--text); background: rgba(28, 40, 70, 0.98); }
+.actionbar.collapsed { padding-top: 13px; gap: 8px; }
+.actionbar.collapsed > *:not(.hand):not(.bar-toggle) { display: none; }
+.actionbar.collapsed .hand-trade-btn { display: none; }
 /* Build buttons carry the piece's icon, name, and an "N left" pill so players
    recognise each piece and see how many they can still build. */
 .actionbar button .b-ico { display: inline-flex; vertical-align: middle; margin-right: 6px; }
@@ -2074,7 +2089,10 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   animation: heroUp 0.8s ease-out 0.85s both;
   transition: color 0.15s ease;
 }
-.hero-tutorial:hover { color: #ffe9a8; text-decoration-color: rgba(255, 233, 168, 0.5); }
+.hero-tutorial:hover { color: #ffe9a8; text-decoration-color: rgba(190, 208, 240, 0.5); }
+/* PWA install chip — shown only when the browser offers installation. */
+.hero-install { margin-top: 12px; padding: 8px 18px; font-size: 13px; font-weight: 700; }
+.hero-install[hidden] { display: none; }
 
 /* === AB3: account chip (top-right of the landing) + profile page. === */
 .acct-chip { position: fixed; top: 16px; right: 16px; z-index: 40; }

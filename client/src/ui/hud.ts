@@ -213,6 +213,9 @@ export class HUD {
   // small ones, where they'd otherwise cover most of the board.
   private sidebarCollapsed = window.innerWidth < 1000;
   private scoreCompact = window.innerWidth < 1000;
+  /** Center action bar collapsed to just the resource hand. Only applies when
+   *  it ISN'T your turn — on your turn the bar always shows the full actions. */
+  private barCollapsed = false;
   /** AA4: small screens fold the side tools behind a "⋯" expander. */
   private toolsExpanded = false;
   /** Previous toggle states, to play a slide animation ONLY on an actual
@@ -1047,6 +1050,25 @@ export class HUD {
     // M2: the activity log is now a section inside the Fleet sidebar (see
     // buildSidebar) rather than a separate floating panel.
     const bar = el(`<div class="hud-panel actionbar"></div>`);
+    // Collapsible center bar: when it's NOT your turn you can fold the bar down
+    // to just your resource hand (tap the edge handle, or the bar's own
+    // padding) so the board is clearer while you watch an opponent. On your own
+    // turn it always springs back open to show every action.
+    if (myTurn) this.barCollapsed = false;
+    const canCollapse = !myTurn && ps.phase !== "setup" && ps.phase !== "gameOver";
+    const barCollapsed = this.barCollapsed && canCollapse;
+    if (barCollapsed) bar.classList.add("collapsed");
+    if (canCollapse) {
+      const toggle = el(
+        `<button class="bar-toggle" title="${barCollapsed ? "Show actions" : "Collapse to resources"}">${barCollapsed ? "▴" : "▾"}</button>`,
+      );
+      toggle.addEventListener("click", () => { this.barCollapsed = !this.barCollapsed; this.rerender(); });
+      bar.appendChild(toggle);
+      // Tapping the bar's own padding (not a child control) toggles too.
+      bar.addEventListener("click", (e) => {
+        if (e.target === bar) { this.barCollapsed = !this.barCollapsed; this.rerender(); }
+      });
+    }
 
     const discardMode = owesDiscard > 0;
     const pickedTotal = RESOURCES.reduce((s, r) => s + (this.discardSel[r] ?? 0), 0);
@@ -1235,7 +1257,9 @@ export class HUD {
     // position:fixed anchors to the viewport (the bar has a CSS transform that
     // would otherwise trap it). positionPrimaryButton() then sits it just above
     // the bar's measured top.
-    const primaryBtn = this.buildPrimaryButton(state);
+    // Hidden while the bar is collapsed (you're spectating — the greyed
+    // "their turn" button is just clutter then).
+    const primaryBtn = barCollapsed ? null : this.buildPrimaryButton(state);
     if (primaryBtn) screen.appendChild(primaryBtn);
 
     // R6: top-left Exit button → confirm before leaving to the main menu.

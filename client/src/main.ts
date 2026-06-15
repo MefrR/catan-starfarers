@@ -22,6 +22,29 @@ const el = (html: string): HTMLElement => {
 const escapeHtml = (s: string): string =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
+// PWA: register the service worker (makes the game installable as an app), and
+// capture Chrome's install prompt so we can surface an explicit "Install app"
+// button on the landing in addition to the browser's own install affordance.
+interface InstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: string }>;
+}
+let deferredInstall: InstallPromptEvent | null = null;
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault(); // keep our own button instead of the mini-infobar
+  deferredInstall = e as InstallPromptEvent;
+  document.querySelector(".hero-install")?.removeAttribute("hidden");
+});
+window.addEventListener("appinstalled", () => {
+  deferredInstall = null;
+  document.querySelector(".hero-install")?.setAttribute("hidden", "");
+});
+
 async function boot(): Promise<void> {
   const canvas = document.getElementById("board") as HTMLCanvasElement;
   const field = await Starfield.create(canvas);
@@ -160,6 +183,7 @@ async function boot(): Promise<void> {
           </div>
           ${resumeHtml}
           <button class="hero-tutorial" id="tutorial">✦ First flight? Take the guided tutorial</button>
+          <button class="hero-install" id="install" ${deferredInstall ? "" : "hidden"}>⤓ Install as app</button>
         </div>
       </div>
     `);
@@ -177,6 +201,14 @@ async function boot(): Promise<void> {
     tutorial.addEventListener("click", () => {
       ensureMenuBg();
       shatter(tutorial, "#ffd23f", () => startTutorial());
+    });
+    const install = screen.querySelector("#install") as HTMLElement | null;
+    install?.addEventListener("click", async () => {
+      if (!deferredInstall) return;
+      await deferredInstall.prompt();
+      await deferredInstall.userChoice;
+      deferredInstall = null;
+      install.setAttribute("hidden", "");
     });
     const resume = screen.querySelector("#resume") as HTMLElement | null;
     resume?.addEventListener("click", () => {
