@@ -161,5 +161,42 @@ create policy "insert own result" on public.game_players
   for insert to authenticated with check (auth.uid() = user_id);
 ```
 
-Phase: **Friends** (a `friendships` table) and **presence/invites** land here
-when we build them next.
+## Schema v3 — friends (run this too)
+
+Adds the `friendships` table for friend requests and accepted friends. Players
+find each other by **username**. Paste into the SQL editor → Run.
+
+```sql
+create table if not exists public.friendships (
+  id uuid primary key default gen_random_uuid(),
+  requester_id uuid not null references auth.users (id) on delete cascade,
+  addressee_id uuid not null references auth.users (id) on delete cascade,
+  status text not null default 'pending',          -- 'pending' | 'accepted'
+  created_at timestamptz not null default now(),
+  unique (requester_id, addressee_id),
+  check (requester_id <> addressee_id)
+);
+create index if not exists friendships_addressee_idx on public.friendships (addressee_id);
+create index if not exists friendships_requester_idx on public.friendships (requester_id);
+
+alter table public.friendships enable row level security;
+
+-- Either party can see the friendship row.
+drop policy if exists "see own friendships" on public.friendships;
+create policy "see own friendships" on public.friendships for select to authenticated
+  using (auth.uid() = requester_id or auth.uid() = addressee_id);
+-- You may only create a request AS yourself (the requester).
+drop policy if exists "send friend request" on public.friendships;
+create policy "send friend request" on public.friendships for insert to authenticated
+  with check (auth.uid() = requester_id);
+-- The addressee accepts a request (updates its status).
+drop policy if exists "respond to request" on public.friendships;
+create policy "respond to request" on public.friendships for update to authenticated
+  using (auth.uid() = addressee_id);
+-- Either party may delete (decline, cancel a sent request, or unfriend).
+drop policy if exists "remove friendship" on public.friendships;
+create policy "remove friendship" on public.friendships for delete to authenticated
+  using (auth.uid() = requester_id or auth.uid() = addressee_id);
+```
+
+Phase: **presence/invites** land here when we build them next.

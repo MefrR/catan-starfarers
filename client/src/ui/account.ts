@@ -1,6 +1,10 @@
 import { PLAYER_COLORS, type PlayerColor } from "@starfarers/shared";
 import { auth, isAuthConfigured, type Profile } from "../auth.js";
 import { fetchMyStats, fetchMyHistory, type HistoryEntry } from "../social.js";
+import {
+  searchUsers, listFriends, listIncoming, listOutgoing,
+  sendRequest, acceptRequest, removeFriendship, type FriendUser,
+} from "../friends.js";
 
 const el = (html: string): HTMLElement => {
   const t = document.createElement("template");
@@ -82,7 +86,8 @@ export function openAccountPage(): void {
       <div class="acct-tabs">
         <button class="acct-tab active" data-tab="record">Record</button>
         <button class="acct-tab" data-tab="history">History</button>
-        <button class="acct-tab" data-tab="profile">Edit profile</button>
+        <button class="acct-tab" data-tab="friends">Friends</button>
+        <button class="acct-tab" data-tab="profile">Edit</button>
       </div>
       <div class="acct-body"></div>
     </div>`);
@@ -94,6 +99,7 @@ export function openAccountPage(): void {
     tabs.forEach((t) => t.classList.toggle("active", t.dataset.tab === tab));
     if (tab === "record") renderRecord(body);
     else if (tab === "history") renderHistory(body);
+    else if (tab === "friends") renderFriends(body);
     else renderProfileEdit(body, card, overlay);
   };
   tabs.forEach((t) => t.addEventListener("click", () => show(t.dataset.tab!)));
@@ -177,6 +183,123 @@ const ordinal = (n: number): string => {
   const v = n % 100;
   return n + (s[(v - 20) % 10] ?? s[v] ?? "th");
 };
+
+/** A compact user row: avatar + name + @handle + action buttons. */
+function userRow(u: FriendUser, actionsHtml: string): HTMLElement {
+  const handle = u.username ? "@" + escapeHtml(u.username) : "";
+  return el(`
+    <div class="fr-row">
+      <span class="acct-avatar sm" style="--ac:${COLOR_HEX[u.favoriteColor]}">${escapeHtml(initials(u.displayName))}</span>
+      <div class="fr-meta"><div class="fr-name">${escapeHtml(u.displayName)}</div><div class="fr-handle">${handle}</div></div>
+      <div class="fr-actions">${actionsHtml}</div>
+    </div>`);
+}
+
+/** Friends tab: search by username, requests, friend list, sent requests. */
+async function renderFriends(body: HTMLElement): Promise<void> {
+  const profile = auth.currentProfile();
+  body.replaceChildren(el(`<div class="acct-loading">Loading friends…</div>`));
+  if (!profile?.username) {
+    body.replaceChildren(
+      el(`<div class="acct-empty">Set a username in the <b>Edit</b> tab first — that's how friends find and add you.</div>`),
+    );
+    return;
+  }
+  const [friends, incoming, outgoing] = await Promise.all([listFriends(), listIncoming(), listOutgoing()]);
+  const wrap = el(`<div class="acct-friends"></div>`);
+  const refresh = (): void => void renderFriends(body);
+
+  const friendIds = new Set(friends.map((e) => e.user.id));
+  const pendingIds = new Set(outgoing.map((e) => e.user.id));
+
+  // --- Search ---
+  const searchSec = el(`
+    <div class="fr-sec">
+      <input class="acct-input fr-search" type="text" placeholder="Find players by username…" />
+      <div class="fr-results"></div>
+    </div>`);
+  const input = searchSec.querySelector(".fr-search") as HTMLInputElement;
+  const results = searchSec.querySelector(".fr-results") as HTMLElement;
+  let seq = 0;
+  input.addEventListener("input", () => {
+    const my = ++seq;
+    if (input.value.trim().length < 2) {
+      results.replaceChildren();
+      return;
+    }
+    void searchUsers(input.value).then((users) => {
+      if (my !== seq) return; // a newer keystroke superseded this
+      results.replaceChildren();
+      if (users.length === 0) {
+        results.appendChild(el(`<div class="fr-hint">No players found.</div>`));
+        return;
+      }
+      for (const u of users) {
+        const actions = friendIds.has(u.id)
+          ? `<span class="fr-tag">Friend</span>`
+          : pendingIds.has(u.id)
+            ? `<span class="fr-tag">Requested</span>`
+            : `<button class="fr-btn add">Add</button>`;
+        const row = userRow(u, actions);
+        row.querySelector(".add")?.addEventListener("click", async () => {
+          await sendRequest(u.id);
+          refresh();
+        });
+        results.appendChild(row);
+      }
+    });
+  });
+  wrap.appendChild(searchSec);
+
+  // --- Incoming requests ---
+  if (incoming.length) {
+    const sec = el(`<div class="fr-sec"><div class="fr-title">Requests</div></div>`);
+    for (const e of incoming) {
+      const row = userRow(e.user, `<button class="fr-btn accept">Accept</button><button class="fr-btn decline" title="Decline">✕</button>`);
+      row.querySelector(".accept")!.addEventListener("click", async () => {
+        await acceptRequest(e.friendshipId);
+        refresh();
+      });
+      row.querySelector(".decline")!.addEventListener("click", async () => {
+        await removeFriendship(e.friendshipId);
+        refresh();
+      });
+      sec.appendChild(row);
+    }
+    wrap.appendChild(sec);
+  }
+
+  // --- Friends ---
+  const fsec = el(`<div class="fr-sec"><div class="fr-title">Friends (${friends.length})</div></div>`);
+  if (friends.length === 0) {
+    fsec.appendChild(el(`<div class="fr-hint">No friends yet — search above to add some.</div>`));
+  }
+  for (const e of friends) {
+    const row = userRow(e.user, `<button class="fr-btn decline" title="Remove friend">✕</button>`);
+    row.querySelector(".decline")!.addEventListener("click", async () => {
+      await removeFriendship(e.friendshipId);
+      refresh();
+    });
+    fsec.appendChild(row);
+  }
+  wrap.appendChild(fsec);
+
+  // --- Sent (pending) requests ---
+  if (outgoing.length) {
+    const sec = el(`<div class="fr-sec"><div class="fr-title">Sent requests</div></div>`);
+    for (const e of outgoing) {
+      const row = userRow(e.user, `<button class="fr-btn decline" title="Cancel">✕</button>`);
+      row.querySelector(".decline")!.addEventListener("click", async () => {
+        await removeFriendship(e.friendshipId);
+        refresh();
+      });
+      sec.appendChild(row);
+    }
+    wrap.appendChild(sec);
+  }
+
+  body.replaceChildren(wrap);
+}
 
 /** Edit tab: display name, username (with availability), favorite color, sign out. */
 function renderProfileEdit(body: HTMLElement, card: HTMLElement, overlay: HTMLElement): void {

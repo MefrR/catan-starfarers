@@ -2168,6 +2168,40 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .acct-hint.good { color: #6fe89a; }
 .acct-hint.bad { color: #ff8a8a; }
 
+/* AC1: Friends tab */
+.acct-friends { display: flex; flex-direction: column; gap: 16px; max-height: 360px; overflow-y: auto; }
+.fr-sec { display: flex; flex-direction: column; gap: 7px; }
+.fr-title {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 700;
+}
+.fr-search { width: 100%; box-sizing: border-box; }
+.fr-results { display: flex; flex-direction: column; gap: 6px; }
+.fr-hint { font-size: 12.5px; color: var(--muted); padding: 4px 2px; }
+.fr-row {
+  display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 11px;
+  background: rgba(255, 255, 255, 0.045);
+}
+.acct-avatar.sm { width: 30px; height: 30px; font-size: 12px; }
+.fr-meta { flex: 1; min-width: 0; }
+.fr-name { font-size: 13.5px; color: #eaf2ff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr-handle { font-size: 11.5px; color: rgba(120, 200, 255, 0.8); }
+.fr-actions { display: flex; gap: 6px; align-items: center; }
+.fr-btn::before, .fr-btn::after { content: none; }
+.fr-btn {
+  padding: 6px 12px; border-radius: 9px; cursor: pointer; font-size: 12.5px; font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.06); color: #eaf2ff;
+}
+.fr-btn.add, .fr-btn.accept {
+  background: linear-gradient(92deg, #39d8c8, #52e8a0); color: #06231d; border: none;
+}
+.fr-btn.add:disabled { opacity: 0.5; cursor: default; }
+.fr-btn.decline {
+  padding: 6px 9px; background: rgba(255, 93, 93, 0.12); color: #ff9a9a;
+  border-color: rgba(255, 93, 93, 0.3);
+}
+.fr-btn.decline:hover { background: rgba(255, 93, 93, 0.2); }
+.fr-tag { font-size: 11px; color: var(--muted); font-style: italic; padding: 0 4px; }
+
 /* Z6: the coach bubble + spotlight ring of the guided first game. */
 .tut-bubble button::before,
 .tut-bubble button::after {
