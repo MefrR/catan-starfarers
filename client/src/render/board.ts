@@ -1600,6 +1600,7 @@ export class BoardRenderer {
   /** Colony: a wide glass-dome habitat (matches the redesigned HUD icon) —
    *  landing pad, owner-colored dome with glass highlight arcs, airlock. */
   private drawColony(g: Graphics, cx: number, cy: number, s: number, color: number): void {
+    s *= 1.3; // owner request: colony building 30% larger
     const ink = 0x0a0f1e;
     const dark = tint(color, -0.3) >>> 0;
     const lite = tint(color, 0.55);
@@ -1659,9 +1660,9 @@ export class BoardRenderer {
     r: number,
     color: number,
   ): void {
-    // Per owner feedback the redesigned ships read too big on the map:
-    // 20% smaller on desktop, 30% smaller on small screens.
-    r *= window.innerWidth < 1000 ? 0.7 : 0.8;
+    // Map ships read too big; shrunk in two passes. Final factors fold the
+    // earlier reduction (0.8 desktop / 0.7 mobile) with a further 30% cut.
+    r *= window.innerWidth < 1000 ? 0.49 : 0.56;
     const ink = 0x0a0f1e;
     const dark = tint(color, -0.28) >>> 0;
     if (kind === "colonyShip") {
@@ -1736,22 +1737,25 @@ export class BoardRenderer {
    * three land on exactly the same spots — otherwise stations render "next to"
    * the painted docks instead of on them.
    */
-  private static readonly DOCK_ANGLES: number[] = (() => {
-    const out: number[] = [];
-    for (let i = 0; i < 3; i++) {
-      const base = -Math.PI / 2 + (Math.PI * 2 * i) / 3;
-      for (const off of [-0.42, 0.42]) out.push(base + off);
-    }
-    return out;
-  })();
-
-  /** World-space positions of the docking nodes for an outpost at (cx,cy). */
+  /**
+   * World-space positions of the six docking rings for an outpost hub at
+   * (cx,cy). EXACTLY mirrors the rings drawn by `drawOutpost`: three lobes one
+   * board-unit (= `scale` px) from the hub at 0/120/240°, each carrying two
+   * rings offset ±0.62 rad along the lobe arc. Trade-station pips and docked
+   * ships use this so they land on the painted rings, not near the hub.
+   */
   private dockNodePositions(cx: number, cy: number, scale: number): { x: number; y: number }[] {
-    const nd = scale * 0.4 + scale * 0.34 * 0.55; // lobeDist + lobeR*0.55 (matches drawOutpost)
-    return BoardRenderer.DOCK_ANGLES.map((a) => ({
-      x: cx + Math.cos(a) * nd,
-      y: cy + Math.sin(a) * nd,
-    }));
+    const ringOut = scale * 0.58 * 0.55; // lobeR * 0.55 (matches drawOutpost)
+    const pts: { x: number; y: number }[] = [];
+    for (let i = 0; i < 3; i++) {
+      const a = (Math.PI * 2 * i) / 3;
+      const lx = cx + Math.cos(a) * scale;
+      const ly = cy + Math.sin(a) * scale;
+      for (const off of [-0.62, 0.62]) {
+        pts.push({ x: lx + Math.cos(a + off) * ringOut, y: ly + Math.sin(a + off) * ringOut });
+      }
+    }
+    return pts;
   }
 
   /**

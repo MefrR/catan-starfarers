@@ -1,7 +1,7 @@
 import "./style.css";
 import { Starfield } from "./render/starfield.js";
 import { CometField } from "./render/comets.js";
-import { shatter, warpTransition } from "./ui/fx.js";
+import { shatter } from "./ui/fx.js";
 import { BoardRenderer } from "./render/board.js";
 import { NewGameMenu, type LaunchOptions } from "./ui/menu.js";
 import { HUD } from "./ui/hud.js";
@@ -40,36 +40,34 @@ async function boot(): Promise<void> {
   };
 
   const mountGame = (game: GameDriver, opts: { tutorial?: boolean } = {}): void => {
-    // The warp flash covers the menu→board swap, then fades off the live game.
-    warpTransition(() => {
-      teardownGame?.();
-      dropMenuBg();
-      board.humanId = game.humanId;
-      (window as unknown as { __sf: unknown }).__sf = { game, board };
-      const unsubBoard = game.subscribe((state) => board.render(state));
-      // Accounts: record single-player results to the signed-in profile when a
-      // game ends (best-effort, no-ops when signed out). Multiplayer results are
-      // recorded server-side later, so this is single-player only.
-      const unsubRecord = game.isMultiplayer
-        ? () => {}
-        : game.subscribe((state) => {
-            if (state.phaseState.phase === "gameOver") void recordLocalGame(state, game.humanId);
-          });
-      app.replaceChildren(); // clear the menu; HUD mounts its own overlay
-      const hud = new HUD(app, game, board);
-      // Z6: the guided first game attaches its coach bubble over the live HUD.
-      const tut = opts.tutorial ? new TutorialDriver(game, board) : null;
-      // The canvas resizes to the window asynchronously; recenter once layout
-      // has settled so the map is always centered regardless of window size.
-      requestAnimationFrame(() => board.recenter());
-      teardownGame = (): void => {
-        tut?.destroy();
-        unsubBoard();
-        unsubRecord();
-        hud.destroy();
-        teardownGame = null;
-      };
-    });
+    // Mount straight into the game (no warp transition — it tested poorly).
+    teardownGame?.();
+    dropMenuBg();
+    board.humanId = game.humanId;
+    (window as unknown as { __sf: unknown }).__sf = { game, board };
+    const unsubBoard = game.subscribe((state) => board.render(state));
+    // Accounts: record single-player results to the signed-in profile when a
+    // game ends (best-effort, no-ops when signed out). Multiplayer results are
+    // recorded server-side later, so this is single-player only.
+    const unsubRecord = game.isMultiplayer
+      ? () => {}
+      : game.subscribe((state) => {
+          if (state.phaseState.phase === "gameOver") void recordLocalGame(state, game.humanId);
+        });
+    app.replaceChildren(); // clear the menu; HUD mounts its own overlay
+    const hud = new HUD(app, game, board);
+    // Z6: the guided first game attaches its coach bubble over the live HUD.
+    const tut = opts.tutorial ? new TutorialDriver(game, board) : null;
+    // The canvas resizes to the window asynchronously; recenter once layout
+    // has settled so the map is always centered regardless of window size.
+    requestAnimationFrame(() => board.recenter());
+    teardownGame = (): void => {
+      tut?.destroy();
+      unsubBoard();
+      unsubRecord();
+      hud.destroy();
+      teardownGame = null;
+    };
   };
 
   const startSingle = (opts: LaunchOptions): void => {

@@ -1810,6 +1810,66 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 }
 .hint-pulse { animation: hintPulse 1.8s ease-in-out 3s infinite; }
 
+/* AD6: the standalone primary-action button, floating just above the center
+   box. Warm amber so it reads as "THE button" — distinct from every blue/teal
+   control. Greyed (and inert) when it isn't your turn. */
+.primary-act::before, .primary-act::after { content: none; } /* no star layers */
+.primary-act {
+  position: absolute; left: 50%; bottom: calc(100% + 12px); transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  min-width: 200px; padding: 11px 30px; border-radius: 14px; cursor: pointer;
+  background: linear-gradient(165deg, #ffd23f, #ff9e2c);
+  color: #2a1800; border: 1px solid rgba(255, 220, 140, 0.9);
+  box-shadow: 0 10px 30px rgba(255, 158, 44, 0.4), 0 0 0 4px rgba(255, 210, 63, 0.12);
+  animation: paBreathe 2.4s ease-in-out infinite;
+  transition: transform 0.12s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  white-space: nowrap; z-index: 2;
+}
+.primary-act:hover { transform: translateX(-50%) translateY(-2px); filter: brightness(1.06); }
+.primary-act:active { transform: translateX(-50%) translateY(0); }
+.pa-label { font-size: 16px; font-weight: 900; letter-spacing: 0.01em; }
+.pa-sub { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; opacity: 0.7; }
+.primary-act.disabled {
+  background: rgba(40, 48, 70, 0.85); color: rgba(180, 195, 225, 0.6);
+  border-color: rgba(255, 255, 255, 0.1); box-shadow: none; cursor: default;
+  animation: none; filter: none;
+}
+.primary-act.disabled:hover { transform: translateX(-50%); filter: none; }
+@keyframes paBreathe {
+  0%, 100% { box-shadow: 0 10px 30px rgba(255, 158, 44, 0.4), 0 0 0 4px rgba(255, 210, 63, 0.1); }
+  50% { box-shadow: 0 12px 38px rgba(255, 158, 44, 0.55), 0 0 0 7px rgba(255, 210, 63, 0.18); }
+}
+@media (max-width: 860px) {
+  .primary-act { min-width: 0; padding: 9px 22px; bottom: calc(100% + 8px); }
+  .pa-label { font-size: 14px; }
+}
+
+/* AD5: "Establish …" bubble pinned above the tapped ship on the board. */
+.estab-pop {
+  position: fixed; z-index: 90; transform: translate(-50%, -135%);
+  pointer-events: auto; animation: estabPop 0.18s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.estab-pop-btn::before, .estab-pop-btn::after { content: none; }
+.estab-pop-btn {
+  padding: 9px 16px; border-radius: 11px; cursor: pointer; font-weight: 800; font-size: 13.5px;
+  background: linear-gradient(165deg, #39d8c8, #2fb39c); color: #04231d;
+  border: 1px solid rgba(120, 240, 220, 0.8);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 18px rgba(57, 216, 200, 0.35);
+  white-space: nowrap;
+}
+.estab-pop-btn:hover { filter: brightness(1.08); }
+.estab-pop.blocked .estab-pop-btn {
+  background: linear-gradient(165deg, #ffb13f, #e07a1f); color: #2a1500;
+  border-color: rgba(255, 200, 120, 0.8); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+/* little downward pointer */
+.estab-pop::after {
+  content: ""; position: absolute; left: 50%; top: 100%; transform: translateX(-50%);
+  border: 6px solid transparent; border-top-color: #2fb39c;
+}
+.estab-pop.blocked::after { border-top-color: #e07a1f; }
+@keyframes estabPop { from { opacity: 0; transform: translate(-50%, -120%) scale(0.85); } to { opacity: 1; transform: translate(-50%, -135%) scale(1); } }
+
 /* Respect users (and test runners) that ask for less motion: collapse all
    decorative animation to instant states. Gameplay still works identically. */
 @media (prefers-reduced-motion: reduce) {

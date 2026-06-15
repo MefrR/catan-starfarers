@@ -303,6 +303,7 @@ export class HUD {
       this.pickerOutside = null;
     }
     this.launchPicker?.remove();
+    this.clearEstablishPopover();
     this.dismissMapConfirm();
     this.board.onViewChange = null;
     this.chat?.destroy();
@@ -1188,6 +1189,13 @@ export class HUD {
     }
     bar.appendChild(el(`<div class="hud-error"></div>`));
 
+    // AD6: the phase's PRIMARY action (Roll / Shake / End build / End turn) is
+    // lifted OUT of the cluttered button row into one bold button floating just
+    // above the center box — distinct, unmissable, and grayed when it's not
+    // your turn so players always know "the one button to press".
+    const primaryBtn = this.buildPrimaryButton(state);
+    if (primaryBtn) bar.appendChild(primaryBtn);
+
     // R6: top-left Exit button → confirm before leaving to the main menu.
     const exitBtn = el(`<button class="exit-menu" title="Exit to main menu">✕</button>`);
     exitBtn.addEventListener("click", () => this.confirmExit());
@@ -1223,23 +1231,20 @@ export class HUD {
 
     this.syncEncounterOverlay(state, me);
     this.syncDiscardOverlay(state, me);
+    this.syncEstablishPopover(state, me); // AD5: establish bubble above a tapped ship
     this.syncTurnTimer(state);
     this.syncGameOverOverlay(state);
     this.drawMinimap(state);
 
-    // Set-up framing: once per placement round, glide the camera onto the
-    // starting-colonies area, fitted to the screen space NOT covered by the
-    // HUD — new players otherwise hunt for it under the bottom action bar.
+    // Set-up framing: glide the camera onto the starting-colonies area exactly
+    // ONCE, when placement first begins (not every round) — new players
+    // otherwise lose the area under the bottom bar, but repeated re-zooming each
+    // round fought their own panning. After the first frame we never auto-zoom.
     const su = ps.setup;
-    if (ps.phase === "setup" && su && su.step === "place") {
-      const key = `setup:${su.round}:${su.r4step ?? ""}`;
-      if (key !== this.lastSetupFocusKey) {
-        this.lastSetupFocusKey = key;
-        // Measure the freshly-rendered HUD (bar/sidebar) on the next frame.
-        requestAnimationFrame(() => this.focusSetupArea(state));
-      }
-    } else if (ps.phase !== "setup" && this.lastSetupFocusKey) {
-      this.lastSetupFocusKey = "";
+    if (ps.phase === "setup" && su && su.step === "place" && this.lastSetupFocusKey !== "done") {
+      this.lastSetupFocusKey = "done";
+      // Measure the freshly-rendered HUD (bar/sidebar) on the next frame.
+      requestAnimationFrame(() => this.focusSetupArea(state));
     }
   }
 
@@ -2462,21 +2467,145 @@ export class HUD {
     this.render(state); // re-render to show establish buttons + highlights
   }
 
-  /** Z3: can the player afford ANY build right now? Mirrors the dock's
-   *  per-tile conditions — used to decide whether to nudge "End build" instead. */
-  private anyAffordableBuild(state: GameState, me: PlayerState): boolean {
-    const afford = (cost: Partial<ResourceBag>): boolean =>
-      RESOURCES.every((r) => me.hand[r] >= (cost[r] ?? 0));
-    const hasLaunch = shipLaunchSites(me, state).length > 0;
-    const transport = me.supply.transportShips;
-    const colonyCount = state.buildings.filter((b) => b.owner === me.id && b.kind === "colony").length;
-    if (afford(BUILD_COSTS.colonyShip) && hasLaunch && transport > 0) return true;
-    if (afford(BUILD_COSTS.tradeShip) && hasLaunch && transport > 0) return true;
-    if (afford(BUILD_COSTS.spaceport) && colonyCount > 0) return true;
-    for (const k of ["booster", "cannon", "freightPod"] as const) {
-      if (afford(BUILD_COSTS[k]) && MAX_UPGRADES[k] - me.upgrades[k] > 0) return true;
+  /** AD6: describe the phase's single primary action for the floating button. */
+  private primaryDescriptor(
+    state: GameState,
+  ): { label: string; sub: string; run: () => void } | null {
+    const ps = state.phaseState;
+    if (ps.phase === "production") {
+      return {
+        label: "Roll the dice", sub: "Production", run: () => {
+          if (!ps.lastRoll) this.act({ t: "rollDice" });
+        },
+      };
     }
-    return false;
+    if (ps.phase === "tradeBuild") {
+      return { label: "End build → Shake", sub: "Trade & build", run: () => this.endBuildAndShake() };
+    }
+    if (ps.phase === "flight") {
+      if (!ps.shake) {
+        return { label: "Shake mothership", sub: "Flight", run: () => this.act({ t: "shakeMothership" }) };
+      }
+      return {
+        label: "End turn", sub: "Flight", run: () => { this.resetSelection(); this.act({ t: "endTurn" }); },
+      };
+    }
+    return null;
+  }
+
+  /**
+   * AD6: the big standalone primary-action button that floats above the action
+   * box. It's the one move that advances your turn. Greyed (non-interactive)
+   * when it isn't your turn — but kept on screen so its place never shifts.
+   */
+  private buildPrimaryButton(state: GameState): HTMLElement | null {
+    const ps = state.phaseState;
+    if (ps.phase === "setup" || ps.phase === "gameOver") return null;
+    const desc = this.primaryDescriptor(state);
+    if (!desc) return null;
+    const myTurn = this.game.isHumanTurn();
+    const me = state.players.find((p) => p.id === this.game.humanId);
+    // A decision is owed elsewhere (encounter / discard / steal / trade / friendship)
+    // — hide the primary so it can't be pressed past a required choice.
+    const blocked =
+      !!ps.encounter || !!ps.pendingTrade || !!ps.pendingFriendship || !!ps.awaitingSteal ||
+      (me ? (ps.pendingDiscards?.[me.id] ?? 0) > 0 : false);
+    if (blocked) return null;
+
+    const active = state.players[ps.activePlayerIndex];
+    const enabled = myTurn;
+    const wrap = el(
+      `<button class="primary-act ${enabled ? "" : "disabled"}">
+         <span class="pa-label">${enabled ? escapeHtml(desc.label) : `${escapeHtml(active?.name ?? "Rival")}'s turn`}</span>
+         <span class="pa-sub">${enabled ? escapeHtml(desc.sub) : "Please wait…"}</span>
+       </button>`,
+    );
+    if (enabled) wrap.addEventListener("click", () => desc.run());
+    return wrap;
+  }
+
+  /** AD5: can this ship settle right now? Returns the option (with a block
+   *  reason for a pirate/ice-blocked colony) or null. */
+  private establishOptionFor(
+    state: GameState,
+    me: PlayerState,
+    ship: GameState["ships"][number],
+  ): { kind: "colony" | "trade"; dock?: number; block?: string } | null {
+    if (ship.owner !== me.id) return null;
+    const inter = state.intersections[ship.intersectionId];
+    if (!inter) return null;
+    if (
+      ship.kind === "colonyShip" &&
+      inter.adjacentPlanets.length === 2 &&
+      !state.buildings.some((b) => b.intersectionId === inter.id)
+    ) {
+      return { kind: "colony", block: colonyEstablishBlock(state, me, inter.id) ?? undefined };
+    }
+    if (ship.kind === "tradeShip" && inter.dockingPointOf) {
+      return { kind: "trade", dock: freeDock(state, inter.id) };
+    }
+    return null;
+  }
+
+  /** AD5: floating "Establish …" bubble pinned above the selected ship. */
+  private estabPop: HTMLElement | null = null;
+  private estabRaf = 0;
+  private estabKey = "";
+
+  private clearEstablishPopover(): void {
+    if (this.estabRaf) { cancelAnimationFrame(this.estabRaf); this.estabRaf = 0; }
+    this.estabPop?.remove();
+    this.estabPop = null;
+    this.estabKey = "";
+  }
+
+  /** Show the establish bubble above the tapped ship when it can settle. The
+   *  bubble re-pins to the ship every frame so it tracks panning/zooming. */
+  private syncEstablishPopover(state: GameState, me: PlayerState): void {
+    const ps = state.phaseState;
+    const ship = this.selectedShipId
+      ? state.ships.find((s) => s.id === this.selectedShipId)
+      : undefined;
+    const opt =
+      this.game.isHumanTurn() && ps.phase === "flight" && ps.shake && ship
+        ? this.establishOptionFor(state, me, ship)
+        : null;
+    if (!ship || !opt) {
+      this.clearEstablishPopover();
+      return;
+    }
+    const key = `${ship.id}:${opt.kind}:${opt.block ?? ""}`;
+    if (this.estabPop && this.estabKey === key) return; // already shown; RAF keeps it pinned
+    this.clearEstablishPopover();
+    this.estabKey = key;
+
+    const label = opt.kind === "colony" ? "Establish Colony" : "Establish Trade Station";
+    const pop = el(
+      `<div class="estab-pop ${opt.block ? "blocked" : ""}"><button class="estab-pop-btn">${opt.block ? "⚠ Can't settle" : "✦ " + label}</button></div>`,
+    );
+    const button = pop.querySelector(".estab-pop-btn") as HTMLElement;
+    if (opt.block) {
+      button.addEventListener("click", () => this.centerNote(opt.block!));
+    } else {
+      button.addEventListener("click", () => {
+        if (opt.kind === "colony") this.act({ t: "establishColony", shipId: ship.id }, { center: true });
+        else this.act({ t: "establishTradeStation", shipId: ship.id, dock: opt.dock ?? 0 }, { center: true });
+        this.resetSelection();
+        this.rerender();
+      });
+    }
+    document.body.appendChild(pop);
+    this.estabPop = pop;
+    const place = (): void => {
+      if (!this.estabPop) return;
+      const pos = this.board.screenPosOf(ship.intersectionId);
+      if (pos) {
+        this.estabPop.style.left = `${pos.x}px`;
+        this.estabPop.style.top = `${pos.y}px`;
+      }
+      this.estabRaf = requestAnimationFrame(place);
+    };
+    place();
   }
 
   private fillHumanActions(actions: HTMLElement, state: GameState, me: PlayerState): void {
@@ -2535,17 +2664,8 @@ export class HUD {
       }
 
       case "production":
-        {
-          // Disable on first tap so a fast double-tap (common on touch) can't
-          // fire a second rollDice after the phase already advanced — which
-          // surfaced a spurious "Not the production phase." error.
-          const rollBtn = btn("🎲 Roll dice", () => {
-            (rollBtn as HTMLButtonElement).disabled = true;
-            this.act({ t: "rollDice" });
-          });
-          rollBtn.classList.add("hint-pulse"); // Z3: nudge after a few idle seconds
-          actions.appendChild(rollBtn);
-        }
+        // Rolling is the floating primary-action button now (AD6).
+        actions.appendChild(el(`<div class="waiting">Roll to gather resources.</div>`));
         break;
 
       case "tradeBuild": {
@@ -2567,21 +2687,15 @@ export class HUD {
             }),
           );
         }
-        {
-          const endBtn = btn("End build → Shake", () => this.endBuildAndShake());
-          // Z3: when nothing is affordable, the sensible move is to fly — nudge
-          // it. (When something IS affordable, the dock tile gets the nudge.)
-          if (!this.anyAffordableBuild(state, me)) endBtn.classList.add("hint-pulse");
-          actions.appendChild(endBtn);
-        }
+        // "End build → Shake" is the floating primary-action button now (AD6).
+        actions.appendChild(el(`<div class="waiting">Build from the dock below, or fly.</div>`));
         break;
       }
 
       case "flight": {
+        // Shaking the mothership is the floating primary-action button now (AD6).
         if (!ps.shake) {
-          const shakeBtn = btn("Shake mothership", () => this.act({ t: "shakeMothership" }));
-          shakeBtn.classList.add("hint-pulse"); // Z3
-          actions.appendChild(shakeBtn);
+          actions.appendChild(el(`<div class="waiting">Shake the mothership to fly.</div>`));
           break;
         }
         const speed = ps.moveBudget ?? ps.shake.speed;
@@ -2625,54 +2739,12 @@ export class HUD {
           ? state.ships.find((s) => s.id === this.selectedShipId)
           : undefined;
 
-        // Establish buttons appear for ANY of the player's ships that is parked on
-        // a valid site — whether or not it's selected, and whether or not it has
-        // already moved this turn. So a ship that just finished moving can still
-        // settle a colony / dock at an outpost without re-selecting it.
+        // AD5: establishing a colony / trade station now pops up ABOVE the ship
+        // you tap (see syncEstablishPopover), not as buttons in this box. Here we
+        // only compute whether ANY of your ships could settle, to drive the
+        // auto-end-turn fallback below.
         const myShips = state.ships.filter((s) => s.owner === me.id);
-        let establishAvailable = false;
-        let establishHinted = false; // Z3: nudge the first ready Establish action
-        for (const s of myShips) {
-          const inter = state.intersections[s.intersectionId]!;
-          if (s.kind === "colonyShip" && inter.adjacentPlanets.length === 2 &&
-              !state.buildings.some((b) => b.intersectionId === inter.id)) {
-            establishAvailable = true;
-            // R12: a pirate base / ice planet next to the site blocks settling until
-            // the player has enough cannons / freight pods. Grey the button and, on
-            // click, surface a center notification spelling out exactly why.
-            const block = colonyEstablishBlock(state, me, inter.id);
-            if (block) {
-              const b = btn("Establish Colony", () => {}, {
-                disabled: true,
-                title: block,
-              });
-              // A disabled <button> swallows clicks, so wrap it so the player can
-              // still tap to read the reason in a center notification.
-              const wrap = el(`<span class="estab-blocked" title="${escapeHtml(block)}"></span>`);
-              wrap.appendChild(b);
-              wrap.addEventListener("click", () => this.centerNote(block));
-              actions.appendChild(wrap);
-            } else {
-              const eb = btn("Establish Colony", () => {
-                this.act({ t: "establishColony", shipId: s.id }, { center: true });
-                this.resetSelection();
-                this.rerender(); // re-wire the board so another ship can move
-              });
-              if (!establishHinted) { eb.classList.add("hint-pulse"); establishHinted = true; }
-              actions.appendChild(eb);
-            }
-          }
-          if (s.kind === "tradeShip" && inter.dockingPointOf) {
-            establishAvailable = true;
-            const tb = btn("Establish Trade Station", () => {
-              this.act({ t: "establishTradeStation", shipId: s.id, dock: freeDock(state, inter.id) }, { center: true });
-              this.resetSelection();
-              this.rerender(); // re-wire the board so another ship can move
-            });
-            if (!establishHinted) { tb.classList.add("hint-pulse"); establishHinted = true; }
-            actions.appendChild(tb);
-          }
-        }
+        const establishAvailable = myShips.some((s) => this.establishOptionFor(state, me, s) !== null);
 
         // #6: a ship can move only if it's owned by me and not the damaged/frozen one.
         const canMove = myShips.some((s) => s.id !== ps.frozenShipId);
