@@ -220,9 +220,7 @@ export function aiTurnAction(state: GameState, seatId: string): ClientIntent | n
         // pay for fame more readily).
         if (ps.encounter.awaiting === "number") {
           const want = knobs(state).encounterGift;
-          // No one may offer nothing: give the comfortable gift, else a minimal
-          // 1 if we hold anything at all (only a truly empty hand offers 0).
-          const offer = handTotal(me) >= want + 2 ? want : handTotal(me) > 0 ? 1 : 0;
+          const offer = handTotal(me) >= want + 2 ? want : 0;
           return { t: "encounterChoice", choice: offer };
         }
         // yes/no: cooperate (help / surrender small tribute) by default.

@@ -24,6 +24,9 @@ interface Member {
 
 /** Pacing for server-driven AI seats (ms) so humans can follow along. */
 const AI_DELAY = 800;
+/** Encounters resolve far slower so players can read the card and the AI's
+ *  choice before it flashes past (5s minimum per AI encounter act). */
+const ENCOUNTER_AI_DELAY = 5000;
 const AI_NAMES = ["Nova", "Orion", "Vega", "Lyra", "Atlas", "Cygnus"];
 
 export class Room {
@@ -308,7 +311,13 @@ export class Room {
     const active = this.game.players[this.game.phaseState.activePlayerIndex];
     if (!active || !this.aiIds.has(active.id)) return;
     const seatId = active.id;
-    setTimeout(() => this.stepAi(seatId), AI_DELAY);
+    setTimeout(() => this.stepAi(seatId), this.aiStepDelay());
+  }
+
+  /** Delay before the AI's next act — slowed right down during an encounter so
+   *  players can read what's happening. */
+  private aiStepDelay(): number {
+    return this.game?.phaseState.phase === "encounter" ? ENCOUNTER_AI_DELAY : AI_DELAY;
   }
 
   private stepAi(seatId: string): void {
@@ -318,7 +327,7 @@ export class Room {
     const intent = aiTurnAction(this.game, seatId);
     if (!intent) {
       // Waiting on something (e.g. a human discard) — retry shortly.
-      setTimeout(() => this.stepAi(seatId), AI_DELAY);
+      setTimeout(() => this.stepAi(seatId), this.aiStepDelay());
       return;
     }
     let res = applyIntent(this.game, seatId, intent);

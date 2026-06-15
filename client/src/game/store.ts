@@ -61,6 +61,9 @@ export interface GameDriver {
 
 /** AI move pacing (ms) so the human can watch opponents play. */
 const AI_DELAY = 750;
+/** Encounters resolve far slower so the human can actually read the card and
+ *  what the AI chose before it flashes past (5s minimum per AI encounter act). */
+const ENCOUNTER_AI_DELAY = 5000;
 
 /** localStorage key for the single-player autosave (one slot). */
 const SAVE_KEY = "sf_save1";
@@ -280,7 +283,13 @@ export class LocalGame {
     if (!active || this.state.phaseState.phase === "gameOver") return;
     if (!this.aiIds.has(active.id)) return;
     const seatId = active.id;
-    setTimeout(() => this.stepAI(seatId), AI_DELAY);
+    setTimeout(() => this.stepAI(seatId), this.aiStepDelay());
+  }
+
+  /** How long to wait before the AI's next act — slowed right down during an
+   *  encounter so the human can read what's happening. */
+  private aiStepDelay(): number {
+    return this.state.phaseState.phase === "encounter" ? ENCOUNTER_AI_DELAY : AI_DELAY;
   }
 
   private stepAI(seatId: string): void {
@@ -290,7 +299,7 @@ export class LocalGame {
     const intent = aiTurnAction(this.state, seatId);
     if (!intent) {
       // Nothing to do right now (e.g. waiting on the human to discard) — retry later.
-      setTimeout(() => this.stepAI(seatId), AI_DELAY);
+      setTimeout(() => this.stepAI(seatId), this.aiStepDelay());
       return;
     }
     let res = applyIntent(this.state, seatId, intent);

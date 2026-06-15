@@ -1060,13 +1060,17 @@ export class HUD {
     if (barCollapsed) bar.classList.add("collapsed");
     if (canCollapse) {
       const toggle = el(
-        `<button class="bar-toggle" title="${barCollapsed ? "Show actions" : "Collapse to resources"}">${barCollapsed ? "▴" : "▾"}</button>`,
+        `<button class="bar-toggle" title="${barCollapsed ? "Show actions" : "Collapse to resources"}"><span class="bt-caret">▾</span></button>`,
       );
-      toggle.addEventListener("click", () => { this.barCollapsed = !this.barCollapsed; this.rerender(); });
+      toggle.addEventListener("click", (e) => { e.stopPropagation(); this.barCollapsed = !this.barCollapsed; this.rerender(); });
       bar.appendChild(toggle);
-      // Tapping the bar's own padding (not a child control) toggles too.
+      // Tapping ANYWHERE on the bar's chrome/edges toggles it — only real
+      // controls (buttons, inputs, steppers) are excluded. When collapsed this
+      // lets you tap the visible resource hand to bring the bar back.
       bar.addEventListener("click", (e) => {
-        if (e.target === bar) { this.barCollapsed = !this.barCollapsed; this.rerender(); }
+        if ((e.target as HTMLElement).closest("button, input, .pc-stepper")) return;
+        this.barCollapsed = !this.barCollapsed;
+        this.rerender();
       });
     }
 
@@ -1546,8 +1550,7 @@ export class HUD {
     } else if (enc.awaiting === "confirm") {
       this.act({ t: "encounterChoice", choice: 0 });
     } else if (enc.awaiting === "number") {
-      // Never auto-offer nothing: pick 1..3 (the engine caps to what's in hand).
-      this.act({ t: "encounterChoice", choice: Math.floor(Math.random() * 3) + 1 });
+      this.act({ t: "encounterChoice", choice: Math.floor(Math.random() * 4) });
     } else {
       this.act({ t: "encounterChoice", choice: Math.random() < 0.5 });
     }
@@ -3411,25 +3414,15 @@ export class HUD {
         choices.appendChild(b);
       } else if (enc.awaiting === "number") {
         // P6d: the *outcome* is hidden — show only the choice itself (how much
-        // you offer). You must offer SOMETHING — there is no "offer nothing".
-        // Options run 1..min(3, what you hold); an empty hand can only offer 0.
+        // you offer). What you gain or lose is a surprise revealed after you pick.
         choices.classList.add("col");
-        const handTotal = RESOURCES.reduce((s, r) => s + subject.hand[r], 0);
-        const maxOffer = Math.min(3, handTotal);
-        if (maxOffer <= 0) {
+        for (const n of [0, 1, 2, 3]) {
+          const label = n === 0 ? "Offer nothing" : `Offer ${n}`;
           const b = el(
-            `<button class="secondary enc-opt"><span class="eo-n">0</span><span class="eo-hint">You have nothing to offer</span></button>`,
+            `<button class="secondary enc-opt"><span class="eo-n">${n}</span><span class="eo-hint">${label}</span></button>`,
           );
-          b.addEventListener("click", () => this.act({ t: "encounterChoice", choice: 0 }));
+          b.addEventListener("click", () => this.act({ t: "encounterChoice", choice: n }));
           choices.appendChild(b);
-        } else {
-          for (let n = 1; n <= maxOffer; n++) {
-            const b = el(
-              `<button class="secondary enc-opt"><span class="eo-n">${n}</span><span class="eo-hint">Offer ${n}</span></button>`,
-            );
-            b.addEventListener("click", () => this.act({ t: "encounterChoice", choice: n }));
-            choices.appendChild(b);
-          }
         }
       } else {
         // P6d: plain Yes / No — outcome stays secret until the player commits.
@@ -3461,8 +3454,8 @@ export class HUD {
       } else if (enc.awaiting === "number") {
         // Spectators see the OUTCOME of each offer (the "answer") — the chooser does not.
         choices.classList.add("col");
-        for (let n = 1; n <= 3; n++) {
-          const hint = card?.choiceHints?.[n] ?? `Offer ${n}`;
+        for (const n of [0, 1, 2, 3]) {
+          const hint = card?.choiceHints?.[n] ?? (n === 0 ? "Offer nothing" : `Offer ${n}`);
           choices.appendChild(
             el(`<button class="secondary enc-opt" disabled><span class="eo-n">${n}</span><span class="eo-hint">${escapeHtml(hint)}</span></button>`),
           );

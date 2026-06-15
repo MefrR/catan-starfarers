@@ -838,9 +838,16 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   font-size: 12px; line-height: 1; font-weight: 800; color: var(--muted);
   background: rgba(18, 26, 46, 0.96); border: 1px solid rgba(160, 195, 255, 0.28); border-bottom: none;
   cursor: pointer; z-index: 2;
+  /* Only animate colour — NOT transform, or the global button:hover transform
+     would fight the translateX(-50%) centering and make the handle jump. */
+  transition: color 0.15s ease, background 0.15s ease;
 }
 .bar-toggle::before, .bar-toggle::after { content: none; }
-.bar-toggle:hover { color: var(--text); background: rgba(28, 40, 70, 0.98); }
+/* Pin the transform through hover/active so it never loses its centering. */
+.bar-toggle:hover { color: var(--text); background: rgba(28, 40, 70, 0.98); transform: translateX(-50%); box-shadow: none; }
+.bar-toggle:active { transform: translateX(-50%) translateY(1px); }
+.bar-toggle .bt-caret { display: inline-block; transition: transform 0.18s ease; }
+.actionbar.collapsed .bar-toggle .bt-caret { transform: rotate(180deg); }
 .actionbar.collapsed { padding-top: 13px; gap: 8px; }
 .actionbar.collapsed > *:not(.hand):not(.bar-toggle) { display: none; }
 .actionbar.collapsed .hand-trade-btn { display: none; }
