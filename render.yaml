@@ -23,3 +23,12 @@ services:
       # Single-service: the online client connects back to its own origin, so
       # VITE_ONLINE_URL is intentionally left unset. Only set it if you split
       # the client onto a separate static host (then it must point here).
+      # Accounts (Supabase). These two are PUBLIC by design — the anon/publishable
+      # key already ships inside the browser bundle, and row-level security guards
+      # the data — so committing them here adds no exposure. They're read at build
+      # time by Vite (VITE_ prefix). The server-only SUPABASE_SERVICE_ROLE_KEY is
+      # NOT here and must never be committed — set it in the dashboard if needed.
+      - key: VITE_SUPABASE_URL
+        value: "https://oajadragzedybicndpfi.supabase.co"
+      - key: VITE_SUPABASE_ANON_KEY
+        value: "sb_publishable_L3uc0uVLKD0l8o5r_nx08g_s-Xb_-TD"
