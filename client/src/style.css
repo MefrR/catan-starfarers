@@ -1876,6 +1876,38 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .estab-pop.blocked::after { border-top-color: #e07a1f; }
 @keyframes estabPop { from { opacity: 0; transform: translate(-50%, -120%) scale(0.85); } to { opacity: 1; transform: translate(-50%, -135%) scale(1); } }
 
+/* Setup placement confirmation bubble (Yes/No) — pinned above the tapped point. */
+.confirm-pop {
+  position: fixed; z-index: 92; transform: translate(-50%, -135%);
+  pointer-events: auto; display: flex; flex-direction: column; gap: 8px; align-items: center;
+  padding: 11px 13px 12px; border-radius: 13px; white-space: nowrap;
+  background: linear-gradient(165deg, rgba(20, 30, 52, 0.97), rgba(12, 18, 34, 0.97));
+  border: 1px solid rgba(120, 160, 240, 0.55);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 22px rgba(91, 140, 255, 0.28);
+  animation: estabPop 0.18s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.confirm-pop.centered { left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.confirm-pop .cp-msg { font-weight: 800; font-size: 13.5px; color: #eaf1ff; letter-spacing: 0.2px; }
+.confirm-pop .cp-row { display: flex; gap: 9px; }
+.confirm-pop .cp-row button {
+  padding: 8px 20px; border-radius: 10px; cursor: pointer; font-weight: 800; font-size: 13px;
+  border: 1px solid transparent;
+}
+.confirm-pop .cp-row button::before, .confirm-pop .cp-row button::after { content: none; }
+.confirm-pop .cp-yes {
+  background: linear-gradient(165deg, #39d8c8, #2fb39c); color: #04231d;
+  border-color: rgba(120, 240, 220, 0.8); box-shadow: 0 6px 18px rgba(57, 216, 200, 0.3);
+}
+.confirm-pop .cp-no {
+  background: rgba(255, 255, 255, 0.08); color: #cdd8ef;
+  border-color: rgba(150, 170, 210, 0.4);
+}
+.confirm-pop .cp-row button:hover { filter: brightness(1.1); }
+.confirm-pop:not(.centered)::after {
+  content: ""; position: absolute; left: 50%; top: 100%; transform: translateX(-50%);
+  border: 6px solid transparent; border-top-color: rgba(20, 30, 52, 0.97);
+}
+
 /* Respect users (and test runners) that ask for less motion: collapse all
    decorative animation to instant states. Gameplay still works identically. */
 @media (prefers-reduced-motion: reduce) {

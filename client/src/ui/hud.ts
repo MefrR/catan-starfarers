@@ -245,7 +245,18 @@ export class HUD {
     // Surface multiplayer errors that the server rejects asynchronously (after
     // dispatch already returned) — otherwise a blocked action looks like it just
     // silently did nothing ("end turn is stuck", "I can't trade").
-    game.onError = (msg) => this.centerNote(msg);
+    game.onError = (msg) => {
+      // These three mean the server no longer has our room — almost always the
+      // free-tier host went to sleep / restarted mid-game and wiped its
+      // in-memory rooms. The reconnect succeeds but the rejoin is refused, so
+      // the board would otherwise just freeze (e.g. "the roll button does
+      // nothing"). Show a clear, recoverable overlay instead of a silent stall.
+      if (msg === "Could not rejoin." || msg === "Room not found." || msg === "Not in a room.") {
+        this.fatalDisconnect();
+      } else {
+        this.centerNote(msg);
+      }
+    };
     // F2/F4/F5: toggle-able chat box (dev-mode + heart codes live here).
     this.chat = new ChatBox(game);
     // On-map colony/trade-ship picker, anchored over the clicked launch point.
@@ -304,6 +315,7 @@ export class HUD {
     }
     this.launchPicker?.remove();
     this.clearEstablishPopover();
+    this.clearBoardConfirm();
     this.dismissMapConfirm();
     this.board.onViewChange = null;
     this.chat?.destroy();
@@ -646,6 +658,32 @@ export class HUD {
     modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
     document.body.appendChild(modal);
     requestAnimationFrame(() => modal.classList.add("show"));
+  }
+
+  /**
+   * The game server lost our room (free-tier sleep/restart wipes in-memory
+   * rooms). Reconnecting can't recover it, so rather than leave the table
+   * silently frozen — the symptom users see as "the roll button stopped
+   * working and the game got stuck" — show a single clear overlay back to the
+   * menu. Guarded so repeated rejoin failures only ever show one overlay.
+   */
+  private fatalDisconnect(): void {
+    if (document.querySelector(".exit-confirm.fatal")) return;
+    const modal = el(`
+      <div class="exit-confirm fatal show">
+        <div class="exit-box">
+          <div class="exit-title">Lost the game server</div>
+          <div class="exit-msg">The online server dropped this room (the free host sleeps after a while of quiet). This game can't be resumed — head back to the menu to start or join another.</div>
+          <div class="exit-actions">
+            <button class="exit-yes">Back to menu</button>
+          </div>
+        </div>
+      </div>`);
+    modal.querySelector(".exit-yes")!.addEventListener("click", () => {
+      try { sessionStorage.removeItem("sf_session"); } catch { /* ignore */ }
+      location.reload();
+    });
+    document.body.appendChild(modal);
   }
 
   private resetSelection(): void {
@@ -2311,7 +2349,8 @@ export class HUD {
             <span class="sp-name">${LABEL[up]}</span>
             <span class="sp-desc">${DESC[up]}</span>
           </button>`);
-        t.addEventListener("click", () => this.act({ t: "setupBonus", upgrade: up }));
+        t.addEventListener("click", () =>
+          this.boardConfirm(`Take the ${LABEL[up]} attachment?`, () => this.act({ t: "setupBonus", upgrade: up })));
         tiles.appendChild(t);
       }
       return pop;
@@ -2333,7 +2372,8 @@ export class HUD {
         const sites = catanianColonySites(state);
         this.board.setHighlights(sites);
         this.board.onIntersectionClick = (id) => {
-          if (sites.includes(id)) this.act({ t: "setupPlaceColony", intersectionId: id });
+          if (sites.includes(id))
+            this.boardConfirm("Place your colony here?", () => this.act({ t: "setupPlaceColony", intersectionId: id }), id);
         };
         return;
       }
@@ -2343,7 +2383,8 @@ export class HUD {
           .map((b) => b.intersectionId);
         this.board.setHighlights(colonies);
         this.board.onIntersectionClick = (id) => {
-          if (colonies.includes(id)) this.act({ t: "setupUpgrade", intersectionId: id });
+          if (colonies.includes(id))
+            this.boardConfirm("Upgrade this colony to a spaceport?", () => this.act({ t: "setupUpgrade", intersectionId: id }), id);
         };
         return;
       }
@@ -2354,8 +2395,11 @@ export class HUD {
         const kind = this.launchKind;
         this.board.onIntersectionClick = (id) => {
           if (kind && sites.includes(id)) {
-            this.act({ t: "setupPlaceShip", shipKind: kind, intersectionId: id });
-            this.resetSelection();
+            const label = kind === "colonyShip" ? "Launch your colony ship here?" : "Launch your trade ship here?";
+            this.boardConfirm(label, () => {
+              this.act({ t: "setupPlaceShip", shipKind: kind, intersectionId: id });
+              this.resetSelection();
+            }, id);
           }
         };
         return;
@@ -2578,6 +2622,50 @@ export class HUD {
   private estabPop: HTMLElement | null = null;
   private estabRaf = 0;
   private estabKey = "";
+
+  private confirmPop: HTMLElement | null = null;
+  private confirmRaf = 0;
+
+  private clearBoardConfirm(): void {
+    if (this.confirmRaf) { cancelAnimationFrame(this.confirmRaf); this.confirmRaf = 0; }
+    this.confirmPop?.remove();
+    this.confirmPop = null;
+  }
+
+  /** Yes/No confirmation bubble for setup placements. When `anchorId` is given
+   *  the bubble pins above that board point (and re-pins every frame so it
+   *  tracks panning/zooming); otherwise it sits centered on screen. */
+  private boardConfirm(label: string, onYes: () => void, anchorId?: string): void {
+    this.clearBoardConfirm();
+    const pop = el(
+      `<div class="confirm-pop${anchorId ? "" : " centered"}">
+         <div class="cp-msg">${label}</div>
+         <div class="cp-row">
+           <button class="cp-yes">Yes</button>
+           <button class="cp-no">No</button>
+         </div>
+       </div>`,
+    );
+    pop.querySelector(".cp-yes")!.addEventListener("click", () => {
+      this.clearBoardConfirm();
+      onYes();
+    });
+    pop.querySelector(".cp-no")!.addEventListener("click", () => this.clearBoardConfirm());
+    document.body.appendChild(pop);
+    this.confirmPop = pop;
+    if (anchorId) {
+      const place = (): void => {
+        if (!this.confirmPop) return;
+        const pos = this.board.screenPosOf(anchorId);
+        if (pos) {
+          this.confirmPop.style.left = `${pos.x}px`;
+          this.confirmPop.style.top = `${pos.y}px`;
+        }
+        this.confirmRaf = requestAnimationFrame(place);
+      };
+      place();
+    }
+  }
 
   private clearEstablishPopover(): void {
     if (this.estabRaf) { cancelAnimationFrame(this.estabRaf); this.estabRaf = 0; }
