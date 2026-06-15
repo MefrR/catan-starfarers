@@ -1745,6 +1745,7 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   display: flex;
   gap: 6px;
   padding: 9px;
+  position: relative; /* anchor for the @-mention dropdown */
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 .chat-input {
@@ -1768,6 +1769,21 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   font-size: 14px;
 }
 .chat-send:hover { filter: brightness(1.08); }
+/* @-mention dropdown: names in the room, surfaced when you type "@". */
+.chat-mentions {
+  position: absolute; left: 9px; right: 9px; bottom: calc(100% - 2px);
+  display: none; flex-direction: column; gap: 2px; z-index: 5;
+  max-height: 150px; overflow-y: auto; padding: 4px;
+  background: rgba(14, 20, 36, 0.98); border: 1px solid rgba(120, 160, 240, 0.35);
+  border-radius: 10px; box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.5);
+}
+.chat-mentions.open { display: flex; }
+.cm-mention {
+  text-align: left; padding: 7px 10px; border-radius: 7px; cursor: pointer;
+  background: transparent; border: none; color: #dce6ff; font-size: 13px; font-weight: 700;
+}
+.cm-mention::before, .cm-mention::after { content: none; }
+.cm-mention.active, .cm-mention:hover { background: rgba(120, 160, 240, 0.22); }
 
 /* ---- F5: floating hearts ---- */
 .heart-fx {
@@ -2213,6 +2229,51 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   background: rgba(255, 93, 93, 0.25);
 }
 .acct-winbar i { display: block; height: 100%; background: linear-gradient(92deg, #39d8c8, #52e8a0); }
+
+/* History sub-tabs (Online / Offline) + record summary */
+.acct-subtabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.acct-subtab {
+  flex: 1; padding: 7px 6px; border-radius: 9px; cursor: pointer; font-size: 12.5px; font-weight: 700;
+  background: rgba(255, 255, 255, 0.05); color: var(--muted); border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.acct-subtab::before, .acct-subtab::after { content: none; }
+.acct-subtab.active { background: rgba(120, 170, 255, 0.18); color: #eaf2ff; border-color: rgba(120, 170, 255, 0.4); }
+.acct-recordwrap { margin-bottom: 12px; }
+.acct-recordbar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.rb-stat {
+  background: rgba(255, 255, 255, 0.045); border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px; padding: 9px 4px; text-align: center;
+}
+.rb-stat.win { border-color: rgba(82, 210, 115, 0.35); }
+.rb-stat.loss { border-color: rgba(255, 93, 93, 0.3); }
+.rb-n { font-size: 20px; font-weight: 900; color: #eaf2ff; }
+.rb-stat.win .rb-n { color: #6fe89a; }
+.rb-stat.loss .rb-n { color: #ff8a8a; }
+.rb-l { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-top: 2px; }
+.acct-recordwrap .acct-winbar { margin-top: 8px; }
+
+/* Online history: friend head-to-head filter */
+.acct-friendfilter { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.ff-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px 5px 6px; border-radius: 999px;
+  font-size: 12px; font-weight: 700; cursor: pointer; color: var(--muted);
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.ff-chip::before, .ff-chip::after { content: none; }
+.ff-chip .acct-avatar.sm { width: 20px; height: 20px; font-size: 9px; }
+.ff-chip.active { background: rgba(120, 170, 255, 0.2); color: #eaf2ff; border-color: rgba(120, 170, 255, 0.45); }
+.acct-h2h { font-size: 13px; color: #d6e2ff; margin-bottom: 8px; min-height: 18px; }
+.acct-h2h .muted { color: var(--muted); }
+.h2h-w { color: #6fe89a; font-weight: 800; }
+.h2h-l { color: #ff8a8a; font-weight: 800; }
+
+/* Friend profile (tap a friend) */
+.acct-avatar.clickable, .fr-meta.clickable { cursor: pointer; }
+.fr-meta.clickable:hover .fr-name { color: #bfe0ff; }
+.fp-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.fp-name { font-size: 18px; font-weight: 800; color: #eaf2ff; }
+.fp-handle { font-size: 12.5px; color: var(--muted); }
+.fp-history { max-height: 260px; margin-top: 8px; }
 
 /* History tab */
 .acct-history { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }

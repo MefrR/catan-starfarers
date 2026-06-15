@@ -89,6 +89,14 @@ export class ChatBox {
       this.submit();
     });
 
+    // @-mention helper: typing "@" surfaces the names in the room so you can drop
+    // one in fast (handy for flings like "Nova <3"). It inserts the plain name.
+    this.mentions = el(`<div class="chat-mentions"></div>`);
+    this.panel.querySelector(".chat-form")!.appendChild(this.mentions);
+    this.input.addEventListener("input", () => this.syncMentions());
+    this.input.addEventListener("keydown", (e) => this.onMentionKey(e));
+    this.input.addEventListener("blur", () => window.setTimeout(() => this.closeMentions(), 150));
+
     document.body.appendChild(this.toggle);
     document.body.appendChild(this.panel);
 
@@ -165,6 +173,71 @@ export class ChatBox {
   /** Z5: quick-emote controls (multiplayer only). */
   private emoteToggle: HTMLElement | null = null;
   private emoteStrip: HTMLElement | null = null;
+  /** @-mention autocomplete state. */
+  private mentions!: HTMLElement;
+  private mentionItems: string[] = [];
+  private mentionActive = 0;
+
+  /** Rebuild the @-mention dropdown from the token being typed after an "@". */
+  private syncMentions(): void {
+    const v = this.input.value;
+    const caret = this.input.selectionStart ?? v.length;
+    const m = /(^|\s)@([^\s@]*)$/.exec(v.slice(0, caret));
+    if (!m) { this.closeMentions(); return; }
+    const partial = m[2]!.toLowerCase();
+    const names = [...new Set(this.game.getState().players.map((p) => p.name))];
+    const matches = names.filter((n) => n.toLowerCase().includes(partial)).slice(0, 6);
+    if (matches.length === 0) { this.closeMentions(); return; }
+    this.mentionItems = matches;
+    this.mentionActive = 0;
+    this.mentions.innerHTML = matches
+      .map((n, i) => `<button type="button" class="cm-mention ${i === 0 ? "active" : ""}" data-i="${i}">${escapeHtml(n)}</button>`)
+      .join("");
+    this.mentions.querySelectorAll(".cm-mention").forEach((b) => {
+      // mousedown (not click) so it fires before the input's blur closes us.
+      b.addEventListener("mousedown", (ev) => {
+        ev.preventDefault();
+        this.applyMention(this.mentionItems[Number((b as HTMLElement).dataset.i)] ?? "");
+      });
+    });
+    this.mentions.classList.add("open");
+  }
+
+  private closeMentions(): void {
+    this.mentions.classList.remove("open");
+    this.mentions.innerHTML = "";
+    this.mentionItems = [];
+  }
+
+  /** Replace the "@token" before the caret with the chosen name. */
+  private applyMention(name: string): void {
+    if (!name) return;
+    const v = this.input.value;
+    const caret = this.input.selectionStart ?? v.length;
+    const m = /(^|\s)@([^\s@]*)$/.exec(v.slice(0, caret));
+    if (!m) return;
+    const at = m.index + m[1]!.length; // index of the "@"
+    const before = v.slice(0, at) + `${name} `;
+    this.input.value = before + v.slice(caret);
+    this.input.setSelectionRange(before.length, before.length);
+    this.closeMentions();
+    this.input.focus();
+  }
+
+  private onMentionKey(e: KeyboardEvent): void {
+    if (!this.mentions.classList.contains("open") || this.mentionItems.length === 0) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const n = this.mentionItems.length;
+      this.mentionActive = (this.mentionActive + (e.key === "ArrowDown" ? 1 : n - 1)) % n;
+      this.mentions.querySelectorAll(".cm-mention").forEach((b, i) => b.classList.toggle("active", i === this.mentionActive));
+    } else if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault(); // select the highlighted name instead of submitting
+      this.applyMention(this.mentionItems[this.mentionActive] ?? "");
+    } else if (e.key === "Escape") {
+      this.closeMentions();
+    }
+  }
 
   destroy(): void {
     this.replyTimers.forEach((t) => window.clearTimeout(t));

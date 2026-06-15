@@ -33,6 +33,7 @@ export interface StatsSummary {
 }
 
 export interface HistoryEntry {
+  gameId: string;
   playedAt: string;
   result: "win" | "loss";
   placement: number;
@@ -138,15 +139,14 @@ async function recordGame(
   }
 }
 
-/** Aggregate the signed-in player's win/loss record. Null when signed out. */
-export async function fetchMyStats(): Promise<StatsSummary | null> {
+/** Aggregate a player's win/loss record. Null when signed out / unconfigured. */
+async function fetchStats(userId: string | null): Promise<StatsSummary | null> {
   const sb = auth.client();
-  const me = auth.userId();
-  if (!sb || !me) return null;
+  if (!sb || !userId) return null;
   const { data, error } = await sb
     .from("game_players")
     .select("result, final_vp")
-    .eq("user_id", me);
+    .eq("user_id", userId);
   if (error || !data) return null;
   const games = data.length;
   const wins = data.filter((r) => r.result === "win").length;
@@ -154,19 +154,29 @@ export async function fetchMyStats(): Promise<StatsSummary | null> {
   return { games, wins, losses: games - wins, winRate: games ? wins / games : 0, bestVp };
 }
 
-/** The signed-in player's recent games (most recent first). */
-export async function fetchMyHistory(limit = 20): Promise<HistoryEntry[]> {
+/** The signed-in player's overall win/loss record. */
+export async function fetchMyStats(): Promise<StatsSummary | null> {
+  return fetchStats(auth.userId());
+}
+
+/** Any player's overall record (stats are public to signed-in users). */
+export async function fetchUserStats(userId: string): Promise<StatsSummary | null> {
+  return fetchStats(userId);
+}
+
+/** A player's recent games (most recent first). */
+async function fetchHistory(userId: string | null, limit: number): Promise<HistoryEntry[]> {
   const sb = auth.client();
-  const me = auth.userId();
-  if (!sb || !me) return [];
+  if (!sb || !userId) return [];
   const { data, error } = await sb
     .from("game_players")
-    .select("result, placement, final_vp, games(created_at, vs_ai, winner_name, winner_color, target_vp, players)")
-    .eq("user_id", me)
+    .select("game_id, result, placement, final_vp, games(created_at, vs_ai, winner_name, winner_color, target_vp, players)")
+    .eq("user_id", userId)
     .order("created_at", { foreignTable: "games", ascending: false })
     .limit(limit);
   if (error || !data) return [];
   const rows = data as unknown as Array<{
+    game_id: string;
     result: "win" | "loss";
     placement: number;
     final_vp: number;
@@ -182,6 +192,7 @@ export async function fetchMyHistory(limit = 20): Promise<HistoryEntry[]> {
   return rows
     .filter((r) => r.games)
     .map((r) => ({
+      gameId: r.game_id,
       playedAt: r.games!.created_at,
       result: r.result,
       placement: r.placement,
@@ -192,4 +203,37 @@ export async function fetchMyHistory(limit = 20): Promise<HistoryEntry[]> {
       targetVp: r.games!.target_vp,
       players: r.games!.players ?? [],
     }));
+}
+
+/** The signed-in player's recent games. */
+export async function fetchMyHistory(limit = 50): Promise<HistoryEntry[]> {
+  return fetchHistory(auth.userId(), limit);
+}
+
+/** Any player's recent games (for viewing a friend's profile). */
+export async function fetchUserHistory(userId: string, limit = 50): Promise<HistoryEntry[]> {
+  return fetchHistory(userId, limit);
+}
+
+/** Head-to-head record vs one friend across the online games you both recorded. */
+export interface FriendRecord {
+  games: number;
+  wins: number;
+  losses: number;
+  gameIds: Set<string>;
+}
+export async function fetchGamesWithFriend(friendId: string): Promise<FriendRecord> {
+  const empty: FriendRecord = { games: 0, wins: 0, losses: 0, gameIds: new Set() };
+  const sb = auth.client();
+  const me = auth.userId();
+  if (!sb || !me || !friendId) return empty;
+  const [mine, theirs] = await Promise.all([
+    sb.from("game_players").select("game_id, result").eq("user_id", me),
+    sb.from("game_players").select("game_id").eq("user_id", friendId),
+  ]);
+  if (mine.error || theirs.error || !mine.data || !theirs.data) return empty;
+  const theirSet = new Set((theirs.data as Array<{ game_id: string }>).map((r) => r.game_id));
+  const shared = (mine.data as Array<{ game_id: string; result: "win" | "loss" }>).filter((r) => theirSet.has(r.game_id));
+  const wins = shared.filter((r) => r.result === "win").length;
+  return { games: shared.length, wins, losses: shared.length - wins, gameIds: new Set(shared.map((r) => r.game_id)) };
 }

@@ -391,24 +391,35 @@ export class LobbyUI {
           host.appendChild(el(`<div class="fr-hint">No friends yet — add some from your profile.</div>`));
           return;
         }
+        // Names already seated in this room — a friend who's joined can't be
+        // invited again (we match on display name, the only identity the lobby
+        // carries for a member).
+        const inRoom = new Set(
+          (this.lobby?.players ?? []).map((p) => p.name.trim().toLowerCase()),
+        );
         for (const f of friends) {
           const on = presence.isOnline(f.user.id);
+          const here = inRoom.has(f.user.displayName.trim().toLowerCase());
           const sent = this.invited.has(f.user.id);
+          const label = here ? "In room" : sent ? "Invited ✓" : "Invite";
+          const disabled = here || sent || !on;
           const row = el(`
             <div class="fr-row">
               <span class="pres-dot ${on ? "on" : ""}"></span>
               <span class="acct-avatar sm" style="--ac:${COLOR_HEX[f.user.favoriteColor] ?? "#4fa8ff"}">${escapeHtml(initials(f.user.displayName))}</span>
-              <div class="fr-meta"><div class="fr-name">${escapeHtml(f.user.displayName)}</div><div class="fr-handle">${on ? "online" : "offline"}</div></div>
-              <div class="fr-actions"><button class="fr-btn add invite" ${sent || !on ? "disabled" : ""}>${sent ? "Invited ✓" : "Invite"}</button></div>
+              <div class="fr-meta"><div class="fr-name">${escapeHtml(f.user.displayName)}</div><div class="fr-handle">${here ? "in this room" : on ? "online" : "offline"}</div></div>
+              <div class="fr-actions"><button class="fr-btn add invite" ${disabled ? "disabled" : ""}>${label}</button></div>
             </div>`);
           const btn = row.querySelector(".invite") as HTMLButtonElement;
-          btn.addEventListener("click", () => {
-            if (this.invited.has(f.user.id)) return;
-            this.invited.add(f.user.id);
-            btn.disabled = true;
-            btn.textContent = "Invited ✓";
-            void presence.sendInvite(f.user.id, roomCode);
-          });
+          if (!disabled) {
+            btn.addEventListener("click", () => {
+              if (this.invited.has(f.user.id) || inRoom.has(f.user.displayName.trim().toLowerCase())) return;
+              this.invited.add(f.user.id);
+              btn.disabled = true;
+              btn.textContent = "Invited ✓";
+              void presence.sendInvite(f.user.id, roomCode);
+            });
+          }
           host.appendChild(row);
         }
       };

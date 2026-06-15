@@ -1,6 +1,9 @@
 import { PLAYER_COLORS, type PlayerColor } from "@starfarers/shared";
 import { auth, isAuthConfigured, type Profile } from "../auth.js";
-import { fetchMyStats, fetchMyHistory, type HistoryEntry } from "../social.js";
+import {
+  fetchMyStats, fetchMyHistory, fetchUserStats, fetchUserHistory, fetchGamesWithFriend,
+  type HistoryEntry,
+} from "../social.js";
 import {
   searchUsers, listFriends, listIncoming, listOutgoing,
   sendRequest, acceptRequest, removeFriendship, type FriendUser,
@@ -146,21 +149,122 @@ async function renderRecord(body: HTMLElement): Promise<void> {
   );
 }
 
-/** History tab: recent games, newest first. */
+/** A win/loss/win-rate summary strip for a set of games. */
+function recordStrip(games: HistoryEntry[]): HTMLElement {
+  const total = games.length;
+  const wins = games.filter((g) => g.result === "win").length;
+  const losses = total - wins;
+  const pct = total ? Math.round((wins / total) * 100) : 0;
+  return el(`
+    <div class="acct-recordwrap">
+      <div class="acct-recordbar">
+        <div class="rb-stat"><div class="rb-n">${total}</div><div class="rb-l">Games</div></div>
+        <div class="rb-stat win"><div class="rb-n">${wins}</div><div class="rb-l">Wins</div></div>
+        <div class="rb-stat loss"><div class="rb-n">${losses}</div><div class="rb-l">Losses</div></div>
+        <div class="rb-stat"><div class="rb-n">${pct}%</div><div class="rb-l">Win rate</div></div>
+      </div>
+      <div class="acct-winbar" title="${pct}% wins"><i style="width:${pct}%"></i></div>
+    </div>`);
+}
+
+/** History tab: Online / Offline sub-tabs, each with a record summary + list. */
 async function renderHistory(body: HTMLElement): Promise<void> {
   body.replaceChildren(el(`<div class="acct-loading">Loading your games…</div>`));
-  const games = await fetchMyHistory(20);
+  const all = await fetchMyHistory(50);
+  const online = all.filter((g) => !g.vsAi);
+  const offline = all.filter((g) => g.vsAi);
+
+  const wrap = el(`
+    <div class="acct-histwrap">
+      <div class="acct-subtabs">
+        <button class="acct-subtab active" data-sub="online">Online${online.length ? ` (${online.length})` : ""}</button>
+        <button class="acct-subtab" data-sub="offline">Offline${offline.length ? ` (${offline.length})` : ""}</button>
+      </div>
+      <div class="acct-subbody"></div>
+    </div>`);
+  const subBody = wrap.querySelector(".acct-subbody") as HTMLElement;
+  const subtabs = [...wrap.querySelectorAll<HTMLElement>(".acct-subtab")];
+  const showSub = (sub: string): void => {
+    subtabs.forEach((t) => t.classList.toggle("active", t.dataset.sub === sub));
+    if (sub === "online") renderOnlineHistory(subBody, online, () => void renderHistory(body));
+    else renderOfflineHistory(subBody, offline, () => void renderHistory(body));
+  };
+  subtabs.forEach((t) => t.addEventListener("click", () => showSub(t.dataset.sub!)));
+  body.replaceChildren(wrap);
+  showSub("online");
+}
+
+/** Offline (vs-AI) games: record summary + clickable list. */
+function renderOfflineHistory(host: HTMLElement, games: HistoryEntry[], back: () => void): void {
+  host.replaceChildren();
+  host.appendChild(recordStrip(games));
   if (games.length === 0) {
-    body.replaceChildren(el(`<div class="acct-empty">No games recorded yet.</div>`));
+    host.appendChild(el(`<div class="acct-empty">No single-player games recorded yet.</div>`));
     return;
   }
   const list = el(`<div class="acct-history"></div>`);
   for (const g of games) {
     const row = historyRow(g);
-    row.addEventListener("click", () => showGameDetail(body, g));
+    row.addEventListener("click", () => showGameDetail(host, g, back));
     list.appendChild(row);
   }
-  body.replaceChildren(list);
+  host.appendChild(list);
+}
+
+/** Online games: record summary, friend filter (head-to-head), clickable list. */
+function renderOnlineHistory(host: HTMLElement, games: HistoryEntry[], back: () => void): void {
+  host.replaceChildren();
+  host.appendChild(recordStrip(games));
+  if (games.length === 0) {
+    host.appendChild(el(`<div class="acct-empty">No online games recorded yet — play a friend!</div>`));
+    return;
+  }
+
+  // Friend filter chips: tap a friend to see only the games you played together,
+  // plus your head-to-head record with them.
+  const filterBar = el(`<div class="acct-friendfilter"></div>`);
+  const h2h = el(`<div class="acct-h2h"></div>`);
+  const list = el(`<div class="acct-history"></div>`);
+  host.append(filterBar, h2h, list);
+
+  const drawList = (entries: HistoryEntry[]): void => {
+    list.replaceChildren();
+    for (const g of entries) {
+      const row = historyRow(g);
+      row.addEventListener("click", () => showGameDetail(host, g, back));
+      list.appendChild(row);
+    }
+  };
+  drawList(games);
+
+  void listFriends().then((friends) => {
+    if (!host.isConnected) return;
+    const allChip = el(`<button class="ff-chip active">All</button>`);
+    filterBar.appendChild(allChip);
+    const chips: HTMLElement[] = [allChip];
+    allChip.addEventListener("click", () => {
+      chips.forEach((c) => c.classList.remove("active"));
+      allChip.classList.add("active");
+      h2h.textContent = "";
+      drawList(games);
+    });
+    for (const f of friends) {
+      const chip = el(`<button class="ff-chip"><span class="acct-avatar sm" style="--ac:${COLOR_HEX[f.user.favoriteColor]}">${escapeHtml(initials(f.user.displayName))}</span>${escapeHtml(f.user.displayName)}</button>`);
+      chips.push(chip);
+      chip.addEventListener("click", async () => {
+        chips.forEach((c) => c.classList.remove("active"));
+        chip.classList.add("active");
+        h2h.textContent = "Loading…";
+        const rec = await fetchGamesWithFriend(f.user.id);
+        if (!host.isConnected) return;
+        h2h.innerHTML = rec.games === 0
+          ? `<span class="muted">No games with <b>${escapeHtml(f.user.displayName)}</b> yet.</span>`
+          : `vs <b>${escapeHtml(f.user.displayName)}</b>: <b>${rec.games}</b> game${rec.games === 1 ? "" : "s"} · <span class="h2h-w">${rec.wins}W</span> · <span class="h2h-l">${rec.losses}L</span>`;
+        drawList(games.filter((g) => rec.gameIds.has(g.gameId)));
+      });
+      filterBar.appendChild(chip);
+    }
+  });
 }
 
 function historyRow(g: HistoryEntry): HTMLElement {
@@ -188,7 +292,7 @@ function historyRow(g: HistoryEntry): HTMLElement {
 }
 
 /** Full result of one past game: final standings + per-player stats. */
-function showGameDetail(body: HTMLElement, g: HistoryEntry): void {
+function showGameDetail(body: HTMLElement, g: HistoryEntry, back: () => void): void {
   const date = new Date(g.playedAt).toLocaleString(undefined, {
     month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
   });
@@ -228,7 +332,7 @@ function showGameDetail(body: HTMLElement, g: HistoryEntry): void {
       </div>
       <div class="gd-players">${rows}</div>
     </div>`);
-  detail.querySelector(".acct-back")!.addEventListener("click", () => void renderHistory(body));
+  detail.querySelector(".acct-back")!.addEventListener("click", () => back());
   body.replaceChildren(detail);
 }
 
@@ -295,7 +399,9 @@ async function renderFriends(body: HTMLElement): Promise<void> {
             ? `<span class="fr-tag">Requested</span>`
             : `<button class="fr-btn add">Add</button>`;
         const row = userRow(u, actions);
-        row.querySelector(".add")?.addEventListener("click", async () => {
+        openProfileOnClick(row, u, body, refresh);
+        row.querySelector(".add")?.addEventListener("click", async (ev) => {
+          ev.stopPropagation();
           await sendRequest(u.id);
           refresh();
         });
@@ -330,6 +436,7 @@ async function renderFriends(body: HTMLElement): Promise<void> {
   }
   for (const e of friends) {
     const row = userRow(e.user, `<button class="fr-btn decline" title="Remove friend">✕</button>`);
+    openProfileOnClick(row, e.user, body, refresh);
     // Unfriending asks for confirmation (swaps the actions to Yes/No inline).
     row.querySelector(".decline")!.addEventListener("click", () => {
       const actions = row.querySelector(".fr-actions") as HTMLElement;
@@ -360,6 +467,57 @@ async function renderFriends(body: HTMLElement): Promise<void> {
   }
 
   body.replaceChildren(wrap);
+}
+
+/** Make a user row's avatar + name open that player's profile when tapped. */
+function openProfileOnClick(row: HTMLElement, u: FriendUser, body: HTMLElement, back: () => void): void {
+  const open = (): void => void showFriendProfile(body, u, back);
+  for (const sel of [".acct-avatar", ".fr-meta"]) {
+    const target = row.querySelector(sel) as HTMLElement | null;
+    if (target) { target.classList.add("clickable"); target.addEventListener("click", open); }
+  }
+}
+
+/** A friend's public profile: their record + recent games (newest first). */
+async function showFriendProfile(body: HTMLElement, u: FriendUser, back: () => void): Promise<void> {
+  body.replaceChildren(el(`<div class="acct-loading">Loading ${escapeHtml(u.displayName)}…</div>`));
+  const [stats, history] = await Promise.all([fetchUserStats(u.id), fetchUserHistory(u.id, 50)]);
+  if (!body.isConnected) return;
+  const handle = u.username ? "@" + escapeHtml(u.username) : "";
+  const pct = stats && stats.games ? Math.round(stats.winRate * 100) : 0;
+  const view = el(`
+    <div class="acct-detail">
+      <button class="acct-back">← Back to friends</button>
+      <div class="fp-head">
+        <span class="acct-avatar big" style="--ac:${COLOR_HEX[u.favoriteColor]}">${escapeHtml(initials(u.displayName))}</span>
+        <div>
+          <div class="fp-name">${escapeHtml(u.displayName)}</div>
+          <div class="fp-handle">${handle}</div>
+        </div>
+      </div>
+      <div class="acct-stat-grid">
+        <div class="acct-stat"><div class="acct-stat-n">${stats?.games ?? 0}</div><div class="acct-stat-l">Games</div></div>
+        <div class="acct-stat win"><div class="acct-stat-n">${stats?.wins ?? 0}</div><div class="acct-stat-l">Wins</div></div>
+        <div class="acct-stat loss"><div class="acct-stat-n">${stats?.losses ?? 0}</div><div class="acct-stat-l">Losses</div></div>
+        <div class="acct-stat"><div class="acct-stat-n">${pct}%</div><div class="acct-stat-l">Win rate</div></div>
+        <div class="acct-stat"><div class="acct-stat-n">${stats?.bestVp ?? 0}</div><div class="acct-stat-l">Best VP</div></div>
+      </div>
+      <div class="acct-winbar" title="${pct}% wins"><i style="width:${pct}%"></i></div>
+      <div class="fr-title" style="margin-top:14px">Recent games</div>
+      <div class="acct-history fp-history"></div>
+    </div>`);
+  view.querySelector(".acct-back")!.addEventListener("click", () => back());
+  const list = view.querySelector(".fp-history") as HTMLElement;
+  if (history.length === 0) {
+    list.appendChild(el(`<div class="acct-empty">No games recorded yet.</div>`));
+  } else {
+    for (const g of history) {
+      const row = historyRow(g);
+      row.addEventListener("click", () => showGameDetail(body, g, () => void showFriendProfile(body, u, back)));
+      list.appendChild(row);
+    }
+  }
+  body.replaceChildren(view);
 }
 
 /** Edit tab: display name, username (with availability), favorite color, sign out. */
