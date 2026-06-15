@@ -2237,11 +2237,19 @@ export class HUD {
       ctx.fill();
     }
 
-    // The live viewport rectangle.
+    // The live "you are here" viewport box: a translucent fill + bright border,
+    // clamped to the minimap so it's always visible (when zoomed in it shrinks
+    // to clearly show which slice of the galaxy you're looking at).
     const vr = this.board.visibleBoardRect();
-    ctx.strokeStyle = "rgba(140, 190, 255, 0.85)";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(px(vr.x0), py(vr.y0), (vr.x1 - vr.x0) * s, (vr.y1 - vr.y0) * s);
+    let rx0 = px(vr.x0), ry0 = py(vr.y0), rx1 = px(vr.x1), ry1 = py(vr.y1);
+    rx0 = Math.max(0, Math.min(rx0, W)); rx1 = Math.max(0, Math.min(rx1, W));
+    ry0 = Math.max(0, Math.min(ry0, H)); ry1 = Math.max(0, Math.min(ry1, H));
+    const rw = Math.max(4, rx1 - rx0), rh = Math.max(4, ry1 - ry0);
+    ctx.fillStyle = "rgba(120, 190, 255, 0.16)";
+    ctx.fillRect(rx0, ry0, rw, rh);
+    ctx.strokeStyle = "rgba(180, 215, 255, 0.95)";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(rx0, ry0, rw, rh);
   }
 
   /** Y3: big center-screen chooser for the round-4 setup decisions (starting

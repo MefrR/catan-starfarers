@@ -18,6 +18,30 @@ export interface FriendshipCardDef {
   text: string;
 }
 
+/** Scientists' faithful 5-card deck: each card permanently grants boosters
+ *  (speed) and/or cannons (combat). A player may hold several; their bonuses
+ *  stack (see scientistBonus). Each id is unique so the outpost grants one per
+ *  card. */
+const SCIENTIST_GRANTS: { id: string; boosters: number; cannons: number; name: string }[] = [
+  { id: "scientists:bc1", boosters: 1, cannons: 1, name: "Improved Upgrades" },
+  { id: "scientists:bc2", boosters: 1, cannons: 1, name: "Improved Upgrades" },
+  { id: "scientists:bc3", boosters: 1, cannons: 1, name: "Improved Upgrades" },
+  { id: "scientists:bb", boosters: 2, cannons: 0, name: "Improved Boosters" },
+  { id: "scientists:cc", boosters: 0, cannons: 2, name: "Improved Cannons" },
+];
+const scientistText = (b: number, c: number): string => {
+  const parts: string[] = [];
+  if (b) parts.push(`+${b} speed (${b} booster${b > 1 ? "s" : ""})`);
+  if (c) parts.push(`+${c} combat (${c} cannon${c > 1 ? "s" : ""})`);
+  return `Your ships gain ${parts.join(" and ")}.`;
+};
+const SCIENTIST_CARDS: FriendshipCardDef[] = SCIENTIST_GRANTS.map((g) => ({
+  id: g.id,
+  civ: "scientists" as AlienCiv,
+  name: g.name,
+  text: scientistText(g.boosters, g.cannons),
+}));
+
 /** Every grantable friendship card, grouped by civ. Travelers are encounter-only. */
 export const FRIENDSHIP_CARDS: FriendshipCardDef[] = [
   // Green Folk — Production Increase: +1 of a resource type when it's produced.
@@ -27,19 +51,11 @@ export const FRIENDSHIP_CARDS: FriendshipCardDef[] = [
     name: "Production Increase",
     text: `When your colonies produce ${r}, gain 1 extra ${r}.`,
   })),
-  // Scientists — Improved Upgrades: virtual boosters / cannons.
-  {
-    id: "scientists:boosters",
-    civ: "scientists",
-    name: "Improved Boosters",
-    text: "Your ships gain +2 speed (as if you had 2 extra boosters).",
-  },
-  {
-    id: "scientists:cannons",
-    civ: "scientists",
-    name: "Improved Cannons",
-    text: "Your ships gain +2 combat strength (as if you had 2 extra cannons).",
-  },
+  // Scientists — Improved Upgrades: the faithful 5-card deck. Three cards give
+  // +1 booster & +1 cannon, one gives +2 boosters, one gives +2 cannons. Each
+  // is a unique card (one grant per card, like every outpost deck), and a player
+  // can hold several, stacking their speed/combat bonuses (see scientistBonus).
+  ...SCIENTIST_CARDS,
   // Diplomats.
   {
     id: "diplomats:reducedTribute",
@@ -87,12 +103,17 @@ for (const c of FRIENDSHIP_CARDS) {
 
 const has = (p: PlayerState, id: string): boolean => p.friendshipCards.includes(id);
 
-/** Speed/combat bonus from Scientist "Improved Upgrades" cards. */
+/** Speed/combat bonus from Scientist upgrade cards — stacks across all held. */
 export function scientistBonus(p: PlayerState): { speed: number; combat: number } {
-  return {
-    speed: has(p, "scientists:boosters") ? 2 : 0,
-    combat: has(p, "scientists:cannons") ? 2 : 0,
-  };
+  let speed = 0;
+  let combat = 0;
+  for (const g of SCIENTIST_GRANTS) {
+    if (has(p, g.id)) {
+      speed += g.boosters;
+      combat += g.cannons;
+    }
+  }
+  return { speed, combat };
 }
 
 /** Resources for which this player has a Green Folk production bonus. */

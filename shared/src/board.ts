@@ -132,6 +132,9 @@ interface Slot {
   vrow: number;
   /** The 3 hexes of this slot's triangle. */
   hexes: [number, number][];
+  /** Fog-randomized outposts tag their half: true = top (advanced civs:
+   *  Diplomats/Scientists), false = bottom (Green Folk/Merchants). */
+  topHalf?: boolean;
 }
 
 function buildSlots(): Slot[] {
@@ -186,20 +189,35 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
   const rand = rng(opts.seed ?? 0xc47a4);
   const slots = buildSlots();
 
-  // P6b / Q9: randomize the *positions* of the discoverable clusters in a fog
-  // game. Planetary systems and empty clusters swap freely among themselves so a
-  // "???" tile may turn out to be a full system OR empty space. Outposts keep
-  // their grid slots (so the Diplomats & Scientists stay on the far top row, per
-  // Q9), the central hub and the bottom Catanian home row stay fixed.
+  // P6b / Q9 + AE: in a fog game, randomize the *positions* of EVERYTHING in the
+  // discoverable field — outposts can now sit where a planet cluster normally
+  // would, and vice-versa. Constraint (per the printed board's flavour): the two
+  // "advanced" civs (Diplomats & Scientists) live somewhere in the TOP half of
+  // the map, and the two "basic" civs (Green Folk & Merchants) in the BOTTOM
+  // half — but exactly where, within each half, is reshuffled every game. The
+  // central hub and the bottom Catanian home row stay fixed.
   if (opts.randomizeLayout) {
-    const movable = slots.filter((s) => s.role === "system" || s.role === "emptyCluster");
-    const roles = shuffle(
-      movable.map((s) => s.role),
+    const upper = slots.filter((s) => s.role !== "home" && s.role !== "hub");
+    // Halves by visual row: rows 0–2 = top, rows 3–4 = bottom.
+    const topHalf = shuffle(upper.filter((s) => s.vrow <= 2), rand);
+    const bottomHalf = shuffle(upper.filter((s) => s.vrow >= 3), rand);
+    // 2 outposts per half; the rest of the field keeps its 8 systems + 3 empty
+    // clusters, distributed at random across every non-outpost slot.
+    const fillRoles = shuffle(
+      [...new Array(8).fill("system"), ...new Array(3).fill("emptyCluster")] as SlotRole[],
       rand,
     );
-    movable.forEach((s, i) => {
-      s.role = roles[i]!;
-    });
+    const topOut = topHalf.slice(0, 2);
+    const botOut = bottomHalf.slice(0, 2);
+    const outpostSet = new Set([...topOut, ...botOut]);
+    for (const s of topOut) s.topHalf = true;
+    for (const s of botOut) s.topHalf = false;
+    // Reassign EVERY upper slot from scratch (don't trust pre-randomization
+    // roles, or leftover original outposts would survive as extras).
+    let fi = 0;
+    for (const s of upper) {
+      s.role = outpostSet.has(s) ? "outpost" : fillRoles[fi++]!;
+    }
   }
 
   // Number chits, shuffled, cycled if we run out.
@@ -287,7 +305,13 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
       (slot.role === "home" ? homeSystems : otherSystems).push(def);
     } else if (slot.role === "outpost") {
       // Outposts span the full 3-hex slot triangle (like a planetary system).
-      outpostDefs.push({ sectorId, q: slot.q, r: slot.r, hexes: slot.hexes, topRow: slot.vrow === 0 });
+      // "topRow" = advanced half. In fog games the slot was tagged with its
+      // half during randomization; in charted games fall back to the fixed
+      // far-top row (vrow 0) carrying the advanced civs.
+      outpostDefs.push({
+        sectorId, q: slot.q, r: slot.r, hexes: slot.hexes,
+        topRow: slot.topHalf ?? slot.vrow === 0,
+      });
       for (const [hq, hr] of slot.hexes) {
         outpostHex.set(hexKey(hq, hr), sectorId);
         usedHex.add(hexKey(hq, hr));
