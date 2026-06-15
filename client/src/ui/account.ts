@@ -1,5 +1,6 @@
 import { PLAYER_COLORS, type PlayerColor } from "@starfarers/shared";
 import { auth, isAuthConfigured, type Profile } from "../auth.js";
+import { fetchMyStats, fetchMyHistory, type HistoryEntry } from "../social.js";
 
 const el = (html: string): HTMLElement => {
   const t = document.createElement("template");
@@ -30,11 +31,13 @@ const escapeHtml = (s: string): string =>
 const initials = (name: string): string =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "C";
 
+/** Validate a username: 3–20 chars, letters/numbers/underscore. */
+const validUsername = (s: string): boolean => /^[a-zA-Z0-9_]{3,20}$/.test(s);
+
 /**
- * The top-right account chip on the landing hero. Shows "Sign in" when signed
- * out, or the player's avatar + name when signed in (click → account page).
- * Renders nothing at all when Supabase isn't configured, so the game is
- * unchanged until accounts are set up.
+ * The top-right account chip on the landing hero. "Sign in" when signed out, or
+ * the player's avatar + name when signed in (click → account page). Renders
+ * nothing when Supabase isn't configured.
  */
 export function mountAccountChip(host: HTMLElement): void {
   if (!isAuthConfigured) return;
@@ -57,94 +60,43 @@ export function mountAccountChip(host: HTMLElement): void {
       chip.appendChild(btn);
     }
   };
-  // onChange fires once immediately, then on every sign-in / edit / sign-out.
   auth.onChange(paint);
 }
 
-/** The account page overlay: avatar, editable display name, favorite-color
- *  picker, and sign out. (Win/loss + history land here in Phase 2.) */
+/** The account page overlay: header + Profile / Record / History tabs. */
 export function openAccountPage(): void {
   const profile = auth.currentProfile();
   if (!profile) return;
 
-  let name = profile.displayName;
-  let color: PlayerColor = profile.favoriteColor;
-  let dirty = false;
-
   const overlay = el(`<div class="acct-overlay"></div>`);
   const card = el(`
-    <div class="acct-card">
+    <div class="acct-card wide">
       <button class="acct-close" title="Close">✕</button>
       <div class="acct-head">
-        <span class="acct-avatar big" style="--ac:${COLOR_HEX[color]}">${escapeHtml(initials(name))}</span>
+        <span class="acct-avatar big" style="--ac:${COLOR_HEX[profile.favoriteColor]}">${escapeHtml(initials(profile.displayName))}</span>
         <div class="acct-head-meta">
-          <div class="acct-card-title">Commander Profile</div>
-          <div class="acct-card-sub">Your name and color follow you into every room.</div>
+          <div class="acct-card-title">${escapeHtml(profile.displayName)}</div>
+          <div class="acct-handle">${profile.username ? "@" + escapeHtml(profile.username) : "Set a username to add friends"}</div>
         </div>
       </div>
-
-      <label class="acct-field">
-        <span class="acct-label">Display name</span>
-        <input class="acct-input" type="text" maxlength="24" value="${escapeHtml(name)}" />
-      </label>
-
-      <div class="acct-field">
-        <span class="acct-label">Favorite color</span>
-        <div class="acct-swatches"></div>
+      <div class="acct-tabs">
+        <button class="acct-tab active" data-tab="record">Record</button>
+        <button class="acct-tab" data-tab="history">History</button>
+        <button class="acct-tab" data-tab="profile">Edit profile</button>
       </div>
-
-      <div class="acct-actions">
-        <button class="acct-save" disabled>Saved</button>
-        <button class="acct-signout secondary">Sign out</button>
-      </div>
-      <div class="acct-stats-soon">📊 Win/loss record &amp; game history are coming soon.</div>
+      <div class="acct-body"></div>
     </div>`);
   overlay.appendChild(card);
 
-  const avatar = card.querySelector(".acct-avatar") as HTMLElement;
-  const input = card.querySelector(".acct-input") as HTMLInputElement;
-  const save = card.querySelector(".acct-save") as HTMLButtonElement;
-  const swatches = card.querySelector(".acct-swatches") as HTMLElement;
-
-  const markDirty = (): void => {
-    dirty = name.trim() !== profile.displayName || color !== profile.favoriteColor;
-    save.disabled = !dirty || name.trim().length === 0;
-    save.textContent = dirty ? "Save changes" : "Saved";
+  const body = card.querySelector(".acct-body") as HTMLElement;
+  const tabs = [...card.querySelectorAll<HTMLElement>(".acct-tab")];
+  const show = (tab: string): void => {
+    tabs.forEach((t) => t.classList.toggle("active", t.dataset.tab === tab));
+    if (tab === "record") renderRecord(body);
+    else if (tab === "history") renderHistory(body);
+    else renderProfileEdit(body, card, overlay);
   };
-
-  for (const c of PLAYER_COLORS) {
-    const sw = el(
-      `<button class="acct-swatch ${c === color ? "selected" : ""}" title="${COLOR_NAME[c]}" style="--sw:${COLOR_HEX[c]}"></button>`,
-    );
-    sw.addEventListener("click", () => {
-      color = c;
-      swatches.querySelectorAll(".acct-swatch").forEach((s) => s.classList.remove("selected"));
-      sw.classList.add("selected");
-      avatar.style.setProperty("--ac", COLOR_HEX[c]);
-      markDirty();
-    });
-    swatches.appendChild(sw);
-  }
-
-  input.addEventListener("input", () => {
-    name = input.value;
-    avatar.textContent = initials(name);
-    markDirty();
-  });
-
-  save.addEventListener("click", async () => {
-    save.disabled = true;
-    save.textContent = "Saving…";
-    try {
-      await auth.updateProfile({ displayName: name.trim(), favoriteColor: color });
-      profile.displayName = name.trim();
-      profile.favoriteColor = color;
-      save.textContent = "Saved";
-    } catch {
-      save.textContent = "Save failed — retry";
-      save.disabled = false;
-    }
-  });
+  tabs.forEach((t) => t.addEventListener("click", () => show(t.dataset.tab!)));
 
   const close = (): void => {
     overlay.classList.remove("show");
@@ -154,11 +106,199 @@ export function openAccountPage(): void {
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) close();
   });
-  card.querySelector(".acct-signout")!.addEventListener("click", async () => {
-    await auth.signOut();
-    close();
-  });
 
   document.body.appendChild(overlay);
   requestAnimationFrame(() => overlay.classList.add("show"));
+  show("record");
+}
+
+/** Record tab: win/loss summary cards. */
+async function renderRecord(body: HTMLElement): Promise<void> {
+  body.replaceChildren(el(`<div class="acct-loading">Loading your record…</div>`));
+  const s = await fetchMyStats();
+  if (!s) {
+    body.replaceChildren(el(`<div class="acct-empty">Couldn't load your record. Try again later.</div>`));
+    return;
+  }
+  if (s.games === 0) {
+    body.replaceChildren(
+      el(`<div class="acct-empty">No games yet — finish a match and your record appears here. 🚀</div>`),
+    );
+    return;
+  }
+  const pct = Math.round(s.winRate * 100);
+  body.replaceChildren(
+    el(`
+      <div class="acct-stat-grid">
+        <div class="acct-stat"><div class="acct-stat-n">${s.games}</div><div class="acct-stat-l">Games</div></div>
+        <div class="acct-stat win"><div class="acct-stat-n">${s.wins}</div><div class="acct-stat-l">Wins</div></div>
+        <div class="acct-stat loss"><div class="acct-stat-n">${s.losses}</div><div class="acct-stat-l">Losses</div></div>
+        <div class="acct-stat"><div class="acct-stat-n">${pct}%</div><div class="acct-stat-l">Win rate</div></div>
+        <div class="acct-stat"><div class="acct-stat-n">${s.bestVp}</div><div class="acct-stat-l">Best VP</div></div>
+      </div>
+      <div class="acct-winbar" title="${pct}% wins"><i style="width:${pct}%"></i></div>`),
+  );
+}
+
+/** History tab: recent games, newest first. */
+async function renderHistory(body: HTMLElement): Promise<void> {
+  body.replaceChildren(el(`<div class="acct-loading">Loading your games…</div>`));
+  const games = await fetchMyHistory(20);
+  if (games.length === 0) {
+    body.replaceChildren(el(`<div class="acct-empty">No games recorded yet.</div>`));
+    return;
+  }
+  const list = el(`<div class="acct-history"></div>`);
+  for (const g of games) list.appendChild(historyRow(g));
+  body.replaceChildren(list);
+}
+
+function historyRow(g: HistoryEntry): HTMLElement {
+  const date = new Date(g.playedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const win = g.result === "win";
+  const others = g.players
+    .filter((p) => !p.userId)
+    .map((p) => `<span style="color:${COLOR_HEX[p.color] ?? "#fff"}">${escapeHtml(p.name)} ${p.vp}</span>`)
+    .join(" · ");
+  const row = el(`
+    <div class="acct-hrow ${win ? "win" : "loss"}">
+      <span class="acct-hres">${win ? "WIN" : "LOSS"}</span>
+      <div class="acct-hmid">
+        <div class="acct-hline">${g.finalVp} VP · ${ordinal(g.placement)} place${g.vsAi ? " · vs AI" : ""}</div>
+        <div class="acct-hsub">${others || "—"}</div>
+      </div>
+      <span class="acct-hdate">${date}</span>
+    </div>`);
+  return row;
+}
+
+const ordinal = (n: number): string => {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] ?? s[v] ?? "th");
+};
+
+/** Edit tab: display name, username (with availability), favorite color, sign out. */
+function renderProfileEdit(body: HTMLElement, card: HTMLElement, overlay: HTMLElement): void {
+  const profile = auth.currentProfile();
+  if (!profile) return;
+  let name = profile.displayName;
+  let username = profile.username ?? "";
+  let color: PlayerColor = profile.favoriteColor;
+
+  const view = el(`
+    <div class="acct-edit">
+      <label class="acct-field">
+        <span class="acct-label">Display name</span>
+        <input class="acct-input" id="dn" type="text" maxlength="24" value="${escapeHtml(name)}" />
+      </label>
+      <label class="acct-field">
+        <span class="acct-label">Username (for friends)</span>
+        <input class="acct-input" id="un" type="text" maxlength="20" placeholder="3–20 letters, numbers, _" value="${escapeHtml(username)}" />
+        <span class="acct-hint" id="unhint"></span>
+      </label>
+      <div class="acct-field">
+        <span class="acct-label">Favorite color</span>
+        <div class="acct-swatches"></div>
+      </div>
+      <div class="acct-actions">
+        <button class="acct-save" disabled>Saved</button>
+        <button class="acct-signout secondary">Sign out</button>
+      </div>
+    </div>`);
+  body.replaceChildren(view);
+
+  const avatar = card.querySelector(".acct-avatar") as HTMLElement;
+  const dn = view.querySelector("#dn") as HTMLInputElement;
+  const un = view.querySelector("#un") as HTMLInputElement;
+  const hint = view.querySelector("#unhint") as HTMLElement;
+  const save = view.querySelector(".acct-save") as HTMLButtonElement;
+  const swatches = view.querySelector(".acct-swatches") as HTMLElement;
+
+  let usernameOk = true; // empty (unchanged) or confirmed available
+  let checkSeq = 0;
+
+  const refresh = (): void => {
+    const changed =
+      name.trim() !== profile.displayName ||
+      username.trim() !== (profile.username ?? "") ||
+      color !== profile.favoriteColor;
+    save.disabled = !changed || name.trim().length === 0 || !usernameOk;
+    save.textContent = changed ? "Save changes" : "Saved";
+  };
+
+  for (const c of PLAYER_COLORS) {
+    const sw = el(`<button class="acct-swatch ${c === color ? "selected" : ""}" title="${COLOR_NAME[c]}" style="--sw:${COLOR_HEX[c]}"></button>`);
+    sw.addEventListener("click", () => {
+      color = c;
+      swatches.querySelectorAll(".acct-swatch").forEach((s) => s.classList.remove("selected"));
+      sw.classList.add("selected");
+      avatar.style.setProperty("--ac", COLOR_HEX[c]);
+      refresh();
+    });
+    swatches.appendChild(sw);
+  }
+
+  dn.addEventListener("input", () => {
+    name = dn.value;
+    avatar.textContent = initials(name);
+    refresh();
+  });
+
+  un.addEventListener("input", () => {
+    username = un.value;
+    const trimmed = username.trim();
+    if (trimmed === (profile.username ?? "")) {
+      usernameOk = true;
+      hint.textContent = "";
+      hint.className = "acct-hint";
+      refresh();
+      return;
+    }
+    if (!validUsername(trimmed)) {
+      usernameOk = false;
+      hint.textContent = "3–20 letters, numbers or _";
+      hint.className = "acct-hint bad";
+      refresh();
+      return;
+    }
+    usernameOk = false; // pending check
+    hint.textContent = "Checking…";
+    hint.className = "acct-hint";
+    refresh();
+    const seq = ++checkSeq;
+    void auth.isUsernameAvailable(trimmed).then((free) => {
+      if (seq !== checkSeq) return; // a newer keystroke superseded this
+      usernameOk = free;
+      hint.textContent = free ? "✓ Available" : "✗ Taken";
+      hint.className = `acct-hint ${free ? "good" : "bad"}`;
+      refresh();
+    });
+  });
+
+  save.addEventListener("click", async () => {
+    save.disabled = true;
+    save.textContent = "Saving…";
+    try {
+      await auth.updateProfile({
+        displayName: name.trim(),
+        favoriteColor: color,
+        username: username.trim() || (profile.username ?? ""),
+      });
+      // Reflect the new identity in the card header without reopening.
+      (card.querySelector(".acct-card-title") as HTMLElement).textContent = name.trim();
+      const handleEl = card.querySelector(".acct-handle") as HTMLElement;
+      handleEl.textContent = username.trim() ? "@" + username.trim() : "Set a username to add friends";
+      save.textContent = "Saved";
+    } catch {
+      save.textContent = "Save failed — retry";
+      save.disabled = false;
+    }
+  });
+
+  view.querySelector(".acct-signout")!.addEventListener("click", async () => {
+    await auth.signOut();
+    overlay.classList.remove("show");
+    setTimeout(() => overlay.remove(), 200);
+  });
 }

@@ -8,6 +8,7 @@ import { HUD } from "./ui/hud.js";
 import { TutorialDriver } from "./ui/tutorial.js";
 import { mountAccountChip } from "./ui/account.js";
 import { auth } from "./auth.js";
+import { recordLocalGame } from "./social.js";
 import { LocalGame } from "./game/store.js";
 import type { GameDriver, Seat } from "./game/store.js";
 
@@ -46,6 +47,14 @@ async function boot(): Promise<void> {
       board.humanId = game.humanId;
       (window as unknown as { __sf: unknown }).__sf = { game, board };
       const unsubBoard = game.subscribe((state) => board.render(state));
+      // Accounts: record single-player results to the signed-in profile when a
+      // game ends (best-effort, no-ops when signed out). Multiplayer results are
+      // recorded server-side later, so this is single-player only.
+      const unsubRecord = game.isMultiplayer
+        ? () => {}
+        : game.subscribe((state) => {
+            if (state.phaseState.phase === "gameOver") void recordLocalGame(state, game.humanId);
+          });
       app.replaceChildren(); // clear the menu; HUD mounts its own overlay
       const hud = new HUD(app, game, board);
       // Z6: the guided first game attaches its coach bubble over the live HUD.
@@ -56,6 +65,7 @@ async function boot(): Promise<void> {
       teardownGame = (): void => {
         tut?.destroy();
         unsubBoard();
+        unsubRecord();
         hud.destroy();
         teardownGame = null;
       };

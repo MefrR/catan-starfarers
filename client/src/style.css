@@ -2045,10 +2045,62 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   background: rgba(255, 93, 93, 0.1); color: #ff9a9a; border: 1px solid rgba(255, 93, 93, 0.35);
 }
 .acct-signout:hover { background: rgba(255, 93, 93, 0.18); }
-.acct-stats-soon {
-  margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 12.5px; color: var(--muted); text-align: center;
+
+/* AB5: wider profile card with tabs (Record / History / Edit). */
+.acct-card.wide { width: min(460px, 94vw); }
+.acct-handle { font-size: 13px; color: rgba(120, 200, 255, 0.85); margin-top: 2px; }
+.acct-tabs {
+  display: flex; gap: 4px; margin: 18px 0 16px; padding: 4px;
+  background: rgba(0, 0, 0, 0.3); border-radius: 12px;
 }
+.acct-tab {
+  flex: 1; padding: 8px 6px; border-radius: 9px; border: none; cursor: pointer;
+  background: transparent; color: var(--muted); font-size: 13px; font-weight: 600;
+}
+.acct-tab.active { background: rgba(120, 170, 255, 0.16); color: #eaf2ff; }
+.acct-body { min-height: 150px; }
+.acct-loading, .acct-empty {
+  text-align: center; color: var(--muted); font-size: 13.5px; padding: 36px 12px; line-height: 1.6;
+}
+
+/* Record tab */
+.acct-stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.acct-stat {
+  background: rgba(255, 255, 255, 0.045); border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px; padding: 14px 8px; text-align: center;
+}
+.acct-stat.win { border-color: rgba(82, 210, 115, 0.35); }
+.acct-stat.loss { border-color: rgba(255, 93, 93, 0.3); }
+.acct-stat-n { font-size: 26px; font-weight: 900; color: #eaf2ff; }
+.acct-stat.win .acct-stat-n { color: #6fe89a; }
+.acct-stat.loss .acct-stat-n { color: #ff8a8a; }
+.acct-stat-l { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-top: 3px; }
+.acct-winbar {
+  height: 8px; border-radius: 999px; margin-top: 14px; overflow: hidden;
+  background: rgba(255, 93, 93, 0.25);
+}
+.acct-winbar i { display: block; height: 100%; background: linear-gradient(92deg, #39d8c8, #52e8a0); }
+
+/* History tab */
+.acct-history { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+.acct-hrow {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 11px;
+  background: rgba(255, 255, 255, 0.04); border-left: 3px solid var(--muted);
+}
+.acct-hrow.win { border-left-color: #52d273; }
+.acct-hrow.loss { border-left-color: #ff5d5d; }
+.acct-hres { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; width: 36px; }
+.acct-hrow.win .acct-hres { color: #6fe89a; }
+.acct-hrow.loss .acct-hres { color: #ff8a8a; }
+.acct-hmid { flex: 1; min-width: 0; }
+.acct-hline { font-size: 13px; color: #eaf2ff; }
+.acct-hsub { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-hdate { font-size: 11.5px; color: var(--muted); }
+
+/* Edit tab */
+.acct-hint { display: block; font-size: 11.5px; margin-top: 5px; color: var(--muted); min-height: 14px; }
+.acct-hint.good { color: #6fe89a; }
+.acct-hint.bad { color: #ff8a8a; }
 
 /* Z6: the coach bubble + spotlight ring of the guided first game. */
 .tut-bubble button::before,

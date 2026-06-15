@@ -98,5 +98,59 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 ```
 
-Phase 2 (game history) adds `games` + `game_players` tables — documented here
-when we build it.
+## Schema v2 — username + game history (run this too)
+
+This adds a **username** to profiles (for friends, added later), and the
+**games** / **game_players** tables for win-loss records and history. Stats are
+viewable by anyone signed in (your choice). Paste into the SQL editor → Run.
+
+```sql
+-- Username (unique, case-insensitive). Nullable until the player picks one.
+alter table public.profiles add column if not exists username text;
+create unique index if not exists profiles_username_lower_idx
+  on public.profiles (lower(username));
+
+-- One row per finished game (full final table snapshot for history detail).
+create table if not exists public.games (
+  id uuid primary key default gen_random_uuid(),
+  client_game_id text unique,           -- dedupe: the in-engine game id
+  recorder_id uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  target_vp int not null default 15,
+  vs_ai boolean not null default false, -- single-player / had AI rivals
+  winner_name text,
+  winner_color text,
+  players jsonb not null default '[]'::jsonb  -- [{name,color,vp,placement,isAi,userId,stats}]
+);
+
+-- One row per HUMAN account in a game — the fast "my games" index.
+create table if not exists public.game_players (
+  id uuid primary key default gen_random_uuid(),
+  game_id uuid references public.games (id) on delete cascade,
+  user_id uuid references auth.users (id) on delete cascade,
+  result text not null,                 -- 'win' | 'loss'
+  placement int not null,               -- 1 = winner
+  final_vp int not null default 0
+);
+create index if not exists game_players_user_idx on public.game_players (user_id);
+
+alter table public.games enable row level security;
+alter table public.game_players enable row level security;
+
+-- Anyone signed in can READ games + results (you chose public stats).
+create policy "games readable" on public.games
+  for select to authenticated using (true);
+create policy "game_players readable" on public.game_players
+  for select to authenticated using (true);
+
+-- Single-player: a client records its OWN game + its own result row.
+-- (Multiplayer recording is written server-side with the service role later,
+--  which bypasses RLS — so no broad insert policy is needed here.)
+create policy "insert own game" on public.games
+  for insert to authenticated with check (auth.uid() = recorder_id);
+create policy "insert own result" on public.game_players
+  for insert to authenticated with check (auth.uid() = user_id);
+```
+
+Phase: **Friends** (a `friendships` table) and **presence/invites** land here
+when we build them next.
