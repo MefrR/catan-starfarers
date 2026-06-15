@@ -203,6 +203,11 @@ function finishSetup(state: GameState, rng: Rng): void {
   state.phaseState.setup = undefined;
   state.phaseState.phase = "production";
   state.phaseState.activePlayerIndex = start;
+  // Clear the dice left over from the roll-for-order step. The production roll
+  // button (and the turn-timer auto-roll) only fire when lastRoll is empty, so
+  // a stale value here would make the very first roll of the game do nothing —
+  // freezing the table on turn one. (Regular turns are cleared by endTurn.)
+  state.phaseState.lastRoll = undefined;
   recomputeVp(state);
   log(
     state,
