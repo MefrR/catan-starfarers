@@ -74,6 +74,10 @@ export class LobbyUI {
   private appliedFavColor = false;
   /** AC2: live presence subscription for the invite-friends panel. */
   private presenceUnsub: (() => void) | null = null;
+  /** AC2: friends already invited to this room, so we never invite twice
+   *  (the panel re-renders on every presence change, which would otherwise
+   *  reset each "Invited" button back to a clickable "Invite"). */
+  private invited = new Set<string>();
 
   constructor(
     mount: HTMLElement,
@@ -389,15 +393,18 @@ export class LobbyUI {
         }
         for (const f of friends) {
           const on = presence.isOnline(f.user.id);
+          const sent = this.invited.has(f.user.id);
           const row = el(`
             <div class="fr-row">
               <span class="pres-dot ${on ? "on" : ""}"></span>
               <span class="acct-avatar sm" style="--ac:${COLOR_HEX[f.user.favoriteColor] ?? "#4fa8ff"}">${escapeHtml(initials(f.user.displayName))}</span>
               <div class="fr-meta"><div class="fr-name">${escapeHtml(f.user.displayName)}</div><div class="fr-handle">${on ? "online" : "offline"}</div></div>
-              <div class="fr-actions"><button class="fr-btn add invite" ${on ? "" : "disabled"}>Invite</button></div>
+              <div class="fr-actions"><button class="fr-btn add invite" ${sent || !on ? "disabled" : ""}>${sent ? "Invited ✓" : "Invite"}</button></div>
             </div>`);
           const btn = row.querySelector(".invite") as HTMLButtonElement;
           btn.addEventListener("click", () => {
+            if (this.invited.has(f.user.id)) return;
+            this.invited.add(f.user.id);
             btn.disabled = true;
             btn.textContent = "Invited ✓";
             void presence.sendInvite(f.user.id, roomCode);
