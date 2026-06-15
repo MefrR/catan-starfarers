@@ -1572,12 +1572,15 @@ export class HUD {
       }
       return;
     }
-    const sig = `${owed}|${RESOURCES.map((r) => this.discardSel[r] ?? 0).join(",")}`;
-    if (sig === this.shownDiscardSig) return;
+    // Rebuild the overlay only when the OWED amount changes (or it isn't up
+    // yet). Selecting cards updates the existing overlay IN PLACE — rebuilding
+    // it on every +/- tap tore it down and replayed its open animation, which
+    // looked like the window closing and popping back up.
+    const sig = `${owed}`;
+    if (sig === this.shownDiscardSig && document.querySelector(".discard-overlay")) return;
     this.shownDiscardSig = sig;
     document.querySelectorAll(".discard-overlay").forEach((n) => n.remove());
 
-    const picked = RESOURCES.reduce((s, r) => s + (this.discardSel[r] ?? 0), 0);
     const overlay = el(`<div class="discard-overlay"><div class="discard-card"></div></div>`);
     const card = overlay.querySelector(".discard-card") as HTMLElement;
     card.appendChild(el(`<div class="enc-tag">Spacedock 7</div>`));
@@ -1591,36 +1594,48 @@ export class HUD {
       card.appendChild(el(`<div class="dc-timer turn-timer"></div>`));
     }
     const picker = el(`<div class="enc-give"></div>`);
-    for (const r of RESOURCES) {
-      const have = me.hand[r];
-      const n = this.discardSel[r] ?? 0;
-      const cell = el(
-        `<div class="ptrade-cell res-cube ${n > 0 ? "on" : ""}" title="${RESOURCE_LABEL[r]}" style="--res:${RES_COLOR[r]}">
-           <span class="pc-glyph res-glyph">${resourceGlyphSvg(r)}</span>
-           <span class="pc-name">${RESOURCE_LABEL[r]}</span>
-           ${n > 0 ? `<span class="pc-badge">${n}</span>` : ""}
-           <div class="pc-stepper">
-             <button class="step minus" ${n <= 0 ? "disabled" : ""}>−</button>
-             <span class="pc-n">${n}/${have}</span>
-             <button class="step plus" ${n >= have || picked >= owed ? "disabled" : ""}>+</button>
-           </div>
-         </div>`,
-      );
-      const [minus, plus] = cell.querySelectorAll("button");
-      minus!.addEventListener("click", () => { this.discardSel[r] = Math.max(0, n - 1); this.rerender(); });
-      plus!.addEventListener("click", () => { this.discardSel[r] = n + 1; this.rerender(); });
-      picker.appendChild(cell);
-    }
+    const tally = el(`<div class="enc-give-tally"></div>`);
+    const btn = el(`<button class="discard-confirm" disabled>Discard</button>`);
+    btn.addEventListener("click", () => {
+      const picked = RESOURCES.reduce((s, r) => s + (this.discardSel[r] ?? 0), 0);
+      if (picked !== owed) return;
+      this.act({ t: "discard", resources: { ...this.discardSel } });
+      this.discardSel = {};
+    });
+    // Redraw the cells / tally / confirm WITHOUT touching the overlay element,
+    // so there's no teardown or animation replay between taps.
+    const refresh = (): void => {
+      picker.innerHTML = "";
+      const picked = RESOURCES.reduce((s, r) => s + (this.discardSel[r] ?? 0), 0);
+      for (const r of RESOURCES) {
+        const have = me.hand[r];
+        const n = this.discardSel[r] ?? 0;
+        const cell = el(
+          `<div class="ptrade-cell res-cube ${n > 0 ? "on" : ""}" title="${RESOURCE_LABEL[r]}" style="--res:${RES_COLOR[r]}">
+             <span class="pc-glyph res-glyph">${resourceGlyphSvg(r)}</span>
+             <span class="pc-name">${RESOURCE_LABEL[r]}</span>
+             ${n > 0 ? `<span class="pc-badge">${n}</span>` : ""}
+             <div class="pc-stepper">
+               <button class="step minus" ${n <= 0 ? "disabled" : ""}>−</button>
+               <span class="pc-n">${n}/${have}</span>
+               <button class="step plus" ${n >= have || picked >= owed ? "disabled" : ""}>+</button>
+             </div>
+           </div>`,
+        );
+        const [minus, plus] = cell.querySelectorAll("button");
+        minus!.addEventListener("click", () => { this.discardSel[r] = Math.max(0, (this.discardSel[r] ?? 0) - 1); refresh(); });
+        plus!.addEventListener("click", () => {
+          if ((this.discardSel[r] ?? 0) < have && picked < owed) { this.discardSel[r] = (this.discardSel[r] ?? 0) + 1; refresh(); }
+        });
+        picker.appendChild(cell);
+      }
+      tally.textContent = `${picked} / ${owed} selected`;
+      btn.toggleAttribute("disabled", picked !== owed);
+    };
     card.appendChild(picker);
-    card.appendChild(el(`<div class="enc-give-tally">${picked} / ${owed} selected</div>`));
-    const btn = el(`<button class="discard-confirm" ${picked === owed ? "" : "disabled"}>Discard</button>`);
-    if (picked === owed) {
-      btn.addEventListener("click", () => {
-        this.act({ t: "discard", resources: { ...this.discardSel } });
-        this.discardSel = {};
-      });
-    }
+    card.appendChild(tally);
     card.appendChild(btn);
+    refresh();
     document.body.appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add("show"));
   }
