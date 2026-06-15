@@ -63,12 +63,16 @@ create table if not exists public.profiles (
 alter table public.profiles enable row level security;
 
 -- Anyone may read a profile (names/colors show up in rooms for everyone).
+-- (drop-if-exists makes the whole script safe to re-run.)
+drop policy if exists "profiles are public to read" on public.profiles;
 create policy "profiles are public to read"
   on public.profiles for select using (true);
 
 -- You may only create/update YOUR OWN profile row.
+drop policy if exists "insert own profile" on public.profiles;
 create policy "insert own profile"
   on public.profiles for insert with check (auth.uid() = id);
+drop policy if exists "update own profile" on public.profiles;
 create policy "update own profile"
   on public.profiles for update using (auth.uid() = id);
 
@@ -138,16 +142,21 @@ alter table public.games enable row level security;
 alter table public.game_players enable row level security;
 
 -- Anyone signed in can READ games + results (you chose public stats).
+-- (drop-if-exists makes this safe to re-run.)
+drop policy if exists "games readable" on public.games;
 create policy "games readable" on public.games
   for select to authenticated using (true);
+drop policy if exists "game_players readable" on public.game_players;
 create policy "game_players readable" on public.game_players
   for select to authenticated using (true);
 
 -- Single-player: a client records its OWN game + its own result row.
 -- (Multiplayer recording is written server-side with the service role later,
 --  which bypasses RLS — so no broad insert policy is needed here.)
+drop policy if exists "insert own game" on public.games;
 create policy "insert own game" on public.games
   for insert to authenticated with check (auth.uid() = recorder_id);
+drop policy if exists "insert own result" on public.game_players;
 create policy "insert own result" on public.game_players
   for insert to authenticated with check (auth.uid() = user_id);
 ```
