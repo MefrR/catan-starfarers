@@ -155,27 +155,81 @@ async function renderHistory(body: HTMLElement): Promise<void> {
     return;
   }
   const list = el(`<div class="acct-history"></div>`);
-  for (const g of games) list.appendChild(historyRow(g));
+  for (const g of games) {
+    const row = historyRow(g);
+    row.addEventListener("click", () => showGameDetail(body, g));
+    list.appendChild(row);
+  }
   body.replaceChildren(list);
 }
 
 function historyRow(g: HistoryEntry): HTMLElement {
   const date = new Date(g.playedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
   const win = g.result === "win";
+  // Rivals = everyone but you (your row is the one with your placement).
   const others = g.players
-    .filter((p) => !p.userId)
+    .filter((p) => p.placement !== g.placement)
     .map((p) => `<span style="color:${COLOR_HEX[p.color] ?? "#fff"}">${escapeHtml(p.name)} ${p.vp}</span>`)
     .join(" · ");
   const row = el(`
-    <div class="acct-hrow ${win ? "win" : "loss"}">
+    <div class="acct-hrow ${win ? "win" : "loss"}" role="button" tabindex="0" title="View full result">
       <span class="acct-hres">${win ? "WIN" : "LOSS"}</span>
       <div class="acct-hmid">
         <div class="acct-hline">${g.finalVp} VP · ${ordinal(g.placement)} place${g.vsAi ? " · vs AI" : ""}</div>
         <div class="acct-hsub">${others || "—"}</div>
       </div>
       <span class="acct-hdate">${date}</span>
+      <span class="acct-hchev">›</span>
     </div>`);
+  row.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); row.click(); }
+  });
   return row;
+}
+
+/** Full result of one past game: final standings + per-player stats. */
+function showGameDetail(body: HTMLElement, g: HistoryEntry): void {
+  const date = new Date(g.playedAt).toLocaleString(undefined, {
+    month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+  });
+  const ranked = [...g.players].sort((a, b) => a.placement - b.placement);
+  const rows = ranked
+    .map((p) => {
+      const isMe = p.placement === g.placement;
+      const pc = COLOR_HEX[p.color] ?? "#fff";
+      const stat = (n: number, label: string): string =>
+        n > 0 ? `<span class="gd-stat"><b>${n}</b>${label}</span>` : "";
+      const stats = [
+        stat(p.resources, "resources"),
+        stat(p.distance, "sectors"),
+        stat(p.encounters, "encounters"),
+        stat(p.trades, "trades"),
+        stat(p.pirates, "pirates"),
+        stat(p.ice, "ice"),
+      ].join("");
+      return `
+        <div class="gd-row ${p.placement === 1 ? "win" : ""} ${isMe ? "me" : ""}">
+          <span class="gd-rank">${p.placement}</span>
+          <span class="acct-avatar sm" style="--ac:${pc}">${escapeHtml(initials(p.name))}</span>
+          <div class="gd-meta">
+            <div class="gd-name" style="color:${pc}">${escapeHtml(p.name)}${isMe ? ' <span class="gd-you">you</span>' : ""}${p.isAi ? ' <span class="gd-ai">AI</span>' : ""}</div>
+            <div class="gd-stats">${stats || '<span class="gd-stat muted">no stats recorded</span>'}</div>
+          </div>
+          <span class="gd-vp" style="color:${pc}">${p.vp}<span class="gd-vp-l">VP</span></span>
+        </div>`;
+    })
+    .join("");
+  const detail = el(`
+    <div class="acct-detail">
+      <button class="acct-back">← Back to history</button>
+      <div class="gd-head">
+        <div class="gd-title" style="color:${COLOR_HEX[g.winnerColor] ?? "#fff"}">🏆 ${escapeHtml(g.winnerName)} won</div>
+        <div class="gd-sub">${date} · Race to ${g.targetVp} VP${g.vsAi ? " · vs AI" : ""}</div>
+      </div>
+      <div class="gd-players">${rows}</div>
+    </div>`);
+  detail.querySelector(".acct-back")!.addEventListener("click", () => void renderHistory(body));
+  body.replaceChildren(detail);
 }
 
 const ordinal = (n: number): string => {

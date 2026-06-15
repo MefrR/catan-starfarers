@@ -1314,22 +1314,32 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .go-up svg { width: 18px; height: 18px; }
 .go-up b { font-size: 13px; font-weight: 800; }
 @media (max-width: 560px) { .go-break { grid-template-columns: 1fr; } }
+/* The win screen lives on document.body (outside .screen), so its buttons would
+   inherit the global star-button cover (the "box of stars" look). Strip those
+   layers and make these plain, normal buttons. */
+.gameover-overlay button::before,
+.gameover-overlay button::after { content: none; }
+.gameover-overlay button { overflow: visible; }
 .go-newgame {
-  margin-top: 20px; width: 100%; padding: 11px; font-weight: 800;
-  cursor: pointer; color: #ecf0fb;
-  /* Inherits the dark pill star-button; a slightly brighter rim marks the CTA. */
-  border-color: rgba(255, 255, 255, 0.24);
+  margin-top: 20px; width: 100%; padding: 11px; font-weight: 800; border-radius: 12px;
+  cursor: pointer; color: #07101f; border: 1px solid rgba(150, 190, 255, 0.6);
+  background: linear-gradient(160deg, var(--accent), #6fa8ff);
 }
 .go-newgame:hover { filter: brightness(1.08); }
 /* R18: multiplayer Play again / Leave footer. */
 .go-actions { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; width: 100%; }
 .go-playagain {
   width: 100%; padding: 11px; border-radius: 12px; font-weight: 800;
-  cursor: pointer; border: none; color: #07101f;
+  cursor: pointer; border: 1px solid rgba(150, 190, 255, 0.6); color: #07101f;
   background: linear-gradient(160deg, var(--accent), #6fa8ff);
 }
 .go-playagain:hover { filter: brightness(1.08); }
-.go-leave { width: 100%; padding: 10px; border-radius: 12px; font-weight: 700; cursor: pointer; }
+.go-leave {
+  width: 100%; padding: 10px; border-radius: 12px; font-weight: 700; cursor: pointer;
+  color: var(--text); background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(160, 195, 255, 0.3);
+}
+.go-leave:hover { filter: brightness(1.1); border-color: rgba(160, 195, 255, 0.55); }
 .go-wait { font-size: 13px; color: var(--muted); font-style: italic; padding: 6px 0; }
 
 /* --- Friendship ability picker (#2) --- */
@@ -2194,6 +2204,44 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .acct-hline { font-size: 13px; color: #eaf2ff; }
 .acct-hsub { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .acct-hdate { font-size: 11.5px; color: var(--muted); }
+/* Clickable history rows → full result detail. */
+.acct-hrow { cursor: pointer; transition: background 0.12s ease, transform 0.12s ease; }
+.acct-hrow:hover { background: rgba(120, 160, 240, 0.12); }
+.acct-hrow:hover .acct-hchev { color: var(--text); transform: translateX(2px); }
+.acct-hchev { font-size: 20px; color: var(--muted); transition: color 0.12s ease, transform 0.12s ease; }
+
+/* History → full result detail view. */
+.acct-detail { display: flex; flex-direction: column; gap: 12px; }
+.acct-back {
+  align-self: flex-start; padding: 6px 12px; border-radius: 10px; font-size: 12.5px; font-weight: 700;
+  cursor: pointer; color: var(--text); background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(160, 195, 255, 0.3);
+}
+.acct-back::before, .acct-back::after { content: none; }
+.acct-back:hover { filter: brightness(1.1); }
+.gd-head { text-align: center; }
+.gd-title { font-size: 19px; font-weight: 900; }
+.gd-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.gd-players { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; }
+.gd-row {
+  display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 11px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid transparent;
+}
+.gd-row.win { background: rgba(120, 160, 240, 0.1); }
+.gd-row.me { border-color: rgba(120, 200, 255, 0.55); }
+.gd-rank { width: 18px; text-align: center; font-weight: 800; color: var(--muted); }
+.gd-meta { flex: 1; min-width: 0; }
+.gd-name { font-size: 14px; font-weight: 800; }
+.gd-you { font-size: 9.5px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase;
+  background: rgba(120, 200, 255, 0.22); color: #bfe4ff; padding: 1px 6px; border-radius: 6px; }
+.gd-ai { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.1); color: var(--muted); padding: 1px 6px; border-radius: 6px; }
+.gd-stats { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 3px; }
+.gd-stat { font-size: 11px; color: var(--muted); }
+.gd-stat b { color: #d6e4ff; font-weight: 800; margin-right: 3px; }
+.gd-stat.muted { font-style: italic; }
+.gd-vp { font-size: 20px; font-weight: 900; display: flex; align-items: baseline; gap: 3px; }
+.gd-vp-l { font-size: 10px; font-weight: 700; opacity: 0.7; }
 
 /* Edit tab */
 .acct-hint { display: block; font-size: 11.5px; margin-top: 5px; color: var(--muted); min-height: 14px; }

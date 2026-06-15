@@ -48,10 +48,30 @@ export interface HistoryEntry {
 const recorded = new Set<string>();
 
 /**
- * Record a finished single-player game for the signed-in human. Best-effort:
- * never throws into the game, and silently skips when signed out / unconfigured.
+ * Record a finished SINGLE-PLAYER game for the signed-in human (every rival is
+ * an AI). Best-effort: never throws into the game, no-ops when signed out.
  */
 export async function recordLocalGame(state: GameState, humanId: string): Promise<void> {
+  return recordGame(state, humanId, { vsAi: true, isAi: (id) => id !== humanId });
+}
+
+/**
+ * Record a finished ONLINE game for the signed-in human. Each human client
+ * records its OWN result row, so every account's history gets the game. The
+ * shared game snapshot is inserted once (the first client wins the unique
+ * client_game_id; the rest read the existing row back). We can't tell AI seats
+ * apart from the shared state, so rivals are treated as human.
+ */
+export async function recordOnlineGame(state: GameState, humanId: string): Promise<void> {
+  return recordGame(state, humanId, { vsAi: false, isAi: () => false });
+}
+
+/** Shared recorder for both single-player and online finished games. */
+async function recordGame(
+  state: GameState,
+  humanId: string,
+  opts: { vsAi: boolean; isAi: (playerId: string) => boolean },
+): Promise<void> {
   try {
     const sb = auth.client();
     const me = auth.userId();
@@ -70,7 +90,7 @@ export async function recordLocalGame(state: GameState, humanId: string): Promis
       color: p.color,
       vp: p.victoryPoints,
       placement: placementOf(p.id),
-      isAi: p.id !== humanId, // in single-player every rival is AI
+      isAi: opts.isAi(p.id),
       userId: p.id === humanId ? me : null,
       resources: stats?.resourcesGained[p.id] ?? 0,
       encounters: stats?.encountersFaced[p.id] ?? 0,
@@ -83,21 +103,28 @@ export async function recordLocalGame(state: GameState, humanId: string): Promis
     const myPlacement = placementOf(humanId);
     const myVp = state.players.find((p) => p.id === humanId)?.victoryPoints ?? 0;
 
-    const { data: game, error } = await sb
+    // Insert the shared snapshot. In online games several clients attempt this;
+    // only the first succeeds (client_game_id is unique). A duplicate error is
+    // expected and ignored — we read the existing row back next.
+    await sb
       .from("games")
       .insert({
         client_game_id: state.id,
         recorder_id: me,
         target_vp: state.config.targetVictoryPoints,
-        vs_ai: true,
+        vs_ai: opts.vsAi,
         winner_name: winner?.name ?? "",
         winner_color: winner?.color ?? "blue",
         players: snaps,
-      })
+      });
+
+    // Find the game row (whether this client inserted it or another did).
+    const { data: game } = await sb
+      .from("games")
       .select("id")
+      .eq("client_game_id", state.id)
       .single();
-    // Unique-violation (23505) = already recorded elsewhere; just stop.
-    if (error || !game) return;
+    if (!game) return;
 
     await sb.from("game_players").insert({
       game_id: game.id,

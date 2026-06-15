@@ -150,9 +150,10 @@ drop policy if exists "game_players readable" on public.game_players;
 create policy "game_players readable" on public.game_players
   for select to authenticated using (true);
 
--- Single-player: a client records its OWN game + its own result row.
--- (Multiplayer recording is written server-side with the service role later,
---  which bypasses RLS — so no broad insert policy is needed here.)
+-- Each signed-in client records the game it just finished as the recorder, plus
+-- its OWN result row. This covers BOTH single-player and online: in an online
+-- game every human client runs this, so the first one inserts the shared game
+-- snapshot (client_game_id is unique) and each writes its own game_players row.
 drop policy if exists "insert own game" on public.games;
 create policy "insert own game" on public.games
   for insert to authenticated with check (auth.uid() = recorder_id);
