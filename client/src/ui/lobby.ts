@@ -2,6 +2,11 @@ import { net, type NetMode } from "../net.js";
 import { type GameState, type LobbyState, type PlayerColor, PLAYER_COLORS } from "@starfarers/shared";
 import { shatter } from "./fx.js";
 import { auth } from "../auth.js";
+import { presence } from "../presence.js";
+import { listFriends } from "../friends.js";
+
+const initials = (name: string): string =>
+  name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "C";
 
 const COLOR_HEX: Record<PlayerColor, string> = {
   yellow: "#ffd23f",
@@ -67,6 +72,8 @@ export class LobbyUI {
   private mode: NetMode;
   /** AB4: apply the signed-in favorite color once, when it's free. */
   private appliedFavColor = false;
+  /** AC2: live presence subscription for the invite-friends panel. */
+  private presenceUnsub: (() => void) | null = null;
 
   constructor(
     mount: HTMLElement,
@@ -74,6 +81,7 @@ export class LobbyUI {
     onBack?: () => void,
     onReset?: () => void,
     mode: NetMode = "lan",
+    autoJoinCode?: string,
   ) {
     this.root = mount;
     this.onStart = onStart;
@@ -85,6 +93,8 @@ export class LobbyUI {
         // The authoritative game has begun (or advanced) — hand off to the board.
         if (!this.started) {
           this.started = true;
+          this.presenceUnsub?.(); // stop refreshing the (now-gone) invite panel
+          this.presenceUnsub = null;
           this.onStart?.(msg.state, msg.youId);
         }
         return;
@@ -118,6 +128,15 @@ export class LobbyUI {
         this.renderError();
       }
     });
+
+    // AC2: accepting a friend's invite jumps straight into THEIR room — join it
+    // immediately (the profile name rides along), bypassing the connect screen.
+    if (autoJoinCode) {
+      const nm = auth.currentProfile()?.displayName ?? "Commander";
+      net.send({ t: "joinRoom", roomCode: autoJoinCode.toUpperCase(), name: nm });
+      this.renderConnect(); // shown only momentarily until the lobby arrives
+      return;
+    }
 
     const saved = loadSession();
     if (saved) {
@@ -245,6 +264,12 @@ export class LobbyUI {
             <div class="setup-ctrl"><div class="swatches" id="colors"></div></div>
           </div>
 
+          ${this.mode === "online" && auth.currentProfile() ? `
+          <div class="setup-row">
+            <div class="setup-label">Invite friends</div>
+            <div class="setup-ctrl"><div class="fr-invite" id="invitefriends"><div class="fr-hint">Loading friends…</div></div></div>
+          </div>` : ""}
+
           ${isHost ? `
           <div class="setup-row">
             <div class="setup-label">Galaxy</div>
@@ -345,6 +370,46 @@ export class LobbyUI {
     });
 
     this.root.replaceChildren(screen);
+    this.fillInviteFriends(screen, lobby.roomCode);
+  }
+
+  /** AC2: list the signed-in player's friends with live online status and an
+   *  Invite button (enabled only when they're online) that broadcasts the room
+   *  code straight to that friend. */
+  private fillInviteFriends(screen: HTMLElement, roomCode: string): void {
+    const host = screen.querySelector("#invitefriends") as HTMLElement | null;
+    if (!host) return;
+    void listFriends().then((friends) => {
+      const render = (): void => {
+        if (!host.isConnected) return;
+        host.replaceChildren();
+        if (friends.length === 0) {
+          host.appendChild(el(`<div class="fr-hint">No friends yet — add some from your profile.</div>`));
+          return;
+        }
+        for (const f of friends) {
+          const on = presence.isOnline(f.user.id);
+          const row = el(`
+            <div class="fr-row">
+              <span class="pres-dot ${on ? "on" : ""}"></span>
+              <span class="acct-avatar sm" style="--ac:${COLOR_HEX[f.user.favoriteColor] ?? "#4fa8ff"}">${escapeHtml(initials(f.user.displayName))}</span>
+              <div class="fr-meta"><div class="fr-name">${escapeHtml(f.user.displayName)}</div><div class="fr-handle">${on ? "online" : "offline"}</div></div>
+              <div class="fr-actions"><button class="fr-btn add invite" ${on ? "" : "disabled"}>Invite</button></div>
+            </div>`);
+          const btn = row.querySelector(".invite") as HTMLButtonElement;
+          btn.addEventListener("click", () => {
+            btn.disabled = true;
+            btn.textContent = "Invited ✓";
+            void presence.sendInvite(f.user.id, roomCode);
+          });
+          host.appendChild(row);
+        }
+      };
+      render();
+      // Refresh the online dots live as friends come and go.
+      this.presenceUnsub?.();
+      this.presenceUnsub = presence.onChange(render);
+    });
   }
 }
 

@@ -8,6 +8,7 @@ import { HUD } from "./ui/hud.js";
 import { TutorialDriver } from "./ui/tutorial.js";
 import { mountAccountChip } from "./ui/account.js";
 import { auth } from "./auth.js";
+import { presence, type RoomInvite } from "./presence.js";
 import { recordLocalGame } from "./social.js";
 import { LocalGame } from "./game/store.js";
 import type { GameDriver, Seat } from "./game/store.js";
@@ -17,6 +18,9 @@ const el = (html: string): HTMLElement => {
   t.innerHTML = html.trim();
   return t.content.firstElementChild as HTMLElement;
 };
+
+const escapeHtml = (s: string): string =>
+  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 async function boot(): Promise<void> {
   const canvas = document.getElementById("board") as HTMLCanvasElement;
@@ -95,7 +99,7 @@ async function boot(): Promise<void> {
   // Multiplayer is lazy-loaded so the single-player path never opens a socket.
   // `mode` selects which server to talk to: "lan" (same host :3000) or "online"
   // (the public game server — see net.ts / VITE_ONLINE_URL).
-  const startNetwork = async (mode: "lan" | "online"): Promise<void> => {
+  const startNetwork = async (mode: "lan" | "online", autoJoinCode?: string): Promise<void> => {
     const { LobbyUI } = await import("./ui/lobby.js");
     const { NetworkGame } = await import("./game/netgame.js");
     const { net } = await import("./net.js");
@@ -108,8 +112,31 @@ async function boot(): Promise<void> {
       showLanding,
       () => teardownGame?.(),
       mode,
+      autoJoinCode,
     );
   };
+
+  // AC2: a friend's room invite can arrive on ANY screen while signed in.
+  // Show a dismissible prompt; "Join" connects online and drops into their room.
+  presence.onInvite((inv: RoomInvite) => {
+    document.querySelector(".invite-pop")?.remove();
+    const pop = el(`
+      <div class="invite-pop">
+        <div class="invite-text"><b>${escapeHtml(inv.fromName)}</b> invited you to a game.</div>
+        <div class="invite-actions">
+          <button class="invite-join">Join</button>
+          <button class="invite-dismiss secondary">Dismiss</button>
+        </div>
+      </div>`);
+    pop.querySelector(".invite-join")!.addEventListener("click", () => {
+      pop.remove();
+      void startNetwork("online", inv.roomCode);
+    });
+    pop.querySelector(".invite-dismiss")!.addEventListener("click", () => pop.remove());
+    document.body.appendChild(pop);
+    requestAnimationFrame(() => pop.classList.add("show"));
+    window.setTimeout(() => pop.remove(), 30000); // auto-expire stale invites
+  });
 
   const showLanding = (): void => {
     // Hero landing: no boxed card — the title and pills float directly over

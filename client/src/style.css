@@ -2201,6 +2201,41 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 }
 .fr-btn.decline:hover { background: rgba(255, 93, 93, 0.2); }
 .fr-tag { font-size: 11px; color: var(--muted); font-style: italic; padding: 0 4px; }
+.fr-confirm { font-size: 12px; color: #ffb4b4; margin-right: 2px; }
+.fr-btn.no { background: rgba(255, 255, 255, 0.06); color: var(--muted); }
+
+/* AC2: online-presence dot + invite-friends panel in the lobby. */
+.fr-invite { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; width: 100%; }
+.pres-dot {
+  width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto;
+  background: #555c70; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25) inset;
+}
+.pres-dot.on { background: #52d273; box-shadow: 0 0 8px rgba(82, 210, 115, 0.8); }
+
+/* AC2: incoming room-invite prompt (any screen). */
+.invite-pop {
+  position: fixed; top: 16px; left: 50%; z-index: 120;
+  transform: translateX(-50%) translateY(-16px);
+  display: flex; flex-direction: column; gap: 10px; align-items: center;
+  padding: 14px 18px; border-radius: 14px; min-width: 260px;
+  background: linear-gradient(165deg, rgba(26, 34, 60, 0.98), rgba(10, 14, 28, 0.98));
+  border: 1px solid rgba(120, 200, 255, 0.4);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6), 0 0 26px rgba(79, 168, 255, 0.18);
+  opacity: 0; transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.2, 1, 0.3, 1);
+}
+.invite-pop.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.invite-text { font-size: 14px; color: #eaf2ff; }
+.invite-text b { color: #9fd0ff; }
+.invite-actions { display: flex; gap: 10px; }
+.invite-join::before, .invite-join::after { content: none; }
+.invite-join {
+  padding: 8px 22px; border-radius: 10px; border: none; cursor: pointer; font-weight: 800; font-size: 13.5px;
+  background: linear-gradient(92deg, #39d8c8, #52e8a0); color: #06231d;
+}
+.invite-dismiss {
+  padding: 8px 16px; border-radius: 10px; cursor: pointer; font-size: 13.5px;
+  background: rgba(255, 255, 255, 0.06); color: var(--muted); border: 1px solid rgba(255, 255, 255, 0.14);
+}
 
 /* Z6: the coach bubble + spotlight ring of the guided first game. */
 .tut-bubble button::before,

@@ -276,9 +276,16 @@ async function renderFriends(body: HTMLElement): Promise<void> {
   }
   for (const e of friends) {
     const row = userRow(e.user, `<button class="fr-btn decline" title="Remove friend">✕</button>`);
-    row.querySelector(".decline")!.addEventListener("click", async () => {
-      await removeFriendship(e.friendshipId);
-      refresh();
+    // Unfriending asks for confirmation (swaps the actions to Yes/No inline).
+    row.querySelector(".decline")!.addEventListener("click", () => {
+      const actions = row.querySelector(".fr-actions") as HTMLElement;
+      actions.innerHTML =
+        `<span class="fr-confirm">Remove?</span><button class="fr-btn decline yes">Yes</button><button class="fr-btn no">No</button>`;
+      actions.querySelector(".yes")!.addEventListener("click", async () => {
+        await removeFriendship(e.friendshipId);
+        refresh();
+      });
+      actions.querySelector(".no")!.addEventListener("click", () => refresh());
     });
     fsec.appendChild(row);
   }
