@@ -2963,23 +2963,11 @@ export class HUD {
       }
       wrap.appendChild(row);
     };
-    // Give is chosen by tapping the hand cards (P6c) — show it as a compact,
-    // read-only summary here; only the Want side gets steppers.
-    const giveSummary = el(`<div class="ptrade-row give-row"><span class="trade-lbl">Give</span><div class="give-bag"></div></div>`);
-    const giveBag = giveSummary.querySelector(".give-bag")!;
-    const givenRes = RESOURCES.filter((r) => (this.pGive[r] ?? 0) > 0);
-    if (givenRes.length === 0) {
-      giveBag.appendChild(el(`<span class="give-hint">Tap your cards above to add</span>`));
-    } else {
-      for (const r of givenRes) {
-        giveBag.appendChild(
-          el(`<span class="bag-ico" title="${RESOURCE_LABEL[r]}" style="--res:${RES_COLOR[r]}"><span class="bi-g">${resourceGlyphSvg(r)}</span>${this.pGive[r]}</span>`),
-        );
-      }
-    }
-    wrap.appendChild(giveSummary);
-    // You can only ask for resources you're NOT already giving — no swapping a
-    // resource for the same resource. Cap those at 0 so their "+" stays disabled.
+    // Both sides use +/- steppers. Give is capped by what you actually hold;
+    // you can also tap a hand card above as a shortcut to bump its Give count.
+    // You can't give AND want the same resource (no same-for-same swap), so each
+    // side caps the other side's resource at 0.
+    stepper("Give", this.pGive, (r) => ((this.pWant[r] ?? 0) > 0 ? 0 : me.hand[r]));
     stepper("Want", this.pWant, (r) => ((this.pGive[r] ?? 0) > 0 ? 0 : 9));
 
     const giveRes = RESOURCES.filter((r) => (this.pGive[r] ?? 0) > 0);
