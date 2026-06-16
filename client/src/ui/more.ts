@@ -4,6 +4,9 @@
 // action — like the animated thumbnails in colonist.io's rules popup). The
 // About tab is a placeholder for the social links / extras coming later.
 
+import type { Resource } from "@starfarers/shared";
+import { resourceGlyphSvg, civAvatarSvg } from "./icons.js";
+
 const el = (html: string): HTMLElement => {
   const t = document.createElement("template");
   t.innerHTML = html.trim();
@@ -16,6 +19,14 @@ const FUEL = "#e08a2e";
 const CARBON = "#3d7fd6";
 const FOOD = "#3fae6b";
 const GOODS = "#9a6fd0";
+const RES_COLOR: Record<Resource, string> = { ore: ORE, fuel: FUEL, carbon: CARBON, food: FOOD, goods: GOODS };
+
+// A real resource "card" — the in-game glyph on a tinted mini card.
+const resCard = (r: Resource): string =>
+  `<span class="htp-rescard" style="--rc:${RES_COLOR[r]}">${resourceGlyphSvg(r)}</span>`;
+// A cost as resource glyphs with counts (e.g. 1 ore · 1 fuel · 2 goods).
+const cost = (parts: [Resource, number][]): string =>
+  parts.map(([r, n]) => `<span class="htp-costres" style="--rc:${RES_COLOR[r]}">${resourceGlyphSvg(r)}<b>${n}</b></span>`).join("");
 
 // ---------------------------------------------------------------------------
 // Tiny inline SVG icons reused across the animated scenes.
@@ -25,6 +36,20 @@ const shipSvg = (c: string): string =>
 
 const colonySvg = (c: string): string =>
   `<svg class="htp-ic" viewBox="0 0 48 48"><path d="M11 35 H37 V25 A13 13 0 0 0 11 25 Z" fill="${c}" stroke="rgba(0,0,0,.4)" stroke-width="1.5" stroke-linejoin="round"/><rect x="20" y="27" width="8" height="8" rx="1.5" fill="#0a1322" opacity=".5"/></svg>`;
+
+const spaceportSvg = (c: string): string =>
+  `<svg class="htp-ic" viewBox="0 0 48 48"><ellipse cx="24" cy="35" rx="20" ry="5.5" fill="none" stroke="${c}" stroke-width="2.4" opacity=".75"/><path d="M12 34 H36 V24 A12 12 0 0 0 12 24 Z" fill="${c}" stroke="rgba(0,0,0,.4)" stroke-width="1.5" stroke-linejoin="round"/><rect x="20" y="26" width="8" height="8" rx="1.5" fill="#0a1322" opacity=".5"/></svg>`;
+
+// Colony ship = transport carrying a colony dome; trade ship carries a crate.
+const colonyShipSvg = (c: string): string =>
+  `<svg class="htp-ic" viewBox="0 0 48 48"><path d="M24 6 L33 30 L24 26 L15 30 Z" fill="${c}" stroke="rgba(0,0,0,.4)" stroke-width="1.5" stroke-linejoin="round"/><path d="M18 22 H30 V17 A6 6 0 0 0 18 17 Z" fill="#0a1322" opacity=".55"/></svg>`;
+const tradeShipSvg = (c: string): string =>
+  `<svg class="htp-ic" viewBox="0 0 48 48"><path d="M24 6 L33 30 L24 26 L15 30 Z" fill="${c}" stroke="rgba(0,0,0,.4)" stroke-width="1.5" stroke-linejoin="round"/><rect x="18" y="16" width="12" height="9" rx="1.5" fill="#0a1322" opacity=".55"/></svg>`;
+
+const boosterSvg = (): string =>
+  `<svg class="htp-ic" viewBox="0 0 48 48"><path d="M18 6 H30 L27 28 H21 Z" fill="#6fd0ff" stroke="#27506e" stroke-width="1.6" stroke-linejoin="round"/><path d="M21 27 H27 L25 41 Q24 44 23 41 Z" fill="#ff8a3c" stroke="#a8521c" stroke-width="1"/></svg>`;
+const freightPodSvg = (): string =>
+  `<svg class="htp-ic" viewBox="0 0 48 48"><rect x="8" y="14" width="32" height="22" rx="4" fill="#d8b25a" stroke="#7a5e22" stroke-width="1.6"/><path d="M8 23 H40 M24 14 V36" stroke="#7a5e22" stroke-width="1.4"/></svg>`;
 
 const starSvg = (c = "#ffd23f"): string =>
   `<svg class="htp-ic" viewBox="0 0 48 48"><path d="M24 4 L29.6 17 L43 18.2 L32.8 27.2 L36 40.4 L24 33.2 L12 40.4 L15.2 27.2 L5 18.2 L18.4 17 Z" fill="${c}" stroke="rgba(0,0,0,.35)" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
@@ -203,8 +228,13 @@ const TOPICS: Topic[] = [
       <ul class="htp-list">
         <li><b>3 resource cards</b> drawn from the reserve pile</li>
         <li><b>1 fame medal piece</b></li>
-        <li><b>1 booster</b> attached to the mothership (base speed help)</li>
+        <li><b>1 bonus attachment of your choice</b> for the mothership:</li>
       </ul>
+      <div class="htp-bonus">
+        <span class="htp-bonus-opt"><span class="htp-bonus-ic">${boosterSvg()}</span>Booster <em>+1 speed</em></span>
+        <span class="htp-bonus-opt"><span class="htp-bonus-ic">${cannonSvg()}</span>Cannon <em>+1 combat</em></span>
+        <span class="htp-bonus-opt"><span class="htp-bonus-ic">${freightPodSvg()}</span>Freight Pod <em>+1 capacity</em></span>
+      </div>
       <p>Players roll the dice for turn order — the highest roller goes first.</p>`,
   },
   {
@@ -215,13 +245,13 @@ const TOPICS: Topic[] = [
       <p>Your turn opens with the <b>Production Phase</b>. Roll both dice; their sum decides which
       planets produce this turn.</p>
       <p>For every <b>colony</b> or <b>spaceport</b> you have next to a planet showing the rolled
-      number, you take <b>1 matching resource</b> from the supply. Planets produce:</p>
+      number, you take <b>1 matching resource</b> card from the supply. Planets produce:</p>
       <ul class="htp-list htp-res">
-        <li><span style="--rc:${ORE}" class="htp-dot-res"></span> Red → <b>Ore</b></li>
-        <li><span style="--rc:${FUEL}" class="htp-dot-res"></span> Orange → <b>Fuel</b></li>
-        <li><span style="--rc:${CARBON}" class="htp-dot-res"></span> Blue → <b>Carbon</b></li>
-        <li><span style="--rc:${FOOD}" class="htp-dot-res"></span> Green → <b>Food</b></li>
-        <li><span style="--rc:${GOODS}" class="htp-dot-res"></span> Multicolor → <b>Goods</b></li>
+        <li>${resCard("ore")} Red planet → <b>Ore</b></li>
+        <li>${resCard("fuel")} Orange planet → <b>Fuel</b></li>
+        <li>${resCard("carbon")} Blue planet → <b>Carbon</b></li>
+        <li>${resCard("food")} Green planet → <b>Food</b></li>
+        <li>${resCard("goods")} Multicolor planet → <b>Goods</b></li>
       </ul>
       <p>Note: unlike classic Catan, a spaceport still produces only <b>1</b> resource per adjacent
       planet — not two. Bigger number discs (<b>6</b> and <b>8</b>) hit most often; <b>2</b> and
@@ -252,15 +282,15 @@ const TOPICS: Topic[] = [
     title: "Building & Costs",
     tag: "Build",
     body: `
-      <p>Return the right resources to the supply to build. You can only build a piece if it remains
-      in your personal supply or the upgrades tray.</p>
+      <p>Return the right resource cards to the supply to build. You can only build a piece if it
+      remains in your personal supply or the upgrades tray.</p>
       <table class="htp-costs">
-        <tr><td>Colony Ship</td><td><span class="cc" style="--rc:${ORE}"></span>1 <span class="cc" style="--rc:${FUEL}"></span>1 <span class="cc" style="--rc:${CARBON}"></span>1 <span class="cc" style="--rc:${FOOD}"></span>1</td></tr>
-        <tr><td>Trade Ship</td><td><span class="cc" style="--rc:${ORE}"></span>1 <span class="cc" style="--rc:${FUEL}"></span>1 <span class="cc" style="--rc:${GOODS}"></span>2</td></tr>
-        <tr><td>Spaceport</td><td><span class="cc" style="--rc:${CARBON}"></span>3 <span class="cc" style="--rc:${FOOD}"></span>2</td></tr>
-        <tr><td>Booster <span class="htp-mini">(+1 speed)</span></td><td><span class="cc" style="--rc:${FUEL}"></span>2</td></tr>
-        <tr><td>Cannon <span class="htp-mini">(+1 combat)</span></td><td><span class="cc" style="--rc:${CARBON}"></span>2</td></tr>
-        <tr><td>Freight Pod <span class="htp-mini">(+1 capacity)</span></td><td><span class="cc" style="--rc:${ORE}"></span>2</td></tr>
+        <tr><td class="ci">${colonyShipSvg("#ffd23f")}</td><td>Colony Ship</td><td>${cost([["ore", 1], ["fuel", 1], ["carbon", 1], ["food", 1]])}</td></tr>
+        <tr><td class="ci">${tradeShipSvg("#4fa8ff")}</td><td>Trade Ship</td><td>${cost([["ore", 1], ["fuel", 1], ["goods", 2]])}</td></tr>
+        <tr><td class="ci">${spaceportSvg("#ffd23f")}</td><td>Spaceport</td><td>${cost([["carbon", 3], ["food", 2]])}</td></tr>
+        <tr><td class="ci">${boosterSvg()}</td><td>Booster <span class="htp-mini">+1 speed</span></td><td>${cost([["fuel", 2]])}</td></tr>
+        <tr><td class="ci">${cannonSvg()}</td><td>Cannon <span class="htp-mini">+1 combat</span></td><td>${cost([["carbon", 2]])}</td></tr>
+        <tr><td class="ci">${freightPodSvg()}</td><td>Freight Pod <span class="htp-mini">+1 capacity</span></td><td>${cost([["ore", 2]])}</td></tr>
       </table>
       <p><b>Ships</b> are built on an unoccupied <b>spaceport site</b> (the 2 intersections beside a
       spaceport). <b>Spaceports</b> are built by upgrading one of your colonies — place a shipyard
@@ -311,7 +341,21 @@ const TOPICS: Topic[] = [
       <p><b>Freight pods required:</b> your mothership's freight-pod count must be <i>greater</i> than
       the number of trade stations already at that outpost.</p>
       <p><b>Friendship card:</b> after docking, pick one face-up card from that civilization and use
-      its power right away (resource doubling, permanent speed/combat, better trades, fame deals…).</p>
+      its power right away. Each civilization helps differently:</p>
+      <div class="htp-civs">
+        <div class="htp-civ"><span class="htp-civ-ic">${civAvatarSvg("greenFolk")}</span>
+          <div><b>Green Folk</b> — bountiful harvests. Their cards hand you <b>extra resources</b>,
+          turning your best planets into even bigger producers.</div></div>
+        <div class="htp-civ"><span class="htp-civ-ic">${civAvatarSvg("scientists")}</span>
+          <div><b>Scientists</b> — advanced tech. Their cards grant <b>permanent boosters and cannons</b>
+          that count toward your speed and combat, on top of your mothership's upgrades.</div></div>
+        <div class="htp-civ"><span class="htp-civ-ic">${civAvatarSvg("merchants")}</span>
+          <div><b>Merchants</b> — master traders. Their cards give you <b>better exchange rates</b>
+          with the supply, so scarce resources cost you fewer cards.</div></div>
+        <div class="htp-civ"><span class="htp-civ-ic">${civAvatarSvg("diplomats")}</span>
+          <div><b>Diplomats</b> — influence &amp; fame. <i>Reduced Tribute</i> raises your 7-discard
+          limit, and <i>Fame for Sale</i> lets you <b>buy fame</b> (1 goods → 1 fame piece).</div></div>
+      </div>
       <p><b>Friendship marker (2 VP):</b> whoever has the <b>most</b> trade stations at an outpost
       holds its marker. Overtake a rival and the marker — and its 2 VP — moves to you.</p>`,
   },

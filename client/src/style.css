@@ -1526,16 +1526,25 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 }
 .exit-title { font-size: 18px; font-weight: 800; margin-bottom: 8px; }
 .exit-msg { font-size: 13px; color: var(--muted); margin-bottom: 18px; line-height: 1.5; }
-.exit-actions { display: flex; gap: 12px; justify-content: center; }
-.exit-actions .exit-yes {
-  /* Danger CTA: keep the red as the star-cover so the warning color reads
-     (a plain element background would be hidden under the cover layer). */
-  background: #1c0a0e;
-  --sb-cover: linear-gradient(165deg, color-mix(in srgb, var(--danger) 72%, #2a0c10), #4a1118);
-  --sb-lightcolor: #ffd9d9;
-  color: #fff;
-  border: 1px solid color-mix(in srgb, var(--danger) 65%, transparent);
+.exit-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+/* Normal flat buttons (no traveling-star glow), like the end-game screen. */
+.exit-box button::before, .exit-box button::after { content: none; }
+.exit-box button {
+  overflow: visible; padding: 10px 20px; border-radius: 12px;
+  font-weight: 700; font-size: 14px; cursor: pointer;
 }
+.exit-actions .exit-yes {
+  color: #fff; border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--danger) 72%, #2a0c10), #4a1118);
+}
+.exit-actions .exit-yes:hover { filter: brightness(1.1); }
+.exit-actions .exit-no,
+.exit-actions .exit-cont {
+  color: var(--text); background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(160, 195, 255, 0.3);
+}
+.exit-actions .exit-no:hover,
+.exit-actions .exit-cont:hover { filter: brightness(1.1); border-color: rgba(160, 195, 255, 0.55); }
 
 /* R3 + small-screen tightening: shrink the center action bar and panels.
    AA4: squeeze HARD vertically — on phones the bar was eating half the screen,
@@ -3295,4 +3304,51 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   .htp-tab { flex: 0 0 auto; min-width: 84px; flex-direction: column; gap: 4px; align-items: flex-start; }
   .htp-content { max-height: none; overflow: visible; }
 }
+
+
+/* === More handbook: real resource cards, build icons, civ list, about === */
+/* Resource "card" in the production legend. */
+.htp-rescard {
+  display: inline-grid; place-items: center; width: 30px; height: 38px; border-radius: 6px; flex: 0 0 auto;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--rc) 30%, #0b1222), #0b1222);
+  border: 1px solid color-mix(in srgb, var(--rc) 55%, #0b1222); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+.htp-rescard svg { width: 22px; height: 22px; }
+
+/* Build table: icon column + real resource-card costs. */
+.htp-costs td:first-child { font-weight: 400; color: inherit; }
+.htp-costs td.ci { width: 44px; text-align: center; }
+.htp-costs td.ci svg { width: 34px; height: 34px; display: inline-block; vertical-align: middle; }
+.htp-costs td:nth-child(2) { color: #eaf2ff; font-weight: 600; }
+.htp-costres { display: inline-flex; align-items: center; gap: 1px; margin-left: 8px; }
+.htp-costres svg { width: 20px; height: 20px; }
+.htp-costres b { font-weight: 800; color: #eaf2ff; font-size: 13px; }
+
+/* Setup bonus-attachment chips. */
+.htp-bonus { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 12px; }
+.htp-bonus-opt {
+  display: flex; align-items: center; gap: 7px; padding: 7px 11px; border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(120, 170, 255, 0.18);
+  font-size: 12.5px; color: #dfe7f6; font-weight: 600;
+}
+.htp-bonus-opt em { font-style: normal; color: #8fa0c4; font-weight: 400; font-size: 11px; }
+.htp-bonus-ic { width: 26px; height: 26px; flex: 0 0 auto; }
+.htp-bonus-ic svg { width: 26px; height: 26px; }
+
+/* Outpost civilization list. */
+.htp-civs { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 12px; }
+.htp-civ {
+  display: flex; gap: 11px; align-items: flex-start; padding: 10px 12px; border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12.8px; line-height: 1.5;
+}
+.htp-civ-ic { flex: 0 0 auto; width: 34px; height: 34px; margin-top: 1px; }
+.htp-civ-ic svg { width: 34px; height: 34px; display: block; }
+.htp-civ b { color: #eaf2ff; }
+
+/* About tab: center the block within the card body. */
+.more-about { margin: auto; max-width: 480px; }
+
+/* Fix the close âœ• glyph not being centered (used by More + the account card). */
+.acct-close { display: grid; place-items: center; line-height: 1; padding: 0; }
 
