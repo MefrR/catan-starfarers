@@ -24,6 +24,8 @@ export interface Profile {
   favoriteColor: PlayerColor;
   /** Unique handle for friends; null until the player picks one. */
   username: string | null;
+  /** Chosen avatar id (see AVATAR_CHOICES); null = default initials avatar. */
+  avatar: string | null;
 }
 
 type AuthListener = (profile: Profile | null) => void;
@@ -203,13 +205,14 @@ class Auth {
 
   /** Persist profile edits (display name / favorite color / username). */
   async updateProfile(
-    patch: Partial<Pick<Profile, "displayName" | "favoriteColor" | "username">>,
+    patch: Partial<Pick<Profile, "displayName" | "favoriteColor" | "username" | "avatar">>,
   ): Promise<void> {
     if (!this.supabase || !this.profile) return;
-    const row: Record<string, string> = {};
+    const row: Record<string, string | null> = {};
     if (patch.displayName !== undefined) row.display_name = patch.displayName;
     if (patch.favoriteColor !== undefined) row.favorite_color = patch.favoriteColor;
     if (patch.username) row.username = patch.username;
+    if (patch.avatar !== undefined) row.avatar = patch.avatar;
     if (Object.keys(row).length === 0) return;
     const { error } = await this.supabase.from("profiles").update(row).eq("id", this.profile.id);
     if (error) throw error;
@@ -253,7 +256,7 @@ class Auth {
       "Commander";
     for (let attempt = 0; attempt < 3; attempt++) {
       const { data } = await this.supabase!.from("profiles")
-        .select("id, display_name, favorite_color, username")
+        .select("id, display_name, favorite_color, username, avatar")
         .eq("id", id)
         .maybeSingle();
       if (data) {
@@ -262,12 +265,13 @@ class Auth {
           displayName: (data.display_name as string) || fallbackName,
           favoriteColor: ((data.favorite_color as string) || "blue") as PlayerColor,
           username: (data.username as string | null) ?? null,
+          avatar: (data.avatar as string | null) ?? null,
         };
       }
       await new Promise((r) => setTimeout(r, 400)); // trigger may not have run yet
     }
     // No row yet — return a sensible default; the next edit will create it.
-    return { id, displayName: fallbackName, favoriteColor: "blue", username: null };
+    return { id, displayName: fallbackName, favoriteColor: "blue", username: null, avatar: null };
   }
 
   private emit(): void {

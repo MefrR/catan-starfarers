@@ -127,6 +127,10 @@ alter table public.profiles add column if not exists username text;
 create unique index if not exists profiles_username_lower_idx
   on public.profiles (lower(username));
 
+-- Profile photo: an avatar id (e.g. "civ:scientists", "res:ore"). Nullable =
+-- default initials avatar. REQUIRED for the avatar picker to work.
+alter table public.profiles add column if not exists avatar text;
+
 -- One row per finished game (full final table snapshot for history detail).
 create table if not exists public.games (
   id uuid primary key default gen_random_uuid(),

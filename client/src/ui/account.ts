@@ -8,6 +8,7 @@ import {
   searchUsers, listFriends, listIncoming, listOutgoing,
   sendRequest, acceptRequest, removeFriendship, type FriendUser,
 } from "../friends.js";
+import { avatarSvgById, AVATAR_CHOICES } from "./icons.js";
 
 const el = (html: string): HTMLElement => {
   const t = document.createElement("template");
@@ -38,6 +39,16 @@ const escapeHtml = (s: string): string =>
 const initials = (name: string): string =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "C";
 
+/** The `.acct-avatar` markup for a user — their chosen photo (avatar icon) if
+ *  set, otherwise their colored initials. `extraCls` adds size variants (sm/big). */
+function avatarMarkup(
+  extraCls: string,
+  u: { avatar?: string | null; displayName: string; favoriteColor: PlayerColor },
+): string {
+  const photo = u.avatar ? avatarSvgById(u.avatar) : "";
+  return `<span class="acct-avatar ${extraCls} ${photo ? "has-photo" : ""}" style="--ac:${COLOR_HEX[u.favoriteColor]}">${photo || escapeHtml(initials(u.displayName))}</span>`;
+}
+
 /** Validate a username: 3–20 chars, letters/numbers/underscore. */
 const validUsername = (s: string): boolean => /^[a-zA-Z0-9_]{3,20}$/.test(s);
 
@@ -56,7 +67,7 @@ export function mountAccountChip(host: HTMLElement): void {
     if (profile) {
       const btn = el(`
         <button class="acct-btn" title="Your account">
-          <span class="acct-avatar" style="--ac:${COLOR_HEX[profile.favoriteColor]}">${escapeHtml(initials(profile.displayName))}</span>
+          ${avatarMarkup("", profile)}
           <span class="acct-name">${escapeHtml(profile.displayName)}</span>
         </button>`);
       btn.addEventListener("click", () => openAccountPage());
@@ -273,7 +284,7 @@ export function openAccountPage(): void {
     <div class="acct-card wide">
       <button class="acct-close" title="Close">✕</button>
       <div class="acct-head">
-        <span class="acct-avatar big" style="--ac:${COLOR_HEX[profile.favoriteColor]}">${escapeHtml(initials(profile.displayName))}</span>
+        ${avatarMarkup("big editable", profile)}
         <div class="acct-head-meta">
           <div class="acct-card-title">${escapeHtml(profile.displayName)}</div>
           <div class="acct-handle">${profile.username ? "@" + escapeHtml(profile.username) : "Set a username to add friends"}</div>
@@ -300,6 +311,23 @@ export function openAccountPage(): void {
   };
   tabs.forEach((t) => t.addEventListener("click", () => show(t.dataset.tab!)));
 
+  // Tap the big avatar to choose a profile photo from the game's art. Re-wires
+  // itself after each pick (the element is replaced to repaint the new photo).
+  const wireHeadAvatar = (): void => {
+    const av = card.querySelector(".acct-avatar.editable") as HTMLElement | null;
+    if (!av) return;
+    av.title = "Change your photo";
+    av.addEventListener("click", () => {
+      openAvatarPicker(auth.currentProfile()?.avatar ?? null, async (id) => {
+        await auth.updateProfile({ avatar: id }); // chip updates via auth.onChange
+        const fresh = auth.currentProfile();
+        if (fresh) av.outerHTML = avatarMarkup("big editable", fresh);
+        wireHeadAvatar();
+      });
+    });
+  };
+  wireHeadAvatar();
+
   const close = (): void => {
     overlay.classList.remove("show");
     setTimeout(() => overlay.remove(), 200);
@@ -312,6 +340,32 @@ export function openAccountPage(): void {
   document.body.appendChild(overlay);
   requestAnimationFrame(() => overlay.classList.add("show"));
   show("record");
+}
+
+/** A grid picker for the profile photo — choose from the game's own art
+ *  (outpost civs, resource icons, encounter motifs). Calls onPick(id) on choose. */
+function openAvatarPicker(current: string | null, onPick: (id: string) => void | Promise<void>): void {
+  if (document.querySelector(".avpick-overlay")) return;
+  const overlay = el(`<div class="acct-overlay avpick-overlay"></div>`);
+  const card = el(`
+    <div class="acct-card avpick-card">
+      <button class="acct-close" title="Close">✕</button>
+      <div class="acct-card-title">Choose your photo</div>
+      <div class="acct-card-sub">Pick an icon from across the galaxy.</div>
+      <div class="avpick-grid"></div>
+    </div>`);
+  overlay.appendChild(card);
+  const grid = card.querySelector(".avpick-grid") as HTMLElement;
+  const close = (): void => { overlay.classList.remove("show"); setTimeout(() => overlay.remove(), 200); };
+  for (const id of AVATAR_CHOICES) {
+    const cell = el(`<button class="avpick-cell ${id === current ? "selected" : ""}">${avatarSvgById(id)}</button>`);
+    cell.addEventListener("click", async () => { await onPick(id); close(); });
+    grid.appendChild(cell);
+  }
+  card.querySelector(".acct-close")!.addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("show"));
 }
 
 /** Record tab: win/loss summary cards. */
@@ -442,7 +496,7 @@ function renderOnlineHistory(host: HTMLElement, games: HistoryEntry[], back: () 
       drawList(games);
     });
     for (const f of friends) {
-      const chip = el(`<button class="ff-chip"><span class="acct-avatar sm" style="--ac:${COLOR_HEX[f.user.favoriteColor]}">${escapeHtml(initials(f.user.displayName))}</span>${escapeHtml(f.user.displayName)}</button>`);
+      const chip = el(`<button class="ff-chip">${avatarMarkup("sm", f.user)}${escapeHtml(f.user.displayName)}</button>`);
       chips.push(chip);
       chip.addEventListener("click", async () => {
         chips.forEach((c) => c.classList.remove("active"));
@@ -540,7 +594,7 @@ function userRow(u: FriendUser, actionsHtml: string): HTMLElement {
   const handle = u.username ? "@" + escapeHtml(u.username) : "";
   return el(`
     <div class="fr-row">
-      <span class="acct-avatar sm" style="--ac:${COLOR_HEX[u.favoriteColor]}">${escapeHtml(initials(u.displayName))}</span>
+      ${avatarMarkup("sm", u)}
       <div class="fr-meta"><div class="fr-name">${escapeHtml(u.displayName)}</div><div class="fr-handle">${handle}</div></div>
       <div class="fr-actions">${actionsHtml}</div>
     </div>`);
@@ -682,7 +736,7 @@ async function showFriendProfile(body: HTMLElement, u: FriendUser, back: () => v
     <div class="acct-detail">
       <button class="acct-back">← Back to friends</button>
       <div class="fp-head">
-        <span class="acct-avatar big" style="--ac:${COLOR_HEX[u.favoriteColor]}">${escapeHtml(initials(u.displayName))}</span>
+        ${avatarMarkup("big", u)}
         <div>
           <div class="fp-name">${escapeHtml(u.displayName)}</div>
           <div class="fp-handle">${handle}</div>

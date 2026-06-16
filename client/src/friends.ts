@@ -12,6 +12,7 @@ export interface FriendUser {
   username: string | null;
   displayName: string;
   favoriteColor: PlayerColor;
+  avatar: string | null;
 }
 
 /** A friendship row paired with the OTHER party's profile. */
@@ -25,6 +26,7 @@ const mapUser = (row: Record<string, unknown>): FriendUser => ({
   username: (row.username as string | null) ?? null,
   displayName: (row.display_name as string) || "Commander",
   favoriteColor: ((row.favorite_color as string) || "blue") as PlayerColor,
+  avatar: (row.avatar as string | null) ?? null,
 });
 
 /** Fetch profiles for a set of user ids, keyed by id. */
@@ -34,7 +36,7 @@ async function fetchProfiles(ids: string[]): Promise<Map<string, FriendUser>> {
   if (!sb || ids.length === 0) return out;
   const { data } = await sb
     .from("profiles")
-    .select("id, username, display_name, favorite_color")
+    .select("id, username, display_name, favorite_color, avatar")
     .in("id", ids);
   for (const row of data ?? []) out.set(row.id as string, mapUser(row));
   return out;
@@ -51,7 +53,7 @@ export async function searchUsers(query: string): Promise<FriendUser[]> {
   if (!sb || !me || q.length < 2) return [];
   const { data } = await sb
     .from("profiles")
-    .select("id, username, display_name, favorite_color")
+    .select("id, username, display_name, favorite_color, avatar")
     .or(`username.ilike.${q}%,display_name.ilike.${q}%`)
     .neq("id", me)
     .limit(15);

@@ -130,3 +130,69 @@ export function civAvatarSvg(civ: string): string {
       );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Profile avatars — players pick one of these as their photo. They reuse the
+// game's own art: the four alien outpost civs, the five resource icons, and a
+// few encounter motifs. Each renders as a self-contained circular SVG.
+// ---------------------------------------------------------------------------
+
+/** Dark circular backdrop tint per resource (the glyph sits on top). */
+const RES_TINT: Record<Resource, string> = {
+  ore: "#2a1010", fuel: "#2a1c08", carbon: "#0e1f33", food: "#0f2616", goods: "#1f1430",
+};
+
+const avFrame = (bg: string, inner: string): string =>
+  `<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="19" fill="${bg}" stroke="#0a0f1e" stroke-width="1.5"/>${inner}</svg>`;
+
+/** The selectable avatars, in display order. */
+export const AVATAR_CHOICES: string[] = [
+  "civ:greenFolk", "civ:scientists", "civ:merchants", "civ:diplomats",
+  "res:ore", "res:fuel", "res:carbon", "res:food", "res:goods",
+  "icon:alien", "icon:rocket", "icon:star", "icon:pirate", "icon:ice",
+];
+
+/** Render a 40×40 circular avatar SVG for an avatar id (see AVATAR_CHOICES). */
+export function avatarSvgById(id: string): string {
+  if (id.startsWith("civ:")) return civAvatarSvg(id.slice(4));
+  if (id.startsWith("res:")) {
+    const r = id.slice(4) as Resource;
+    return avFrame(RES_TINT[r] ?? "#15203a", `<g transform="translate(9,9)">${resourceGlyphSvg(r)}</g>`);
+  }
+  switch (id) {
+    case "icon:alien":
+      return avFrame(
+        "#11261a",
+        `<ellipse cx="20" cy="21" rx="10" ry="12" fill="#7fe0a0" stroke="#2a6b44" stroke-width="1.2"/>
+         <ellipse cx="16" cy="20" rx="2.8" ry="4" fill="#10202a"/><ellipse cx="24" cy="20" rx="2.8" ry="4" fill="#10202a"/>
+         <path d="M16 29 Q20 31 24 29" fill="none" stroke="#2a6b44" stroke-width="1.2" stroke-linecap="round"/>`,
+      );
+    case "icon:rocket":
+      return avFrame(
+        "#1a2238",
+        `<path d="M20 6 C25 11 27 19 27 25 H13 C13 19 15 11 20 6 Z" fill="#d8b25a" stroke="#7a5e22" stroke-width="1.2"/>
+         <circle cx="20" cy="16" r="3.4" fill="#6fd0ff" stroke="#27506e" stroke-width="1"/>
+         <path d="M13 24 L8 31 L15 28 Z" fill="#b07a2a"/><path d="M27 24 L32 31 L25 28 Z" fill="#b07a2a"/>
+         <path d="M17 26 H23 L21 33 H19 Z" fill="#ff8a3c"/>`,
+      );
+    case "icon:star":
+      return avFrame(
+        "#2a2410",
+        `<path d="M20 6 L23.4 15 L33 15.8 L25.6 21.8 L28 31 L20 25.6 L12 31 L14.4 21.8 L7 15.8 L16.6 15 Z" fill="#ffd23f" stroke="#0a0f1e" stroke-width="1" stroke-linejoin="round"/>`,
+      );
+    case "icon:pirate":
+      return avFrame(
+        "#1c2236",
+        `<path d="M20 7 C13 7 9 12 9 18 C9 22 11 24 12.5 24.8 V29 H27.5 V24.8 C29 24 31 22 31 18 C31 12 27 7 20 7 Z" fill="#c9cee0" stroke="#3a4566" stroke-width="1.1"/>
+         <circle cx="15.5" cy="18" r="3" fill="#10202a"/><circle cx="24.5" cy="18" r="3" fill="#10202a"/>
+         <rect x="18" y="24" width="4" height="5" fill="#10202a"/>`,
+      );
+    case "icon:ice":
+      return avFrame(
+        "#0e2230",
+        `<g stroke="#9fe3ff" stroke-width="2" stroke-linecap="round"><path d="M20 8 V32"/><path d="M9.6 14 L30.4 26"/><path d="M30.4 14 L9.6 26"/><path d="M20 12 l-3 -3 M20 12 l3 -3 M20 28 l-3 3 M20 28 l3 3"/></g>`,
+      );
+    default:
+      return civAvatarSvg("");
+  }
+}
