@@ -447,6 +447,7 @@ export function openMorePanel(): void {
       <div class="acct-tabs more-tabs">
         <button class="acct-tab active" data-tab="howto">How to Play</button>
         <button class="acct-tab" data-tab="privacy">Privacy</button>
+        <button class="acct-tab" data-tab="terms">Terms</button>
         <button class="acct-tab" data-tab="about">About</button>
       </div>
       <div class="acct-body more-body"></div>
@@ -459,6 +460,7 @@ export function openMorePanel(): void {
     tabs.forEach((t) => t.classList.toggle("active", t.dataset.tab === tab));
     if (tab === "about") renderAbout(body);
     else if (tab === "privacy") renderPrivacy(body);
+    else if (tab === "terms") renderTerms(body);
     else renderHowTo(body);
   };
   tabs.forEach((t) => t.addEventListener("click", () => show(t.dataset.tab!)));
@@ -607,6 +609,86 @@ function renderPrivacy(body: HTMLElement): void {
 
         <h4 class="legal-h">10. Contact</h4>
         <p>Questions or requests about your data? Reach us at
+        <a class="legal-link" href="mailto:support@example.com">support@example.com</a>.</p>
+
+        <p class="legal-note">This adaptation is an unofficial fan project and is not affiliated with
+        or endorsed by Catan GmbH or Catan Studio.</p>
+      </div>`),
+  );
+}
+
+/** Terms tab — the terms of service. Plain-language, fits a free fan project.
+ *  Update the contact email + effective date (and governing law) before launch. */
+function renderTerms(body: HTMLElement): void {
+  body.replaceChildren(
+    el(`
+      <div class="more-legal">
+        <h3 class="legal-title">Terms of Service</h3>
+        <p class="legal-date">Effective date: 16 June 2026</p>
+        <p>Welcome to Catan: Starfarers. By playing the game or creating an account, you agree to
+        these Terms. If you don't agree, please don't use the game.</p>
+
+        <h4 class="legal-h">1. The game</h4>
+        <p>Catan: Starfarers is a free, fan-made digital adaptation you can play solo against AI or
+        online with others. We offer it as-is and may add, change, or remove features over time.</p>
+
+        <h4 class="legal-h">2. Eligibility</h4>
+        <p>You must be at least 13 years old (or the minimum age in your country) to create an
+        account. By signing in you confirm you meet this requirement.</p>
+
+        <h4 class="legal-h">3. Your account</h4>
+        <p>You're responsible for activity on your account and for keeping your sign-in secure. Pick a
+        username that isn't offensive or impersonating someone else — we may reclaim or change
+        usernames that break these rules. See our Privacy Policy for what we collect.</p>
+
+        <h4 class="legal-h">4. Fair play &amp; conduct</h4>
+        <p>To keep the game fun for everyone, you agree not to:</p>
+        <ul class="htp-list">
+          <li>Cheat, exploit bugs, or use bots or automation to gain an unfair advantage.</li>
+          <li>Harass, threaten, or abuse other players, including in chat.</li>
+          <li>Post unlawful, hateful, or sexually explicit content, or spam.</li>
+          <li>Attempt to disrupt, overload, reverse-engineer, or gain unauthorized access to the
+          service or other players' accounts.</li>
+          <li>Impersonate others or misrepresent your identity.</li>
+        </ul>
+        <p>We may suspend or remove accounts that break these rules.</p>
+
+        <h4 class="legal-h">5. Your content</h4>
+        <p>You keep ownership of the chat messages and name you submit. By sending them, you grant us
+        permission to display and transmit them within the game so others can see them during play.
+        You're responsible for what you post.</p>
+
+        <h4 class="legal-h">6. Intellectual property</h4>
+        <p>"CATAN", "Catan: Starfarers", and related marks are trademarks of Catan GmbH and Catan
+        Studio. This is an <b>unofficial fan project</b>, not affiliated with or endorsed by them,
+        based on the published rules. The game's own code and original artwork remain the property of
+        their respective authors and may not be copied without permission.</p>
+
+        <h4 class="legal-h">7. Availability</h4>
+        <p>The game is provided free of charge with no guarantee of uptime. Online play depends on
+        servers that may be unavailable, reset, or discontinued at any time, and in-progress games may
+        be interrupted. We may modify or shut down the service without liability.</p>
+
+        <h4 class="legal-h">8. Disclaimer of warranties</h4>
+        <p>The game is provided "as is" and "as available", without warranties of any kind, whether
+        express or implied, including fitness for a particular purpose and non-infringement. You use
+        it at your own risk.</p>
+
+        <h4 class="legal-h">9. Limitation of liability</h4>
+        <p>To the fullest extent permitted by law, we are not liable for any indirect, incidental, or
+        consequential damages, or for any lost data or game progress, arising from your use of the
+        game.</p>
+
+        <h4 class="legal-h">10. Termination</h4>
+        <p>You may stop using the game and delete your account at any time. We may suspend or terminate
+        access if you violate these Terms or to protect the service and its players.</p>
+
+        <h4 class="legal-h">11. Changes to these terms</h4>
+        <p>We may update these Terms as the game evolves. We'll revise the effective date above, and
+        continued play after changes means you accept the updated Terms.</p>
+
+        <h4 class="legal-h">12. Contact</h4>
+        <p>Questions about these Terms? Reach us at
         <a class="legal-link" href="mailto:support@example.com">support@example.com</a>.</p>
 
         <p class="legal-note">This adaptation is an unofficial fan project and is not affiliated with
