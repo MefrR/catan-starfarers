@@ -2483,22 +2483,36 @@ export class HUD {
       const canAfford = (cost: Partial<ResourceBag>): boolean =>
         RESOURCES.every((r) => me.hand[r] >= (cost[r] ?? 0));
       const hasFreeTrade = (state.phaseState.freeTradeShips?.[me.id] ?? 0) > 0;
+      // Launch dots next to your spaceports — always shown while you can afford
+      // (and have a transport for) a colony or trade ship.
       const canShip =
         me.supply.transportShips > 0 &&
         sites.length > 0 &&
         (canAfford(BUILD_COSTS.colonyShip) || canAfford(BUILD_COSTS.tradeShip) || hasFreeTrade);
-      if (canShip) {
-        this.board.setHighlights(sites);
+      // Spaceport: when you can afford one, tapping any of your colonies pops an
+      // "Upgrade to spaceport?" confirm right on top of it.
+      const myColonies = state.buildings
+        .filter((b) => b.owner === me.id && b.kind === "colony")
+        .map((b) => b.intersectionId);
+      const canPort = canAfford(BUILD_COSTS.spaceport) && myColonies.length > 0;
+      const shipSites = canShip ? sites : [];
+      const portSites = canPort ? myColonies : [];
+      if (shipSites.length || portSites.length) {
+        this.board.setHighlights([...shipSites, ...portSites]);
         this.board.onIntersectionClick = (id) => {
-          if (sites.includes(id)) {
+          if (canPort && portSites.includes(id)) {
+            this.boardConfirm("Upgrade to spaceport?", () => {
+              this.act({ t: "build", what: "spaceport", targetId: id });
+              this.resetSelection();
+            }, id);
+          } else if (canShip && shipSites.includes(id)) {
             this.launchPickSite = id;
-            // Show the colony/trade chooser right on the map over the clicked
-            // point (not in the center action bar).
+            // Show the colony/trade chooser right on the map over the clicked point.
             this.showLaunchPicker(me, id);
           }
         };
         // Keep an already-open picker anchored after a re-render.
-        if (this.launchPickSite && sites.includes(this.launchPickSite)) {
+        if (this.launchPickSite && shipSites.includes(this.launchPickSite)) {
           this.showLaunchPicker(me, this.launchPickSite);
         }
         return;
@@ -2516,11 +2530,20 @@ export class HUD {
         };
         if (this.selectedShipId) {
           this.board.setSelectedShip(this.selectedShipId);
+          // A space jump can land on ANY open point, so light the whole map up
+          // with green dots (like a normal move, but unrestricted by distance).
+          const occupied = new Set<string>([
+            ...state.buildings.map((b) => b.intersectionId),
+            ...state.ships.map((s) => s.intersectionId),
+          ]);
+          this.board.setHighlights(Object.keys(state.intersections).filter((id) => !occupied.has(id)));
           this.board.onIntersectionClick = (id) => {
+            if (occupied.has(id)) return;
             const sid = this.selectedShipId!;
             this.selectedShipId = null;
             this.mode = "idle";
             this.board.setSelectedShip(null);
+            this.board.clearHighlights();
             this.act({ t: "spaceJump", shipId: sid, toIntersectionId: id }, { center: true });
           };
         }
