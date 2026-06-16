@@ -2628,6 +2628,15 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .seg-opt:disabled { opacity: 0.55; cursor: default; }
 
 /* Lobby browser: list of joinable public rooms. */
+.room-refresh {
+  margin-left: 8px; width: 24px; height: 24px; padding: 0; border-radius: 50%;
+  font-size: 14px; line-height: 1; cursor: pointer; color: #9fd8ff; vertical-align: middle;
+  background: rgba(120, 160, 240, 0.12); border: 1px solid rgba(120, 160, 240, 0.3);
+}
+.room-refresh::before, .room-refresh::after { content: none; }
+.room-refresh:hover { color: #fff; filter: brightness(1.15); }
+.room-refresh.spin { animation: roomRefreshSpin 0.6s linear; }
+@keyframes roomRefreshSpin { to { transform: rotate(360deg); } }
 .room-list { flex: 1 1 320px; display: flex; flex-direction: column; gap: 7px; max-height: 230px; overflow-y: auto; }
 .room-empty { font-size: 12.5px; color: var(--muted); font-style: italic; padding: 6px 2px; }
 .room-row {

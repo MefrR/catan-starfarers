@@ -74,6 +74,8 @@ export class LobbyUI {
   private appliedFavColor = false;
   /** AC2: live presence subscription for the invite-friends panel. */
   private presenceUnsub: (() => void) | null = null;
+  /** Re-request the public-room list whenever the socket (re)connects. */
+  private statusUnsub: (() => void) | null = null;
   /** AC2: friends already invited to this room, so we never invite twice
    *  (the panel re-renders on every presence change, which would otherwise
    *  reset each "Invited" button back to a clickable "Invite"). */
@@ -102,6 +104,8 @@ export class LobbyUI {
           this.started = true;
           this.presenceUnsub?.(); // stop refreshing the (now-gone) invite panel
           this.presenceUnsub = null;
+          this.statusUnsub?.(); // stop re-requesting the room list
+          this.statusUnsub = null;
           this.onStart?.(msg.state, msg.youId);
         }
         return;
@@ -184,7 +188,7 @@ export class LobbyUI {
           </div>
 
           <div class="setup-row">
-            <div class="setup-label">Open rooms</div>
+            <div class="setup-label">Open rooms <button class="room-refresh" id="refreshrooms" title="Refresh room list">⟳</button></div>
             <div class="setup-ctrl">
               <div class="room-list" id="roomlist"></div>
             </div>
@@ -229,12 +233,13 @@ export class LobbyUI {
     hostBtn.addEventListener("click", () => {
       shatter(hostBtn, "#39d8c8", () => net.send({ t: "createRoom", name: name(), public: this.hostPublic }));
     });
-    // Public / Private visibility toggle for the room you host.
+    // Public / Private visibility toggle for the room you host. (The active
+    // segment uses the `.on` class — toggling `active` did nothing.)
     screen.querySelectorAll<HTMLElement>(".host-vis .seg-opt").forEach((b) => {
       b.addEventListener("click", () => {
         this.hostPublic = b.dataset.vis === "public";
         screen.querySelectorAll<HTMLElement>(".host-vis .seg-opt").forEach((x) =>
-          x.classList.toggle("active", (x.dataset.vis === "public") === this.hostPublic));
+          x.classList.toggle("on", (x.dataset.vis === "public") === this.hostPublic));
       });
     });
     screen.querySelector("#join")!.addEventListener("click", () => {
@@ -242,9 +247,22 @@ export class LobbyUI {
       if (!code) { this.errorText = "Enter a room code."; this.renderError(); return; }
       net.send({ t: "joinRoom", roomCode: code, name: name() });
     });
+    // Refresh the open-room list on demand.
+    screen.querySelector("#refreshrooms")?.addEventListener("click", () => {
+      const btn = screen.querySelector("#refreshrooms") as HTMLElement;
+      btn.classList.add("spin");
+      window.setTimeout(() => btn.classList.remove("spin"), 600);
+      net.send({ t: "listRooms" });
+    });
     this.root.replaceChildren(screen);
-    // Ask for the browsable public-room list (server pushes live updates too).
+    // Ask for the browsable public-room list (server pushes live updates too),
+    // and re-ask whenever the socket (re)connects — the free-tier server naps
+    // and forgets browsers, so the list would otherwise stay stale/empty.
     net.send({ t: "listRooms" });
+    this.statusUnsub?.();
+    this.statusUnsub = net.onStatus((s) => {
+      if (s === "connected" && !this.lobby && !this.started) net.send({ t: "listRooms" });
+    });
     this.renderRoomList();
   }
 
