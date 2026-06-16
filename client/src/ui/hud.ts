@@ -3404,10 +3404,19 @@ export class HUD {
         return;
       }
       if (enc.awaiting === "selectShip") {
-        // Combat defeat: pick which of your ships is immobilized this turn.
+        // Pick which of your ships is immobilized — straight off the board, since
+        // ship names ("#2") are hard to map to the map. The card slides to the
+        // top so the whole board stays tappable underneath it.
         const myShips = state.ships.filter((s) => s.owner === subject.id);
         cardEl.querySelector(".enc-text")!.textContent =
-          "Defeat! Choose one of your ships — it cannot move this turn.";
+          "Tap one of your ships on the map — it can't move this turn.";
+        overlay.classList.add("pick-ship");
+        this.board.setHighlights(myShips.map((s) => s.intersectionId));
+        this.board.onShipClick = (id) => {
+          const idx = myShips.findIndex((s) => s.id === id);
+          if (idx >= 0) this.act({ t: "encounterChoice", choice: idx });
+        };
+        // Fallback buttons (also tappable directly on the map above).
         myShips.forEach((s, i) => {
           const label = s.kind === "colonyShip" ? "Colony ship" : "Trade ship";
           const b = el(`<button class="secondary">${label} #${i + 1}</button>`);

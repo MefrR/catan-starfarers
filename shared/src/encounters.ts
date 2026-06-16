@@ -248,20 +248,6 @@ function shakeCombat(p: PlayerState, rng: Rng): number {
   return base + p.upgrades.cannon + scientistBonus(p).combat;
 }
 
-function pirateCombat(ctx: EncounterCtx, threshold: number, reward: () => void): void {
-  const { subject, rng, log } = ctx;
-  const strength = shakeCombat(subject, rng);
-  if (strength >= threshold) {
-    log(`${subject.name} fights the pirates (combat ${strength} vs ${threshold}) — VICTORY!`);
-    reward();
-  } else {
-    log(`${subject.name} fights the pirates (combat ${strength} vs ${threshold}) — defeat.`);
-    gainFame(subject, 1);
-    log(`${subject.name} earns 1 fame medal piece for their courage, but a ship is damaged.`);
-    damageOneShip(ctx);
-  }
-}
-
 /** Shake speed for a player: 2 balls + boosters + scientist bonus. */
 function shakeSpeed(p: PlayerState, rng: Rng): number {
   const bag = [...MOTHERSHIP_BALLS];
@@ -424,34 +410,32 @@ function merchantCard(id: number): EncounterCard {
   };
 }
 
-/** Pirate posing as a merchant: any gift is stolen, then combat. */
+/**
+ * Pirate posing as a merchant. The prompt gives NOTHING away — it looks like a
+ * friendly trade. Whatever you offer, it's revealed as a pirate: it grabs your
+ * offering and cripples one of your ships (you pick which), then flees. Cards 7
+ * and 8 share the mechanic but read differently.
+ */
 function disguisedPirateCard(id: number): EncounterCard {
+  const seven = id === 7;
   return {
     id,
     category: "merchant",
     prompt: "number",
-    title: "A Merchant... or is it?",
+    title: seven ? "A Merchant" : "A Trader Hails You",
     text: "Offer 0-3 resources as a gift.",
-    choiceHints: [
-      "Offer nothing — then it attacks!",
-      "Lose 1 gift, then combat (≥7 → +2 carbon & +1 fame)",
-      "Lose 2 gifts, then combat (≥7 → +2 carbon & +1 fame)",
-      "Lose 3 gifts, then combat (≥7 → +2 carbon & +1 fame)",
-    ],
+    // No choiceHints on purpose — the betrayal is a surprise revealed only
+    // after you commit, for the chooser AND spectators.
     resolve: (ctx) => {
-      const { state, subject, log } = ctx;
+      const { subject, log } = ctx;
       const offer = offerWithinHand(ctx);
-      if (offer > 0) {
-        requestLoss(ctx, offer);
-        log(`It's a pirate in disguise! ${subject.name} must hand over the ${offer} offered resource(s).`);
-      } else {
-        log(`It's a pirate in disguise!`);
-      }
-      pirateCombat(ctx, 7, () => {
-        takeSpecific(state, subject, "carbon", 2);
-        gainFame(subject, 1);
-        log(`${subject.name} seizes the pirate's cargo: +2 carbon, +1 fame.`);
-      });
+      if (offer > 0) requestLoss(ctx, offer); // it grabs whatever you handed over
+      damageOneShip(ctx); // and cripples a ship you choose
+      log(
+        seven
+          ? `HA! No merchant at all — a pirate in disguise! It snatched ${subject.name}'s offering, crippled a ship and ran. Choose the ship that can't move this turn.`
+          : `It was never a trader — pirates! They blasted one of ${subject.name}'s ships and fled with the goods. Pick the ship that's stuck this turn.`,
+      );
     },
   };
 }
