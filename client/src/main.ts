@@ -214,6 +214,7 @@ async function boot(): Promise<void> {
           <div class="hero-actions">
             <button id="single">Single Player</button>
             <button class="secondary" id="online">Play Online</button>
+            <button class="secondary hero-more" id="more">More</button>
           </div>
           ${resumeHtml}
           <button class="hero-tutorial" id="tutorial">✦ First flight? Take the guided tutorial</button>
@@ -235,6 +236,12 @@ async function boot(): Promise<void> {
     tutorial.addEventListener("click", () => {
       ensureMenuBg();
       shatter(tutorial, "#ffd23f", () => startTutorial());
+    });
+    // "More": rulebook / How-to-Play handbook (and future links). Opens as an
+    // overlay, so no screen swap — just lazy-load the panel and show it.
+    const more = screen.querySelector("#more") as HTMLElement;
+    more.addEventListener("click", () => {
+      void import("./ui/more.js").then((m) => m.openMorePanel());
     });
     const install = screen.querySelector("#install") as HTMLElement | null;
     install?.addEventListener("click", async () => {
