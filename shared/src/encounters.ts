@@ -41,6 +41,9 @@ export interface EncounterCard {
   noHint?: string;
   /** Wear & Tear: players holding MORE than this many upgrades scrap one (P6i). */
   wearTearThreshold?: number;
+  /** "New Encounters": after this card resolves, shuffle the deck and draw a
+   *  fresh encounter card for the subject (both Wear & Tear cards do this). */
+  newEncounter?: boolean;
   resolve: (ctx: EncounterCtx) => void;
   /** Cards with an interactive duel: applied once both motherships have shaken
    *  (won = the subject's shake ≥ the rival's). */
@@ -499,8 +502,9 @@ function wearTearCard(id: number, threshold: number, councilFame: boolean): Enco
     prompt: "resolve",
     allPlayers: true,
     wearTearThreshold: threshold,
+    newEncounter: true, // both W&T cards then shuffle the deck and draw a new card
     title: "Wear and Tear",
-    text: `Each player with more than ${threshold} upgrades removes one.`,
+    text: `Each player with more than ${threshold} upgrades removes one. Then a new encounter is drawn.`,
     resolve: (ctx) => {
       const { state, log } = ctx;
       // P6i: each over-the-limit player chose which upgrade to scrap (stored on
@@ -1045,10 +1049,26 @@ export function confirmAllPlayerEncounter(
   const allIn = everyone.every((id) => enc.confirmedBy!.includes(id));
   if (!allIn) return false;
   const card = ENCOUNTER_CARDS[enc.cardId]!;
-  const subject = state.players.find((p) => p.id === enc.subjectId)!;
+  const subjectId = enc.subjectId;
+  const subject = state.players.find((p) => p.id === subjectId)!;
   card.resolve({ state, subject, choice: 0, rng, log: (line) => logTo(state, line) });
   state.encounterDiscard.push(enc.cardId);
   state.phaseState.encounter = undefined;
+  // "New Encounters" (both Wear & Tear cards): shuffle the ENTIRE deck (remaining
+  // + discard) and draw a fresh encounter for the subject, instead of returning
+  // straight to flight.
+  if (card.newEncounter) {
+    logTo(state, "New encounters: the deck is reshuffled and a new card is drawn.");
+    const pool = [...state.encounterDeck, ...state.encounterDiscard];
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+    }
+    state.encounterDeck = pool;
+    state.encounterDiscard = [];
+    beginEncounter(state, subjectId, rng); // draws the top of the reshuffled deck
+    return true;
+  }
   state.phaseState.phase = "flight";
   state.phaseState.moveBudget =
     state.phaseState.moveBudget ?? state.phaseState.shake?.speed ?? POST_ENCOUNTER_BASE_SPEED;
