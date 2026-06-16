@@ -2882,6 +2882,7 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   background: rgba(6, 9, 18, 0.92);
 }
 .minimap:hover { border-color: rgba(140, 190, 255, 0.55); }
+.minimap.hidden { display: none; }
 @media (max-width: 999px) {
   .minimap { display: none; }
 }

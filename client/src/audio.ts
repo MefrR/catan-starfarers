@@ -24,6 +24,7 @@ export type SfxName =
   | "trade" // coin blip pair
   | "turn" // gentle "your turn" chime
   | "medal" // sparkle arpeggio (conquest medal / friendship marker)
+  | "tick" // countdown click (final seconds of the turn timer)
   | "win"; // fanfare
 
 class Sfx {
@@ -238,6 +239,12 @@ class Sfx {
         this.tone(1046.5, { dur: 0.09, vol: 0.14, type: "triangle" });
         this.tone(1318.5, { at: 0.07, dur: 0.09, vol: 0.14, type: "triangle" });
         this.tone(1568, { at: 0.14, dur: 0.18, vol: 0.16, type: "triangle" });
+        break;
+      }
+      case "tick": {
+        // Dry clock click — a short high blip so the final seconds feel urgent.
+        this.tone(1760, { dur: 0.04, vol: 0.16, type: "square" });
+        this.noise({ at: 0, dur: 0.025, freq: 2600, q: 3, vol: 0.1 });
         break;
       }
       case "win": {

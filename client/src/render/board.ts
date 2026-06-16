@@ -92,7 +92,7 @@ export class BoardRenderer {
   // current render registered. Deterministic phases (from position), no RNG.
   private ambientItems: {
     g: Graphics;
-    kind: "halo" | "mote" | "special" | "spin";
+    kind: "halo" | "mote" | "special" | "spin" | "pulse";
     x: number;
     y: number;
     rad: number;
@@ -177,6 +177,12 @@ export class BoardRenderer {
           } else if (it.kind === "spin") {
             // AA6: outpost energy ring — a slow, stately rotation.
             it.g.rotation = t * 0.00022 * it.speed + it.phase;
+          } else if (it.kind === "pulse") {
+            // Flight-phase cue: a ship you can still fly breathes a green ring
+            // (alpha + scale) so it's obvious it's time to move.
+            const p = 0.5 + 0.5 * Math.sin(t * 0.005 * it.speed + it.phase);
+            it.g.alpha = 0.3 + 0.6 * p;
+            it.g.scale.set(1 + 0.18 * p);
           } else {
             // Mote on a tilted ellipse; it dims while on the far (upper) half.
             const a = t * 0.00042 * it.speed + it.phase;
@@ -1227,6 +1233,15 @@ export class BoardRenderer {
     }
 
     // Ships: clickable rocket tokens at their intersections.
+    // Flight cue: on my turn, after shaking, with no encounter pending, my ships
+    // that still have movement left breathe a green ring so it's clearly time to
+    // fly. (Only the active human — spectators/AI turns don't pulse.)
+    const ps = state.phaseState;
+    const myFlight =
+      ps.phase === "flight" && !!ps.shake && !ps.encounter &&
+      state.players[ps.activePlayerIndex]?.id === this.humanId;
+    const flightSpeed = ps.shake?.speed ?? 0;
+
     for (const ship of state.ships) {
       const inter = state.intersections[ship.intersectionId];
       if (!inter) continue;
@@ -1265,6 +1280,19 @@ export class BoardRenderer {
       const id = ship.id;
       g.on("pointertap", () => this.onShipClick?.(id));
       shipLayer.addChild(g);
+
+      // Flight cue: breathe a green ring around my ships that can still move,
+      // so it's obvious it's time to fly. Not the selected ship (it has its own
+      // ring) or a frozen/damaged one.
+      if (
+        myFlight && ship.owner === this.humanId && !damaged && !selected &&
+        ship.id !== ps.frozenShipId && ship.distanceMoved < flightSpeed
+      ) {
+        const ring = new Graphics().circle(0, 0, r * 1.45).stroke({ color: 0x7cffb0, width: 3, alpha: 0.9 });
+        ring.position.set(sx, sy);
+        shipLayer.addChild(ring);
+        this.ambientItems.push({ g: ring, kind: "pulse", x: sx, y: sy, rad: r, phase: (sx * 0.03 + sy * 0.05) % 6.28, speed: 1 });
+      }
 
       const mine = ship.owner === this.humanId;
       const owner = OWNER_NAME[pc];

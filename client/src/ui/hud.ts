@@ -158,6 +158,8 @@ export class HUD {
   private hoverInfoOn = true;
   /** HUD-tools toggle: idle 60s auto-recenter of the map. Persisted. */
   private autoRecenterOn = true;
+  /** HUD-tools toggle: hide the corner minimap. Persisted. */
+  private miniHidden = false;
   private discardSel: Partial<Record<Resource, number>> = {};
   /** Last roll counter we played a dice animation for. */
   private lastAnimatedRoll = 0;
@@ -188,6 +190,9 @@ export class HUD {
   private turnDeadline = 0;
   private turnTimerStep = "";
   private turnTimerInterval = 0;
+  /** Last whole-second shown on my timer, so the final-5s countdown ticks once
+   *  per second (the interval fires every 250ms). -1 = no tick played yet. */
+  private lastTimerSec = -1;
   /** Whether the +10s trade bonus has already been granted in the current step,
    *  so a turn's trading earns it only once (not once per click). Reset whenever
    *  the timed step changes. */
@@ -271,6 +276,7 @@ export class HUD {
     try {
       this.hoverInfoOn = localStorage.getItem("sf_hoverInfo") !== "0";
       this.autoRecenterOn = localStorage.getItem("sf_autoRecenter") !== "0";
+      this.miniHidden = localStorage.getItem("sf_minimap") === "0";
     } catch { /* localStorage unavailable — keep defaults */ }
     this.board.setAutoRecenter(this.autoRecenterOn);
 
@@ -278,6 +284,7 @@ export class HUD {
     // anywhere on it to jump the camera there.
     this.mini = document.createElement("canvas");
     this.mini.className = "minimap";
+    this.mini.classList.toggle("hidden", this.miniHidden);
     this.mini.width = 180;
     this.mini.height = 230;
     document.body.appendChild(this.mini);
@@ -1455,6 +1462,7 @@ export class HUD {
       this.turnTimerStep = step.key;
       this.turnDeadline = Date.now() + step.seconds * 1000;
       this.tradeBonusUsed = false; // each new step earns its trade bonus afresh
+      this.lastTimerSec = -1; // re-arm the final-5s ticking for the new step
     }
     if (!this.turnTimerInterval) {
       this.turnTimerInterval = window.setInterval(() => this.tickTurnTimer(), 250);
@@ -1468,6 +1476,11 @@ export class HUD {
     const remain = Math.max(0, Math.ceil((this.turnDeadline - Date.now()) / 1000));
     for (const chip of [this.root.querySelector(".turn-timer"), document.querySelector(".discard-overlay .dc-timer"), document.querySelector(".encounter-overlay .enc-timer")]) {
       if (chip) { chip.textContent = fmtClock(remain); (chip as HTMLElement).classList.toggle("low", remain <= 5); }
+    }
+    // Final-5s ticking: one click per second, only while the clock is mine.
+    if (remain !== this.lastTimerSec) {
+      if (step.mine && remain >= 1 && remain <= 5) sfx.play("tick");
+      this.lastTimerSec = remain;
     }
     if (remain > 0) return;
     if (!step.mine) return; // only the responsible player auto-resolves; others just watch
@@ -2119,6 +2132,21 @@ export class HUD {
     fleetBtn.addEventListener("click", () => this.findMyFleet());
     extra(fleetBtn);
 
+    // Minimap show/hide (large screens only — the minimap itself is hidden by
+    // CSS under 1000px, so this button only appears there).
+    if (window.innerWidth >= 1000) {
+      const mapBtn = el(
+        `<button class="tool-btn ${this.miniHidden ? "" : "active"}" title="Minimap: ${this.miniHidden ? "hidden (tap to show)" : "shown (tap to hide)"}">🗺</button>`,
+      );
+      mapBtn.addEventListener("click", () => {
+        this.miniHidden = !this.miniHidden;
+        try { localStorage.setItem("sf_minimap", this.miniHidden ? "0" : "1"); } catch { /* ignore */ }
+        this.mini?.classList.toggle("hidden", this.miniHidden);
+        this.rerender();
+      });
+      extra(mapBtn);
+    }
+
     // The reference popover hangs to the LEFT of the "i" button when open.
     if (this.showRef) {
       const pop = el(`<div class="ref-pop"></div>`);
@@ -2235,7 +2263,7 @@ export class HUD {
    *  in the constructor via the stored board→canvas mapping. */
   private drawMinimap(state: GameState): void {
     const cv = this.mini;
-    if (!cv) return;
+    if (!cv || this.miniHidden) return; // skip painting while hidden
     const ctx = cv.getContext("2d");
     if (!ctx) return;
     const W = cv.width;
