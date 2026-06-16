@@ -140,18 +140,21 @@ class Auth {
     });
   }
 
-  /** Register a new account with email + password. With email confirmation on,
-   *  returns `pendingConfirm: true` (no session yet until they click the link). */
-  async signUpWithEmail(email: string, password: string, displayName?: string): Promise<AuthResult> {
+  /** Register a new account with email + password. `username` is the unique
+   *  @handle; it's stashed in user metadata and written to the profile as soon
+   *  as a session exists (immediately, or after email confirmation). With email
+   *  confirmation on, returns `pendingConfirm: true` (no session yet). */
+  async signUpWithEmail(email: string, password: string, username: string): Promise<AuthResult> {
     if (!this.supabase) return { ok: false, error: "Accounts aren't available right now." };
-    const name = displayName?.trim();
+    const handle = username.trim();
     const { data, error } = await this.supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
         emailRedirectTo: location.origin,
-        // Seed the profile trigger with a display name when one was provided.
-        data: name ? { full_name: name } : undefined,
+        // Seed the profile: display name + the unique @handle (persisted by
+        // adopt() once authenticated, since RLS needs a session to write it).
+        data: { full_name: handle, username: handle },
       },
     });
     if (error) return { ok: false, error: friendlyAuthError(error.message) };
@@ -223,7 +226,22 @@ class Auth {
       return;
     }
     this.profile = await this.fetchProfile(session.user.id, session);
+    await this.ensureUsernameFromMetadata(session);
     this.emit();
+  }
+
+  /** Persist the @username chosen at registration (stashed in user metadata) the
+   *  first time we have an authenticated session — RLS needs a session to write
+   *  the profile row, so this can't happen during sign-up itself. */
+  private async ensureUsernameFromMetadata(session: Session): Promise<void> {
+    if (!this.supabase || !this.profile || this.profile.username) return;
+    const meta = session.user.user_metadata?.username;
+    const handle = typeof meta === "string" ? meta.trim() : "";
+    if (!handle) return;
+    const { error } = await this.supabase.from("profiles").update({ username: handle }).eq("id", this.profile.id);
+    // On a unique-constraint clash (someone grabbed it meanwhile) leave it null;
+    // the player can pick a different handle in the Edit tab.
+    if (!error) this.profile = { ...this.profile, username: handle };
   }
 
   /** Read the profile row; retry briefly in case the signup trigger is mid-flight. */

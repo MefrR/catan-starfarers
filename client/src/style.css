@@ -3385,3 +3385,5 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   background: #fff; color: #4285f4; font-weight: 900; font-size: 12px;
 }
 
+
+.auth-at { display: inline; font-weight: 400; font-size: 10.5px; color: var(--muted); letter-spacing: 0; text-transform: none; }

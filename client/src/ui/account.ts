@@ -93,8 +93,9 @@ export function openAuthPanel(): void {
       </div>
       <form class="auth-form" novalidate>
         <label class="acct-field reg-only" hidden>
-          <span class="acct-label">Display name</span>
-          <input class="acct-input" id="auth-name" type="text" maxlength="24" autocomplete="nickname" placeholder="Commander" />
+          <span class="acct-label">Username <span class="auth-at">@yourname — unique, how friends find you</span></span>
+          <input class="acct-input" id="auth-username" type="text" maxlength="20" autocomplete="username" placeholder="3–20 letters, numbers or _" />
+          <span class="acct-hint" id="auth-uhint"></span>
         </label>
         <label class="acct-field">
           <span class="acct-label">Email</span>
@@ -116,13 +117,15 @@ export function openAuthPanel(): void {
   const tabs = [...card.querySelectorAll<HTMLElement>(".acct-tab")];
   const form = card.querySelector(".auth-form") as HTMLFormElement;
   const nameField = card.querySelector(".reg-only") as HTMLElement;
-  const nameInput = card.querySelector("#auth-name") as HTMLInputElement;
+  const userInput = card.querySelector("#auth-username") as HTMLInputElement;
+  const uhint = card.querySelector("#auth-uhint") as HTMLElement;
   const emailInput = card.querySelector("#auth-email") as HTMLInputElement;
   const passInput = card.querySelector("#auth-pass") as HTMLInputElement;
   const submit = card.querySelector(".auth-submit") as HTMLButtonElement;
   const forgot = card.querySelector(".auth-forgot") as HTMLElement;
   const msg = card.querySelector(".auth-msg") as HTMLElement;
   let mode: "login" | "register" = "login";
+  let checkSeq = 0; // latest username availability check wins
 
   const showMsg = (text: string, kind: "err" | "ok"): void => {
     msg.textContent = text;
@@ -138,9 +141,30 @@ export function openAuthPanel(): void {
     forgot.style.display = m === "login" ? "" : "none";
     submit.textContent = m === "login" ? "Log in" : "Create account";
     passInput.autocomplete = m === "login" ? "current-password" : "new-password";
+    uhint.textContent = "";
+    uhint.className = "acct-hint";
     clearMsg();
   };
   tabs.forEach((t) => t.addEventListener("click", () => setMode(t.dataset.mode as "login" | "register")));
+
+  // Live username availability (register mode): format check, then a debounced
+  // lookup, with the @handle reserved uniquely.
+  userInput.addEventListener("input", () => {
+    const handle = userInput.value.trim();
+    if (!validUsername(handle)) {
+      uhint.textContent = handle ? "3–20 letters, numbers or _" : "";
+      uhint.className = "acct-hint bad";
+      return;
+    }
+    uhint.textContent = "Checking…";
+    uhint.className = "acct-hint";
+    const seq = ++checkSeq;
+    void auth.isUsernameAvailable(handle).then((free) => {
+      if (seq !== checkSeq) return; // superseded by a newer keystroke
+      uhint.textContent = free ? "✓ Available" : "✗ Taken — try another";
+      uhint.className = `acct-hint ${free ? "good" : "bad"}`;
+    });
+  });
 
   // Close automatically once a session is established (covers email login and
   // confirmation-off sign-up). `stop` is also called on manual close so the
@@ -162,11 +186,19 @@ export function openAuthPanel(): void {
     const pass = passInput.value;
     if (!email || !/.+@.+\..+/.test(email)) { showMsg("Please enter a valid email address.", "err"); return; }
     if (pass.length < 6) { showMsg("Password must be at least 6 characters.", "err"); return; }
+    const handle = userInput.value.trim();
+    if (mode === "register") {
+      if (!validUsername(handle)) { showMsg("Pick a username: 3–20 letters, numbers or _.", "err"); return; }
+      // Authoritative availability check at submit (the live one may be stale).
+      submit.disabled = true; submit.textContent = "Checking…";
+      const free = await auth.isUsernameAvailable(handle);
+      if (!free) { submit.disabled = false; submit.textContent = "Create account"; showMsg("That username is already taken — choose another.", "err"); return; }
+    }
     submit.disabled = true;
     submit.textContent = mode === "login" ? "Logging in…" : "Creating…";
     const res = mode === "login"
       ? await auth.signInWithEmail(email, pass)
-      : await auth.signUpWithEmail(email, pass, nameInput.value);
+      : await auth.signUpWithEmail(email, pass, handle);
     submit.disabled = false;
     submit.textContent = mode === "login" ? "Log in" : "Create account";
     if (!res.ok) { showMsg(res.error ?? "Something went wrong.", "err"); return; }
