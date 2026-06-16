@@ -42,6 +42,8 @@ export class Room {
   /** Member ids that are AI seats (played by the server). */
   private aiIds = new Set<string>();
   private aiSeq = 0;
+  /** Public rooms show up in the lobby browser; private ones are code-only. */
+  isPublic = false;
 
   constructor(code: string) {
     this.code = code;
@@ -54,6 +56,22 @@ export class Room {
 
   get hasStarted(): boolean {
     return this.started;
+  }
+
+  /** Joinable from the lobby browser: public, open, and not yet started. */
+  get isJoinable(): boolean {
+    return this.isPublic && !this.started && this.members.size < this.config.playerCount;
+  }
+
+  /** Compact card for the lobby room list. */
+  summary(): { code: string; host: string; players: number; max: number } {
+    const host = [...this.members.values()].find((m) => m.isHost);
+    return {
+      code: this.code,
+      host: host?.name ?? "Commander",
+      players: this.members.size,
+      max: this.config.playerCount,
+    };
   }
 
   hasMember(id: string): boolean {

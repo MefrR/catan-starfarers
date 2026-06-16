@@ -1,5 +1,5 @@
 import { net, type NetMode } from "../net.js";
-import { type GameState, type LobbyState, type PlayerColor, PLAYER_COLORS } from "@starfarers/shared";
+import { type GameState, type LobbyState, type PlayerColor, type RoomSummary, PLAYER_COLORS } from "@starfarers/shared";
 import { shatter } from "./fx.js";
 import { auth } from "../auth.js";
 import { presence } from "../presence.js";
@@ -78,6 +78,9 @@ export class LobbyUI {
    *  (the panel re-renders on every presence change, which would otherwise
    *  reset each "Invited" button back to a clickable "Invite"). */
   private invited = new Set<string>();
+  /** Browsable public-room list (lobby browser) + chosen host visibility. */
+  private rooms: RoomSummary[] = [];
+  private hostPublic = true;
 
   constructor(
     mount: HTMLElement,
@@ -101,6 +104,11 @@ export class LobbyUI {
           this.presenceUnsub = null;
           this.onStart?.(msg.state, msg.youId);
         }
+        return;
+      }
+      if (msg.t === "roomList") {
+        this.rooms = msg.rooms;
+        this.renderRoomList();
         return;
       }
       if (msg.t === "lobby") {
@@ -176,10 +184,27 @@ export class LobbyUI {
           </div>
 
           <div class="setup-row">
-            <div class="setup-label">Join a room</div>
+            <div class="setup-label">Open rooms</div>
+            <div class="setup-ctrl">
+              <div class="room-list" id="roomlist"></div>
+            </div>
+          </div>
+
+          <div class="setup-row">
+            <div class="setup-label">Join by code</div>
             <div class="setup-ctrl">
               <input type="text" id="code" class="setup-name setup-code" placeholder="ABCD" maxlength="4" />
               <div class="seg"><button class="seg-opt" id="join">Join</button></div>
+            </div>
+          </div>
+
+          <div class="setup-row">
+            <div class="setup-label">Visibility</div>
+            <div class="setup-ctrl">
+              <div class="seg host-vis">
+                <button class="seg-opt ${this.hostPublic ? "on" : ""}" data-vis="public">Public</button>
+                <button class="seg-opt ${this.hostPublic ? "" : "on"}" data-vis="private">Private</button>
+              </div>
             </div>
           </div>
 
@@ -199,10 +224,18 @@ export class LobbyUI {
     // AB4: prefill the commander name from the signed-in profile.
     const profile = auth.currentProfile();
     if (profile) (screen.querySelector("#name") as HTMLInputElement).value = profile.displayName;
-    screen.querySelector("#back")?.addEventListener("click", () => this.onBack?.());
+    screen.querySelector("#back")?.addEventListener("click", () => { net.send({ t: "leaveBrowsing" }); this.onBack?.(); });
     const hostBtn = screen.querySelector("#host") as HTMLElement;
     hostBtn.addEventListener("click", () => {
-      shatter(hostBtn, "#39d8c8", () => net.send({ t: "createRoom", name: name() }));
+      shatter(hostBtn, "#39d8c8", () => net.send({ t: "createRoom", name: name(), public: this.hostPublic }));
+    });
+    // Public / Private visibility toggle for the room you host.
+    screen.querySelectorAll<HTMLElement>(".host-vis .seg-opt").forEach((b) => {
+      b.addEventListener("click", () => {
+        this.hostPublic = b.dataset.vis === "public";
+        screen.querySelectorAll<HTMLElement>(".host-vis .seg-opt").forEach((x) =>
+          x.classList.toggle("active", (x.dataset.vis === "public") === this.hostPublic));
+      });
     });
     screen.querySelector("#join")!.addEventListener("click", () => {
       const code = (screen.querySelector("#code") as HTMLInputElement).value.trim().toUpperCase();
@@ -210,6 +243,37 @@ export class LobbyUI {
       net.send({ t: "joinRoom", roomCode: code, name: name() });
     });
     this.root.replaceChildren(screen);
+    // Ask for the browsable public-room list (server pushes live updates too).
+    net.send({ t: "listRooms" });
+    this.renderRoomList();
+  }
+
+  /** Fill the public-room list on the connect screen (no-op elsewhere). */
+  private renderRoomList(): void {
+    const host = this.root.querySelector("#roomlist") as HTMLElement | null;
+    if (!host) return;
+    host.replaceChildren();
+    if (this.rooms.length === 0) {
+      host.appendChild(el(`<div class="room-empty">No open rooms — host one below.</div>`));
+      return;
+    }
+    const nameVal = (): string =>
+      (this.root.querySelector("#name") as HTMLInputElement | null)?.value.trim() ?? "";
+    for (const r of this.rooms) {
+      const row = el(`
+        <div class="room-row">
+          <div class="room-meta">
+            <span class="room-host">${escapeHtml(r.host)}</span>
+            <span class="room-code">${escapeHtml(r.code)}</span>
+          </div>
+          <span class="room-count">${r.players}/${r.max}</span>
+          <button class="room-join">Join</button>
+        </div>`);
+      row.querySelector(".room-join")!.addEventListener("click", () => {
+        net.send({ t: "joinRoom", roomCode: r.code, name: nameVal() });
+      });
+      host.appendChild(row);
+    }
   }
 
   /** AB4: once in the pre-game lobby, switch to the signed-in player's favorite

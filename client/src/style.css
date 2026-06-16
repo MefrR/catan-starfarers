@@ -2626,6 +2626,25 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   color: #fff;
 }
 .seg-opt:disabled { opacity: 0.55; cursor: default; }
+
+/* Lobby browser: list of joinable public rooms. */
+.room-list { flex: 1 1 320px; display: flex; flex-direction: column; gap: 7px; max-height: 230px; overflow-y: auto; }
+.room-empty { font-size: 12.5px; color: var(--muted); font-style: italic; padding: 6px 2px; }
+.room-row {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 11px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(120, 160, 240, 0.2);
+}
+.room-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.room-host { font-size: 13.5px; font-weight: 700; color: #eaf2ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.room-code { font-size: 11px; letter-spacing: 0.14em; color: var(--muted); }
+.room-count { font-size: 12px; font-weight: 800; color: #9fd8ff; }
+.room-join {
+  padding: 7px 16px; border-radius: 9px; font-weight: 800; font-size: 13px; cursor: pointer;
+  color: #07101f; border: 1px solid rgba(150, 190, 255, 0.6);
+  background: linear-gradient(160deg, var(--accent), #6fa8ff);
+}
+.room-join::before, .room-join::after { content: none; }
+.room-join:hover { filter: brightness(1.08); }
 .seg-opt.seg-val { color: #eaf2ff; opacity: 1; min-width: 110px; }
 .seg-hint { font-size: 10px; font-weight: 600; color: #8094c2; }
 .seg-opt.on .seg-hint { color: rgba(255, 255, 255, 0.75); }

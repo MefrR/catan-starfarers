@@ -20,8 +20,10 @@ export interface LobbyState {
 
 /** Intents the client sends to the server. The server validates everything. */
 export type ClientIntent =
-  | { t: "createRoom"; name: string }
+  | { t: "createRoom"; name: string; public?: boolean }
   | { t: "joinRoom"; roomCode: string; name: string }
+  | { t: "listRooms" } // ask the server for the browsable public-room list
+  | { t: "leaveBrowsing" } // stop receiving public-room list updates
   | { t: "rejoin"; roomCode: string; playerId: string }
   | { t: "setColor"; color: PlayerColor }
   | { t: "startGame"; config: Partial<GameConfig> }
@@ -73,8 +75,17 @@ export type ClientIntent =
 /** TEMPORARY dev/testing actions (single-player chat codes, also enabled online). */
 export type DevAction = "encounter" | "upgrades" | "friendship" | "jump" | "vp" | "reveal" | "resources";
 
+/** A joinable public room, summarised for the lobby browser. */
+export interface RoomSummary {
+  code: string;
+  host: string;
+  players: number;
+  max: number;
+}
+
 /** Server -> client messages. */
 export type ServerMessage =
+  | { t: "roomList"; rooms: RoomSummary[] }
   | { t: "lobby"; lobby: LobbyState; youId: string }
   | { t: "state"; state: GameState; youId: string }
   | { t: "error"; message: string }

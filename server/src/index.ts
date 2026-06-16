@@ -52,6 +52,18 @@ if (clientDist) {
 // --- Room registry ---
 const rooms = new Map<string, Room>();
 const socketToRoom = new Map<string, { roomCode: string; playerId: string }>();
+// Sockets currently browsing the lobby (not yet in a room) — they get live
+// updates to the public-room list.
+const browsers = new Map<string, import("socket.io").Socket>();
+
+/** Public, open, not-started rooms — the browsable list. */
+function publicRoomList(): { code: string; host: string; players: number; max: number }[] {
+  return [...rooms.values()].filter((r) => r.isJoinable).map((r) => r.summary());
+}
+function broadcastRoomList(): void {
+  const list = publicRoomList();
+  for (const s of browsers.values()) s.emit(SOCKET_EVENT.message, { t: "roomList", rooms: list });
+}
 
 function makeRoomCode(): string {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -65,14 +77,29 @@ function makeRoomCode(): string {
 io.on("connection", (socket) => {
   socket.on(SOCKET_EVENT.intent, (intent: ClientIntent) => {
     try {
+      if (intent.t === "listRooms") {
+        // Enter the lobby browser: get the current list and live updates.
+        browsers.set(socket.id, socket);
+        socket.emit(SOCKET_EVENT.message, { t: "roomList", rooms: publicRoomList() });
+        return;
+      }
+
+      if (intent.t === "leaveBrowsing") {
+        browsers.delete(socket.id);
+        return;
+      }
+
       if (intent.t === "createRoom") {
         const code = makeRoomCode();
         const room = new Room(code);
+        room.isPublic = intent.public !== false; // public by default
         rooms.set(code, room);
         const playerId = randomUUID();
         room.addMember(playerId, intent.name, socket);
         socketToRoom.set(socket.id, { roomCode: code, playerId });
+        browsers.delete(socket.id); // now in a room, not browsing
         room.broadcastLobby();
+        broadcastRoomList();
         return;
       }
 
@@ -84,6 +111,7 @@ io.on("connection", (socket) => {
         }
         room.reattach(intent.playerId, socket);
         socketToRoom.set(socket.id, { roomCode: room.code, playerId: intent.playerId });
+        browsers.delete(socket.id);
         room.broadcastLobby();
         room.broadcastState();
         return;
@@ -95,10 +123,16 @@ io.on("connection", (socket) => {
           socket.emit(SOCKET_EVENT.message, { t: "error", message: "Room not found." });
           return;
         }
+        if (room.hasStarted) {
+          socket.emit(SOCKET_EVENT.message, { t: "error", message: "That game has already started." });
+          return;
+        }
         const playerId = randomUUID();
         room.addMember(playerId, intent.name, socket);
         socketToRoom.set(socket.id, { roomCode: room.code, playerId });
+        browsers.delete(socket.id);
         room.broadcastLobby();
+        broadcastRoomList(); // room may now be full → drops off the list
         return;
       }
 
@@ -114,6 +148,10 @@ io.on("connection", (socket) => {
         socketToRoom.delete(socket.id);
         if (room.isEmpty && !room.hasStarted) rooms.delete(ref.roomCode);
       }
+      // start / play-again / leave all change whether the room is joinable.
+      if (intent.t === "startGame" || intent.t === "playAgain" || intent.t === "leaveRoom") {
+        broadcastRoomList();
+      }
     } catch (err) {
       console.error("intent error", err);
       socket.emit(SOCKET_EVENT.message, { t: "error", message: "Server error." });
@@ -121,6 +159,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
+    browsers.delete(socket.id);
     const ref = socketToRoom.get(socket.id);
     if (!ref) return;
     const room = rooms.get(ref.roomCode);
@@ -132,6 +171,7 @@ io.on("connection", (socket) => {
       if (room.isEmpty && !room.hasStarted) rooms.delete(ref.roomCode);
     }
     socketToRoom.delete(socket.id);
+    broadcastRoomList(); // a freed seat / reaped room may change the list
   });
 });
 
