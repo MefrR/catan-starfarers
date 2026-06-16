@@ -26,11 +26,11 @@ const OWNER_FILL: Record<PlayerColor, number> = {
 
 /** Per-civ outpost colour + display name (mirrors the printed OUTPOSTS art). */
 const CIV_STYLE: Record<string, { color: number; name: string; ability: string }> = {
-  greenFolk: { color: 0x57e389, name: "The Green Folk", ability: "Gives you extra resources from your planets" },
-  scientists: { color: 0x6fb3ff, name: "The Scientists", ability: "Gives you extra boosters & cannons" },
-  diplomats: { color: 0xffd23f, name: "The Diplomats", ability: "Gives you lots of abilities" },
-  merchants: { color: 0xc98bff, name: "The Merchants", ability: "Gives you more trade options" },
-  travelers: { color: 0xff8a5d, name: "The Travelers", ability: "Encounter-only allies" },
+  greenFolk: { color: 0x57e389, name: "The Green Folk", ability: "Bountiful harvests — extra resources from your planets' production" },
+  scientists: { color: 0x6fb3ff, name: "The Scientists", ability: "Advanced tech — permanent boosters & cannons (more speed & combat)" },
+  diplomats: { color: 0xffd23f, name: "The Diplomats", ability: "Influence — raises your 7-discard limit & lets you buy fame" },
+  merchants: { color: 0xc98bff, name: "The Merchants", ability: "Master traders — better exchange rates with the supply" },
+  travelers: { color: 0xff8a5d, name: "The Travelers", ability: "Wandering allies you meet only during encounters" },
 };
 
 const RESOURCE_NAME: Record<Resource, string> = {
@@ -1040,7 +1040,9 @@ export class BoardRenderer {
         // Hover description for this planet / special token.
         let tip: string;
         if (!planet.explored) {
-          tip = `<b>Unexplored planet</b><br>Fly a ship adjacent to reveal it`;
+          // Same wording as every other uncharted sector so the fog gives no hint
+          // whether this is a planet, an outpost, or empty space.
+          tip = `<b>Unexplored sector</b><br>Fly a ship adjacent to chart it`;
         } else if (planet.special === "pirateBase") {
           tip = `<b>Pirate Base</b><br>Beat it with ${planet.specialValue}+ cannons to win a fame medal (+1 VP)`;
         } else if (planet.special === "icePlanet") {
@@ -1118,11 +1120,22 @@ export class BoardRenderer {
     }
 
     // Intersections: small nodes; colony sites (>=2 adjacent planets) highlighted.
+    // Fog gating: a colony site / docking point only reveals its role once the
+    // underlying sector is charted — otherwise it draws as a plain travel node so
+    // uncharted systems, outposts and empty space look identical (no hint leak).
+    const exploredPlanets = new Set<string>();
+    for (const s of state.sectors) for (const p of s.planets) if (p.explored) exploredPlanets.add(p.id);
+    const sectorById = new Map(state.sectors.map((s) => [s.id, s]));
     for (const inter of Object.values(state.intersections)) {
       const ix = tx(inter.x);
       const iy = ty(inter.y);
-      const isColonySite = inter.adjacentPlanets.length === 2;
-      const isDock = inter.dockingPointOf != null;
+      const dockSector = inter.dockingPointOf ? sectorById.get(inter.dockingPointOf) : undefined;
+      // Charted once either adjacent planet is revealed (colony) / the outpost
+      // sector is discovered (dock). In non-fog games everything is charted, so
+      // behaviour is unchanged.
+      const isColonySite =
+        inter.adjacentPlanets.length === 2 && inter.adjacentPlanets.some((id) => exploredPlanets.has(id));
+      const isDock = !!dockSector && dockSector.discovered;
 
       // Legal-target rings (move destinations / colony picks) are drawn as a
       // continuously pulsing/glowing marker on the FX overlay — see
@@ -1143,9 +1156,12 @@ export class BoardRenderer {
       node.on("pointertap", () => this.onIntersectionClick?.(id));
       // Hover description (colony sites / docking points are the meaningful ones).
       if (isColonySite || isDock) {
+        const civStyle = dockSector?.outpostCiv ? CIV_STYLE[dockSector.outpostCiv] : undefined;
         const tip = isColonySite
           ? `<b>Colony site</b><br>Land a colony ship here to settle (+1 VP).<br>It sits between two planets and collects from both.`
-          : `<b>Docking point</b><br>Land a trade ship here to build a trade station (+1 VP) and earn a friendship card.`;
+          : civStyle
+            ? `<b>${civStyle.name} — docking point</b><br>${civStyle.ability}<br><i>Dock a trade ship to build a trade station (+1 VP) &amp; earn its friendship card</i>`
+            : `<b>Docking point</b><br>Land a trade ship here to build a trade station (+1 VP) and earn a friendship card.`;
         // Route through showTip so the 👁 hover-info toggle (tooltipsSuppressed)
         // and the auto-dismiss timer apply here too — this path used to bypass
         // both and kept showing "Colony site" with hover info switched off.
