@@ -446,6 +446,7 @@ export function openMorePanel(): void {
       </div>
       <div class="acct-tabs more-tabs">
         <button class="acct-tab active" data-tab="howto">How to Play</button>
+        <button class="acct-tab" data-tab="privacy">Privacy</button>
         <button class="acct-tab" data-tab="about">About</button>
       </div>
       <div class="acct-body more-body"></div>
@@ -457,6 +458,7 @@ export function openMorePanel(): void {
   const show = (tab: string): void => {
     tabs.forEach((t) => t.classList.toggle("active", t.dataset.tab === tab));
     if (tab === "about") renderAbout(body);
+    else if (tab === "privacy") renderPrivacy(body);
     else renderHowTo(body);
   };
   tabs.forEach((t) => t.addEventListener("click", () => show(t.dataset.tab!)));
@@ -522,6 +524,95 @@ function renderHowTo(body: HTMLElement): void {
 
   body.replaceChildren(view);
   renderTopic(TOPICS[0]!);
+}
+
+/** Privacy tab — the privacy policy. Reflects exactly what the game collects
+ *  (accounts via Supabase/Google, gameplay records, friends, in-room chat) and
+ *  what stays only on the device. Update the contact email + effective date. */
+function renderPrivacy(body: HTMLElement): void {
+  body.replaceChildren(
+    el(`
+      <div class="more-legal">
+        <h3 class="legal-title">Privacy Policy</h3>
+        <p class="legal-date">Effective date: 16 June 2026</p>
+        <p>This policy explains what information Catan: Starfarers ("the game", "we") collects when
+        you play, how it is used, and the choices you have. You can play <b>single-player without an
+        account</b> — the sections below about accounts only apply once you sign in to play online.</p>
+
+        <h4 class="legal-h">1. Information we collect</h4>
+        <p><b>Account information.</b> When you create an account or sign in with Google, we receive
+        your <b>email address</b> and store the profile details you choose: your <b>username</b>,
+        <b>favorite color</b>, and <b>avatar</b>. We never see or store your password — sign-in is
+        handled by our authentication provider.</p>
+        <p><b>Gameplay records.</b> When you finish an online game (and single-player games while
+        signed in), we store the result: final victory points, placement, the other players, and
+        per-game stats (such as resources gained, distance flown, encounters, and trades). This
+        powers your record and match history.</p>
+        <p><b>Social features.</b> If you add friends, we store your friend list and pending
+        requests. <b>Chat messages</b> you send in a game room are relayed to the other players in
+        that room.</p>
+        <p><b>Stored only on your device.</b> Your sound and music preferences, any saved
+        single-player game, and your sign-in session are kept in your browser's local storage — not
+        on our servers.</p>
+        <p>We do <b>not</b> collect precise location, contacts, or device sensors, and the game does
+        not run third-party advertising or tracking.</p>
+
+        <h4 class="legal-h">2. How we use information</h4>
+        <ul class="htp-list">
+          <li>To create your account and show your profile to you and other players.</li>
+          <li>To run online matches, friends, invitations, and in-room chat.</li>
+          <li>To keep your win/loss record and game history.</li>
+          <li>To keep the service working, secure, and free of abuse.</li>
+        </ul>
+
+        <h4 class="legal-h">3. How information is shared</h4>
+        <p><b>With other players.</b> Your <b>username, color, avatar, online status, and game
+        results</b> are visible to people you play with or who view your profile.</p>
+        <p><b>With service providers.</b> We rely on trusted services to run the game: a hosted
+        database and authentication provider (Supabase), Google (only if you choose Google sign-in),
+        and our hosting provider. They process data on our behalf to deliver the service.</p>
+        <p>We do <b>not sell</b> your personal information, and we don't share it with advertisers.</p>
+
+        <h4 class="legal-h">4. Cookies &amp; local storage</h4>
+        <p>We don't use advertising or cross-site tracking cookies. We use your browser's local
+        storage to keep you signed in and to remember your settings (like sound on/off). Clearing
+        your browser storage signs you out and resets those preferences.</p>
+
+        <h4 class="legal-h">5. Data storage &amp; security</h4>
+        <p>Account, friends, and game data are stored in a hosted Postgres database with row-level
+        security, so each player can only modify their own records. No method of transmission or
+        storage is perfectly secure, but we take reasonable measures to protect your information.</p>
+
+        <h4 class="legal-h">6. Data retention</h4>
+        <p>We keep your profile and game history for as long as your account exists so your record
+        stays available. Delete your account and we remove your profile and associated records.</p>
+
+        <h4 class="legal-h">7. Your choices &amp; rights</h4>
+        <ul class="htp-list">
+          <li><b>Edit</b> your username, color, and avatar any time from your profile.</li>
+          <li><b>Access or delete</b> your account and its data — contact us using the email below.</li>
+          <li><b>Play without an account</b> — single-player stores nothing on our servers.</li>
+        </ul>
+        <p>Depending on where you live, you may have additional rights (such as access, correction,
+        or erasure). We honor valid requests.</p>
+
+        <h4 class="legal-h">8. Children's privacy</h4>
+        <p>The game is not directed to children under 13 (or the minimum age in your country), and we
+        do not knowingly collect their personal information. If you believe a child has provided us
+        data, contact us and we will remove it.</p>
+
+        <h4 class="legal-h">9. Changes to this policy</h4>
+        <p>We may update this policy as the game evolves. We'll revise the effective date above, and
+        significant changes will be highlighted in the game.</p>
+
+        <h4 class="legal-h">10. Contact</h4>
+        <p>Questions or requests about your data? Reach us at
+        <a class="legal-link" href="mailto:support@example.com">support@example.com</a>.</p>
+
+        <p class="legal-note">This adaptation is an unofficial fan project and is not affiliated with
+        or endorsed by Catan GmbH or Catan Studio.</p>
+      </div>`),
+  );
 }
 
 /** About tab — short blurb; placeholder for the social links / extras to come. */

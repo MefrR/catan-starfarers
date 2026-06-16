@@ -3411,3 +3411,25 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .avpick-cell.selected { border-color: #6fd0ff; box-shadow: 0 0 0 3px rgba(111, 208, 255, 0.25); }
 @media (max-width: 420px) { .avpick-grid { grid-template-columns: repeat(4, 1fr); } }
 
+
+/* === More: Privacy policy (scrollable legal doc) === */
+.more-legal {
+  flex: 1; min-width: 0; overflow-y: auto; max-height: 64vh; padding-right: 8px;
+  font-size: 13px; line-height: 1.62; color: #cdd8ef;
+}
+.more-legal p { margin: 0 0 10px; }
+.more-legal b { color: #eaf2ff; }
+.more-legal .legal-title { margin: 0 0 2px; font-size: 19px; font-weight: 800; color: #eaf2ff; }
+.more-legal .legal-date { margin: 0 0 14px; font-size: 12px; color: var(--muted); }
+.more-legal .legal-h {
+  margin: 18px 0 7px; font-size: 14px; font-weight: 800; color: #9fc6ff;
+}
+.more-legal .htp-list { margin: 0 0 10px; padding-left: 18px; }
+.more-legal .htp-list li { margin: 4px 0; }
+.more-legal .legal-link { color: #7fd0ff; text-decoration: underline; text-underline-offset: 3px; }
+.more-legal .legal-note {
+  margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 11.5px; color: #8fa0c4;
+}
+@media (max-width: 640px) { .more-legal { max-height: none; overflow: visible; } }
+
