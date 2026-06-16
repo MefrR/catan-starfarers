@@ -566,7 +566,7 @@ async function renderFriends(body: HTMLElement): Promise<void> {
   // --- Search ---
   const searchSec = el(`
     <div class="fr-sec">
-      <input class="acct-input fr-search" type="text" placeholder="Find players by username…" />
+      <input class="acct-input fr-search" type="text" placeholder="Find players by name or @username…" />
       <div class="fr-results"></div>
     </div>`);
   const input = searchSec.querySelector(".fr-search") as HTMLInputElement;

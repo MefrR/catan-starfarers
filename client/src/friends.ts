@@ -40,18 +40,21 @@ async function fetchProfiles(ids: string[]): Promise<Map<string, FriendUser>> {
   return out;
 }
 
-/** Search profiles by username prefix (excludes yourself). */
+/** Search profiles by the START of their username OR display name (case-
+ *  insensitive), excluding yourself. So typing a few letters surfaces everyone
+ *  whose handle or shown name begins with them — you don't need the exact name. */
 export async function searchUsers(query: string): Promise<FriendUser[]> {
   const sb = auth.client();
   const me = auth.userId();
-  const q = query.trim().replace(/[%_]/g, "");
+  // Strip characters that would break the PostgREST .or() filter syntax.
+  const q = query.trim().replace(/[%_(),]/g, "");
   if (!sb || !me || q.length < 2) return [];
   const { data } = await sb
     .from("profiles")
     .select("id, username, display_name, favorite_color")
-    .ilike("username", `${q}%`)
+    .or(`username.ilike.${q}%,display_name.ilike.${q}%`)
     .neq("id", me)
-    .limit(10);
+    .limit(15);
   return (data ?? []).map(mapUser);
 }
 
