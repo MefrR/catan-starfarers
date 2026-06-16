@@ -713,23 +713,20 @@ async function showFriendProfile(body: HTMLElement, u: FriendUser, back: () => v
   body.replaceChildren(view);
 }
 
-/** Edit tab: display name, username (with availability), favorite color, sign out. */
+/** Edit tab: username (the single identity, with availability), favorite color,
+ *  sign out. There's no separate display name — the username IS the name shown
+ *  everywhere, so saving it mirrors to display_name under the hood. */
 function renderProfileEdit(body: HTMLElement, card: HTMLElement, overlay: HTMLElement): void {
   const profile = auth.currentProfile();
   if (!profile) return;
-  let name = profile.displayName;
   let username = profile.username ?? "";
   let color: PlayerColor = profile.favoriteColor;
 
   const view = el(`
     <div class="acct-edit">
       <label class="acct-field">
-        <span class="acct-label">Display name</span>
-        <input class="acct-input" id="dn" type="text" maxlength="24" value="${escapeHtml(name)}" />
-      </label>
-      <label class="acct-field">
-        <span class="acct-label">Username (for friends)</span>
-        <input class="acct-input" id="un" type="text" maxlength="20" placeholder="3–20 letters, numbers, _" value="${escapeHtml(username)}" />
+        <span class="acct-label">Username <span class="auth-at">@yourname — your name everywhere, and how friends find you</span></span>
+        <input class="acct-input" id="un" type="text" maxlength="20" placeholder="3–20 letters, numbers or _" value="${escapeHtml(username)}" />
         <span class="acct-hint" id="unhint"></span>
       </label>
       <div class="acct-field">
@@ -744,7 +741,6 @@ function renderProfileEdit(body: HTMLElement, card: HTMLElement, overlay: HTMLEl
   body.replaceChildren(view);
 
   const avatar = card.querySelector(".acct-avatar") as HTMLElement;
-  const dn = view.querySelector("#dn") as HTMLInputElement;
   const un = view.querySelector("#un") as HTMLInputElement;
   const hint = view.querySelector("#unhint") as HTMLElement;
   const save = view.querySelector(".acct-save") as HTMLButtonElement;
@@ -754,11 +750,8 @@ function renderProfileEdit(body: HTMLElement, card: HTMLElement, overlay: HTMLEl
   let checkSeq = 0;
 
   const refresh = (): void => {
-    const changed =
-      name.trim() !== profile.displayName ||
-      username.trim() !== (profile.username ?? "") ||
-      color !== profile.favoriteColor;
-    save.disabled = !changed || name.trim().length === 0 || !usernameOk;
+    const changed = username.trim() !== (profile.username ?? "") || color !== profile.favoriteColor;
+    save.disabled = !changed || !usernameOk;
     save.textContent = changed ? "Save changes" : "Saved";
   };
 
@@ -774,15 +767,10 @@ function renderProfileEdit(body: HTMLElement, card: HTMLElement, overlay: HTMLEl
     swatches.appendChild(sw);
   }
 
-  dn.addEventListener("input", () => {
-    name = dn.value;
-    avatar.textContent = initials(name);
-    refresh();
-  });
-
   un.addEventListener("input", () => {
     username = un.value;
     const trimmed = username.trim();
+    avatar.textContent = initials(trimmed || "C"); // avatar follows the username
     if (trimmed === (profile.username ?? "")) {
       usernameOk = true;
       hint.textContent = "";
@@ -815,15 +803,18 @@ function renderProfileEdit(body: HTMLElement, card: HTMLElement, overlay: HTMLEl
     save.disabled = true;
     save.textContent = "Saving…";
     try {
-      await auth.updateProfile({
-        displayName: name.trim(),
-        favoriteColor: color,
-        username: username.trim() || (profile.username ?? ""),
-      });
+      const handle = username.trim();
+      // The username is the single identity, so mirror it into display_name.
+      await auth.updateProfile(
+        handle && handle !== (profile.username ?? "")
+          ? { username: handle, displayName: handle, favoriteColor: color }
+          : { favoriteColor: color },
+      );
       // Reflect the new identity in the card header without reopening.
-      (card.querySelector(".acct-card-title") as HTMLElement).textContent = name.trim();
+      const shown = handle || profile.displayName;
+      (card.querySelector(".acct-card-title") as HTMLElement).textContent = shown;
       const handleEl = card.querySelector(".acct-handle") as HTMLElement;
-      handleEl.textContent = username.trim() ? "@" + username.trim() : "Set a username to add friends";
+      handleEl.textContent = handle ? "@" + handle : "Set a username to add friends";
       save.textContent = "Saved";
     } catch {
       save.textContent = "Save failed — retry";
