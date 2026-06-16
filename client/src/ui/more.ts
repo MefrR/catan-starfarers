@@ -609,7 +609,7 @@ function renderPrivacy(body: HTMLElement): void {
 
         <h4 class="legal-h">10. Contact</h4>
         <p>Questions or requests about your data? Reach us at
-        <a class="legal-link" href="mailto:support@example.com">support@example.com</a>.</p>
+        <a class="legal-link" href="mailto:starfarersspace@gmail.com">starfarersspace@gmail.com</a>.</p>
 
         <p class="legal-note">This adaptation is an unofficial fan project and is not affiliated with
         or endorsed by Catan GmbH or Catan Studio.</p>
@@ -689,7 +689,7 @@ function renderTerms(body: HTMLElement): void {
 
         <h4 class="legal-h">12. Contact</h4>
         <p>Questions about these Terms? Reach us at
-        <a class="legal-link" href="mailto:support@example.com">support@example.com</a>.</p>
+        <a class="legal-link" href="mailto:starfarersspace@gmail.com">starfarersspace@gmail.com</a>.</p>
 
         <p class="legal-note">This adaptation is an unofficial fan project and is not affiliated with
         or endorsed by Catan GmbH or Catan Studio.</p>
