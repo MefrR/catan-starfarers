@@ -2120,6 +2120,27 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 /* PWA install chip — shown only when the browser offers installation. */
 .hero-install { margin-top: 12px; padding: 8px 18px; font-size: 13px; font-weight: 700; }
 .hero-install[hidden] { display: none; }
+/* iOS install instructions (no programmatic prompt on Safari). */
+.ios-install {
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
+  background: rgba(4, 8, 18, 0.6); backdrop-filter: blur(3px);
+}
+.ios-install-card {
+  width: min(360px, 90vw); padding: 22px 22px 18px; border-radius: 16px; text-align: center;
+  background: linear-gradient(165deg, #18223e, #0b1020);
+  border: 1px solid rgba(120, 170, 255, 0.4);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+}
+.ios-install-title { font-size: 18px; font-weight: 900; color: #eaf2ff; margin-bottom: 10px; }
+.ios-install-body { font-size: 14px; line-height: 1.6; color: #cdd8ef; }
+.ios-install-body svg { vertical-align: -3px; color: #6fb0ff; margin: 0 2px; }
+.ios-install-ok {
+  margin-top: 16px; padding: 9px 22px; border-radius: 11px; font-weight: 800; cursor: pointer;
+  color: #07101f; border: 1px solid rgba(150, 190, 255, 0.6);
+  background: linear-gradient(160deg, var(--accent), #6fa8ff);
+}
+.ios-install-ok::before, .ios-install-ok::after { content: none; }
+.ios-install-ok:hover { filter: brightness(1.08); }
 
 /* === AB3: account chip (top-right of the landing) + profile page. === */
 .acct-chip { position: fixed; top: 16px; right: 16px; z-index: 40; }

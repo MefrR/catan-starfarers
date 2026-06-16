@@ -46,6 +46,39 @@ window.addEventListener("appinstalled", () => {
   document.querySelector(".hero-install")?.setAttribute("hidden", "");
 });
 
+// iOS has NO install-prompt API (beforeinstallprompt never fires, and only
+// Safari can add a web app to the home screen). So on iOS we still show the
+// button, but it explains the manual Share → Add to Home Screen steps.
+const isIOS = (): boolean =>
+  /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); // iPadOS
+const isStandalone = (): boolean =>
+  window.matchMedia("(display-mode: standalone)").matches ||
+  (navigator as unknown as { standalone?: boolean }).standalone === true;
+
+/** iOS install instructions — there's no programmatic prompt, so we explain the
+ *  Safari Share → Add to Home Screen flow (and that only Safari can do it). */
+function showIosInstallHelp(): void {
+  document.querySelector(".ios-install")?.remove();
+  const inSafari = !/crios|fxios|edgios/i.test(navigator.userAgent);
+  const shareIcon =
+    `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M6 12v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7"/></svg>`;
+  const body = inSafari
+    ? `Tap the <b>Share</b> button ${shareIcon} in Safari's toolbar, then choose <b>“Add to Home Screen”</b>.`
+    : `On iPhone & iPad only <b>Safari</b> can install web apps. Open this page in <b>Safari</b>, then tap <b>Share</b> ${shareIcon} → <b>“Add to Home Screen”</b>.`;
+  const pop = el(`
+    <div class="ios-install">
+      <div class="ios-install-card">
+        <div class="ios-install-title">⤓ Install Starfarers</div>
+        <div class="ios-install-body">${body}</div>
+        <button class="ios-install-ok">Got it</button>
+      </div>
+    </div>`);
+  pop.querySelector(".ios-install-ok")!.addEventListener("click", () => pop.remove());
+  pop.addEventListener("click", (e) => { if (e.target === pop) pop.remove(); });
+  document.body.appendChild(pop);
+}
+
 async function boot(): Promise<void> {
   const canvas = document.getElementById("board") as HTMLCanvasElement;
   const field = await Starfield.create(canvas);
@@ -184,7 +217,7 @@ async function boot(): Promise<void> {
           </div>
           ${resumeHtml}
           <button class="hero-tutorial" id="tutorial">✦ First flight? Take the guided tutorial</button>
-          <button class="hero-install" id="install" ${deferredInstall ? "" : "hidden"}>⤓ Install as app</button>
+          <button class="hero-install" id="install" ${deferredInstall || (isIOS() && !isStandalone()) ? "" : "hidden"}>⤓ Install as app</button>
         </div>
       </div>
     `);
@@ -205,11 +238,16 @@ async function boot(): Promise<void> {
     });
     const install = screen.querySelector("#install") as HTMLElement | null;
     install?.addEventListener("click", async () => {
-      if (!deferredInstall) return;
-      await deferredInstall.prompt();
-      await deferredInstall.userChoice;
-      deferredInstall = null;
-      install.setAttribute("hidden", "");
+      if (deferredInstall) {
+        // Chrome / Edge / Android: fire the real install prompt.
+        await deferredInstall.prompt();
+        await deferredInstall.userChoice;
+        deferredInstall = null;
+        install.setAttribute("hidden", "");
+      } else if (isIOS()) {
+        // iOS Safari has no install API — walk the user through it.
+        showIosInstallHelp();
+      }
     });
     const resume = screen.querySelector("#resume") as HTMLElement | null;
     resume?.addEventListener("click", () => {
