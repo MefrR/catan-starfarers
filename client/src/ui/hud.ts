@@ -205,7 +205,7 @@ export class HUD {
    *  the exact narration lines the card produced (its descriptive outcome). */
   private encLogMark = 0;
   /** Snapshot of each player's fame/medals/hand taken when an encounter opens. */
-  private encSnapshot: Record<string, { fame: number; medals: number; hand: ResourceBag }> = {};
+  private encSnapshot: Record<string, { fame: number; medals: number; hand: ResourceBag; ships: number }> = {};
   /** Whether the center-screen game-over results overlay is already shown. */
   private gameOverShown = false;
   /** R1/R2: collapse toggles for the side panels on small screens. */
@@ -3242,6 +3242,7 @@ export class HUD {
         fame: p.fameMedalPieces,
         medals: p.victoryMedals,
         hand: { ...p.hand },
+        ships: state.ships.filter((s) => s.owner === p.id).length,
       };
     }
   }
@@ -3291,14 +3292,25 @@ export class HUD {
       const opp = state.players.find((p) => p.id === enc.duel!.opponentId);
       const statLabel = enc.duel.stat === "combat" ? "combat strength" : "speed";
       cardEl.appendChild(el(`<div class="enc-subject">Duel — compare ${statLabel}</div>`));
-      const row = (p: PlayerState | undefined, roll: number | undefined, role: string): HTMLElement => {
+      // Once BOTH motherships have shaken, colour each row so it's instantly
+      // clear who won (subject wins ties, matching the engine).
+      const bothIn = enc.duel.subjectRoll != null && enc.duel.oppRoll != null;
+      const subjWon = bothIn && (enc.duel.subjectRoll ?? 0) >= (enc.duel.oppRoll ?? 0);
+      const row = (p: PlayerState | undefined, roll: number | undefined, role: string, isSubject: boolean): HTMLElement => {
         const name = p ? escapeHtml(p.name) : "Rival";
         const col = p ? COLOR_HEX[p.color] : "#fff";
-        return el(`<div class="enc-rost" style="color:${col};opacity:1">${role}: <b>${name}</b> ${roll != null ? `— shook <b>${roll}</b>` : "— …"}</div>`);
+        let cls = "enc-rost";
+        let tag = roll != null ? `— shook <b>${roll}</b>` : "— …";
+        if (bothIn) {
+          const won = isSubject ? subjWon : !subjWon;
+          cls += won ? " duel-win" : " duel-loss";
+          tag += won ? ` <span class="duel-tag win">WON</span>` : ` <span class="duel-tag loss">lost</span>`;
+        }
+        return el(`<div class="${cls}" style="color:${col}">${role}: <b>${name}</b> ${tag}</div>`);
       };
       const roster = el(`<div class="enc-roster" style="flex-direction:column;gap:6px"></div>`);
-      roster.appendChild(row(subject, enc.duel.subjectRoll, "Pilot"));
-      roster.appendChild(row(opp, enc.duel.oppRoll, "Rival"));
+      roster.appendChild(row(subject, enc.duel.subjectRoll, "Pilot", true));
+      roster.appendChild(row(opp, enc.duel.oppRoll, "Rival", false));
       cardEl.appendChild(roster);
       const iAmSubject = enc.subjectId === me.id && enc.duel.subjectRoll == null;
       const iAmOpp = enc.duel.opponentId === me.id && enc.duel.oppRoll == null;
@@ -3562,10 +3574,11 @@ export class HUD {
     let chipCount = 0;
     let chips = "";
     if (medalDelta > 0) chips += chip("gain", medalGlyphSvg(), `+${medalDelta} VP medal`);
-    if (fameDelta > 0) chips += chip("gain", fameGlyphSvg(), `+${fameDelta} fame`);
-    if (fameDelta < 0) chips += chip("loss", fameGlyphSvg(), `${fameDelta} fame`);
-    for (const g of gained) chips += chip("gain", resourceGlyphSvg(g.r), `+${g.d} ${RESOURCE_LABEL[g.r]}`);
-    for (const l of lost) chips += chip("loss", resourceGlyphSvg(l.r), `${l.d} ${RESOURCE_LABEL[l.r]}`);
+    // Fame shows as a star — gold when gained, red when taken away.
+    if (fameDelta > 0) chips += chip("gain fame", fameGlyphSvg(), `+${fameDelta} fame`);
+    if (fameDelta < 0) chips += chip("loss fame", fameGlyphSvg(), `${fameDelta} fame`);
+    for (const g of gained) chips += chip("gain res", resourceGlyphSvg(g.r), `+${g.d} ${RESOURCE_LABEL[g.r]}`);
+    for (const l of lost) chips += chip("loss res", resourceGlyphSvg(l.r), `${l.d} ${RESOURCE_LABEL[l.r]}`);
     const sparks = Array.from({ length: 12 }, (_v, i) => {
       const a = (Math.PI * 2 * i) / 12 + 0.26;
       const d = 90 + (i % 3) * 38;
@@ -3582,6 +3595,19 @@ export class HUD {
     document.body.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add("show"));
     sfx.play(tone === "gain" ? "medal" : tone === "loss" ? "steal" : "trade");
+
+    // Won a ship from the encounter — show its icon big and proud.
+    const shipDelta = state.ships.filter((s) => s.owner === subjectId).length - snap.ships;
+    if (shipDelta > 0) {
+      const newShip = [...state.ships].reverse().find((s) => s.owner === subjectId);
+      const kind = newShip?.kind ?? "tradeShip";
+      const big = el(
+        `<div class="enc-ship-reward"><div class="esr-ico">${shipIco(kind)}</div><div class="esr-label">+1 ${kind === "colonyShip" ? "colony" : "trade"} ship!</div></div>`,
+      );
+      document.body.appendChild(big);
+      requestAnimationFrame(() => big.classList.add("show"));
+      window.setTimeout(() => big.remove(), 2600);
+    }
     const center = { x: window.innerWidth / 2, y: window.innerHeight * 0.38 };
 
     // Mine: fame/medal → left sidebar, resources → hand cards.

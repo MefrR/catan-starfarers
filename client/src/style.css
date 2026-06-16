@@ -2904,6 +2904,33 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .er-chip svg { width: 18px; height: 18px; }
 .er-chip.gain { color: #6ee7a8; border: 1px solid rgba(110, 231, 168, 0.5); }
 .er-chip.loss { color: #ff8a8a; border: 1px solid rgba(255, 138, 138, 0.5); }
+/* Resource gains/losses read as little cards: big glyph stacked over the count. */
+.er-chip.res { flex-direction: column; gap: 2px; padding: 8px 12px 6px; border-radius: 12px; min-width: 54px; font-size: 12px; }
+.er-chip.res svg { width: 28px; height: 28px; }
+.er-chip.res.gain { background: linear-gradient(165deg, rgba(110,231,168,0.16), rgba(8,12,24,0.92)); }
+.er-chip.res.loss { background: linear-gradient(165deg, rgba(255,138,138,0.16), rgba(8,12,24,0.92)); }
+/* Fame is a STAR — gold when earned, red when taken. */
+.er-chip.fame svg { width: 24px; height: 24px; }
+.er-chip.fame.gain { color: #ffd23f; border-color: rgba(255, 210, 63, 0.6); }
+.er-chip.fame.loss { color: #ff6b6b; border-color: rgba(255, 107, 107, 0.6); }
+/* Duel result: winner glows, loser dims — instantly clear who won. */
+.encounter-card .enc-rost.duel-win {
+  opacity: 1; background: rgba(87, 227, 137, 0.14); border: 1px solid rgba(87, 227, 137, 0.5);
+  border-radius: 8px; padding: 4px 9px; font-weight: 700;
+}
+.encounter-card .enc-rost.duel-loss { opacity: 0.5; }
+.duel-tag { font-size: 10px; font-weight: 800; letter-spacing: 0.06em; padding: 1px 6px; border-radius: 6px; margin-left: 4px; }
+.duel-tag.win { color: #062; background: #6fe89a; }
+.duel-tag.loss { color: #ff8a8a; background: rgba(255, 138, 138, 0.18); }
+/* Won a ship — its icon blooms big in the centre. */
+.enc-ship-reward {
+  position: fixed; left: 50%; top: 44%; transform: translate(-50%, -50%) scale(0.4);
+  z-index: 75; pointer-events: none; text-align: center; opacity: 0;
+  transition: transform 0.45s cubic-bezier(0.2, 1.5, 0.4, 1), opacity 0.3s ease;
+}
+.enc-ship-reward.show { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+.enc-ship-reward .esr-ico svg { width: 128px; height: 128px; filter: drop-shadow(0 0 26px rgba(120, 200, 255, 0.6)); }
+.enc-ship-reward .esr-label { margin-top: 6px; font-size: 18px; font-weight: 900; color: #bfe4ff; text-shadow: 0 2px 12px rgba(0,0,0,0.85); }
 @keyframes erChip {
   from { transform: scale(0.3) translateY(8px); opacity: 0; }
   to { transform: scale(1) translateY(0); opacity: 1; }
