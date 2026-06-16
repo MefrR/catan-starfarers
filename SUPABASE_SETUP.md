@@ -36,14 +36,27 @@ doesn't appear. So you can develop single-player without any of this.
      `https://<your-project-ref>.supabase.co/auth/v1/callback`.
    - Paste the Google **Client ID** + **Client secret** back into Supabase.
 
-3. **Allow your app's redirect URLs** — *Authentication → URL Configuration*:
+3. **Enable Email sign-up (email + password)** — *Authentication → Providers →
+   Email → Enable*. This powers the in-app **Register / Log in** form.
+   - **Confirm email** (recommended ON): Supabase emails a confirmation link and
+     the player can't log in until they click it. The app handles this — after
+     registering it shows "check your inbox", then they log in once confirmed.
+     Turn it OFF for instant login (less safe; allows fake emails).
+   - **Password reset** works out of the box — the app's "Forgot password?" link
+     calls Supabase, and opening the emailed link prompts for a new password.
+   - **Email sending:** Supabase's built-in mailer is rate-limited (~a few/hour).
+     For production, set a custom SMTP provider under
+     *Authentication → Emails → SMTP Settings* (Resend, SendGrid, Postmark, …).
+
+4. **Allow your app's redirect URLs** — *Authentication → URL Configuration*:
    - **Site URL**: your main deployed origin (e.g. `https://play.designroom.studio`).
    - **Redirect URLs**: add every origin you sign in from, e.g.
-     `http://localhost:5173`, your Render URL, and your Vercel URL.
+     `http://localhost:5173`, your Render URL, and your Vercel URL. (The email
+     confirmation and password-reset links return to these origins.)
 
-4. **Run the schema** — *SQL Editor → New query* → paste the block below → Run.
+5. **Run the schema** — *SQL Editor → New query* → paste the block below → Run.
 
-5. **Set the env vars** where you build the client:
+6. **Set the env vars** where you build the client:
    - **Local dev**: create `client/.env.local` with the two `VITE_…` values.
    - **Render / Vercel**: add them in the dashboard's Environment Variables.
 

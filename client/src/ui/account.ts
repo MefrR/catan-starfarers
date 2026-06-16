@@ -62,12 +62,173 @@ export function mountAccountChip(host: HTMLElement): void {
       btn.addEventListener("click", () => openAccountPage());
       chip.appendChild(btn);
     } else {
-      const btn = el(`<button class="acct-btn signin"><span class="g-mark">G</span>Sign in</button>`);
-      btn.addEventListener("click", () => void auth.signInWithGoogle());
+      const btn = el(`<button class="acct-btn signin">Sign in</button>`);
+      btn.addEventListener("click", () => openAuthPanel());
       chip.appendChild(btn);
     }
   };
   auth.onChange(paint);
+  // A password-reset link returns here with a recovery session — prompt for a
+  // new password as soon as that happens.
+  auth.onPasswordRecovery(() => openSetPasswordPanel());
+}
+
+/** Sign-in / register overlay: email+password (with Log in / Register toggle
+ *  and Forgot password), plus the Google option. */
+export function openAuthPanel(): void {
+  if (!isAuthConfigured) return;
+  if (document.querySelector(".auth-overlay")) return;
+
+  const overlay = el(`<div class="acct-overlay auth-overlay"></div>`);
+  const card = el(`
+    <div class="acct-card auth-card">
+      <button class="acct-close" title="Close">✕</button>
+      <div class="auth-head">
+        <div class="acct-card-title">Welcome, Commander</div>
+        <div class="acct-card-sub">Sign in or create an account to play online, add friends and save your record.</div>
+      </div>
+      <div class="acct-tabs auth-tabs">
+        <button class="acct-tab active" data-mode="login">Log in</button>
+        <button class="acct-tab" data-mode="register">Register</button>
+      </div>
+      <form class="auth-form" novalidate>
+        <label class="acct-field reg-only" hidden>
+          <span class="acct-label">Display name</span>
+          <input class="acct-input" id="auth-name" type="text" maxlength="24" autocomplete="nickname" placeholder="Commander" />
+        </label>
+        <label class="acct-field">
+          <span class="acct-label">Email</span>
+          <input class="acct-input" id="auth-email" type="email" autocomplete="email" placeholder="you@example.com" />
+        </label>
+        <label class="acct-field">
+          <span class="acct-label">Password</span>
+          <input class="acct-input" id="auth-pass" type="password" autocomplete="current-password" placeholder="At least 6 characters" />
+        </label>
+        <div class="auth-msg" hidden></div>
+        <button type="submit" class="acct-save auth-submit">Log in</button>
+        <button type="button" class="auth-forgot link login-only">Forgot password?</button>
+      </form>
+      <div class="auth-or"><span>or</span></div>
+      <button class="auth-google"><span class="g-mark">G</span>Continue with Google</button>
+    </div>`);
+  overlay.appendChild(card);
+
+  const tabs = [...card.querySelectorAll<HTMLElement>(".acct-tab")];
+  const form = card.querySelector(".auth-form") as HTMLFormElement;
+  const nameField = card.querySelector(".reg-only") as HTMLElement;
+  const nameInput = card.querySelector("#auth-name") as HTMLInputElement;
+  const emailInput = card.querySelector("#auth-email") as HTMLInputElement;
+  const passInput = card.querySelector("#auth-pass") as HTMLInputElement;
+  const submit = card.querySelector(".auth-submit") as HTMLButtonElement;
+  const forgot = card.querySelector(".auth-forgot") as HTMLElement;
+  const msg = card.querySelector(".auth-msg") as HTMLElement;
+  let mode: "login" | "register" = "login";
+
+  const showMsg = (text: string, kind: "err" | "ok"): void => {
+    msg.textContent = text;
+    msg.className = `auth-msg ${kind}`;
+    msg.hidden = false;
+  };
+  const clearMsg = (): void => { msg.hidden = true; msg.textContent = ""; };
+
+  const setMode = (m: "login" | "register"): void => {
+    mode = m;
+    tabs.forEach((t) => t.classList.toggle("active", t.dataset.mode === m));
+    nameField.hidden = m !== "register";
+    forgot.style.display = m === "login" ? "" : "none";
+    submit.textContent = m === "login" ? "Log in" : "Create account";
+    passInput.autocomplete = m === "login" ? "current-password" : "new-password";
+    clearMsg();
+  };
+  tabs.forEach((t) => t.addEventListener("click", () => setMode(t.dataset.mode as "login" | "register")));
+
+  // Close automatically once a session is established (covers email login and
+  // confirmation-off sign-up). `stop` is also called on manual close so the
+  // listener never leaks.
+  let stop: () => void = () => {};
+  const close = (): void => {
+    stop();
+    overlay.classList.remove("show");
+    setTimeout(() => overlay.remove(), 200);
+  };
+  card.querySelector(".acct-close")!.addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  stop = auth.onChange((profile) => { if (profile) close(); });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearMsg();
+    const email = emailInput.value.trim();
+    const pass = passInput.value;
+    if (!email || !/.+@.+\..+/.test(email)) { showMsg("Please enter a valid email address.", "err"); return; }
+    if (pass.length < 6) { showMsg("Password must be at least 6 characters.", "err"); return; }
+    submit.disabled = true;
+    submit.textContent = mode === "login" ? "Logging in…" : "Creating…";
+    const res = mode === "login"
+      ? await auth.signInWithEmail(email, pass)
+      : await auth.signUpWithEmail(email, pass, nameInput.value);
+    submit.disabled = false;
+    submit.textContent = mode === "login" ? "Log in" : "Create account";
+    if (!res.ok) { showMsg(res.error ?? "Something went wrong.", "err"); return; }
+    if (res.pendingConfirm) {
+      showMsg("Account created! Check your inbox to confirm your email, then log in.", "ok");
+      setMode("login");
+      return;
+    }
+    // Logged in — auth.onChange will close the panel.
+  });
+
+  forgot.addEventListener("click", async () => {
+    const email = emailInput.value.trim();
+    if (!email || !/.+@.+\..+/.test(email)) { showMsg("Enter your email above first, then tap Forgot password.", "err"); return; }
+    const res = await auth.sendPasswordReset(email);
+    showMsg(res.ok ? "If that email has an account, a reset link is on its way." : (res.error ?? "Couldn't send the reset email."), res.ok ? "ok" : "err");
+  });
+
+  card.querySelector(".auth-google")!.addEventListener("click", () => void auth.signInWithGoogle());
+
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("show"));
+  setMode("login");
+}
+
+/** After a password-reset link, prompt the (recovery-session) user for a new
+ *  password and save it. */
+export function openSetPasswordPanel(): void {
+  if (document.querySelector(".setpass-overlay")) return;
+  const overlay = el(`<div class="acct-overlay setpass-overlay"></div>`);
+  const card = el(`
+    <div class="acct-card auth-card">
+      <div class="auth-head">
+        <div class="acct-card-title">Set a new password</div>
+        <div class="acct-card-sub">Choose a new password for your account.</div>
+      </div>
+      <form class="auth-form" novalidate>
+        <label class="acct-field">
+          <span class="acct-label">New password</span>
+          <input class="acct-input" id="np" type="password" autocomplete="new-password" placeholder="At least 6 characters" />
+        </label>
+        <div class="auth-msg" hidden></div>
+        <button type="submit" class="acct-save">Save password</button>
+      </form>
+    </div>`);
+  overlay.appendChild(card);
+  const input = card.querySelector("#np") as HTMLInputElement;
+  const msg = card.querySelector(".auth-msg") as HTMLElement;
+  const btn = card.querySelector(".acct-save") as HTMLButtonElement;
+  const form = card.querySelector(".auth-form") as HTMLFormElement;
+  const close = (): void => { overlay.classList.remove("show"); setTimeout(() => overlay.remove(), 200); };
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (input.value.length < 6) { msg.textContent = "Password must be at least 6 characters."; msg.className = "auth-msg err"; msg.hidden = false; return; }
+    btn.disabled = true; btn.textContent = "Saving…";
+    const res = await auth.updatePassword(input.value);
+    if (!res.ok) { msg.textContent = res.error ?? "Couldn't update the password."; msg.className = "auth-msg err"; msg.hidden = false; btn.disabled = false; btn.textContent = "Save password"; return; }
+    msg.textContent = "Password updated! You're all set."; msg.className = "auth-msg ok"; msg.hidden = false;
+    setTimeout(close, 1200);
+  });
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("show"));
 }
 
 /** The account page overlay: header + Profile / Record / History tabs. */

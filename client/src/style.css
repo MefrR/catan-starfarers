@@ -3352,3 +3352,36 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 /* Fix the close âœ• glyph not being centered (used by More + the account card). */
 .acct-close { display: grid; place-items: center; line-height: 1; padding: 0; }
 
+
+/* === Sign-in / register panel (email+password + Google) === */
+.auth-card { width: min(400px, 94vw); }
+.auth-head { margin-bottom: 4px; }
+.auth-tabs { margin: 14px 0 16px; }
+/* The Display-name field is hidden in Log-in mode (explicit, since .acct-field
+   sets display:block which would otherwise defeat the [hidden] attribute). */
+.acct-field[hidden] { display: none; }
+.auth-msg { font-size: 12.5px; line-height: 1.45; border-radius: 9px; padding: 9px 11px; margin: 2px 0 12px; }
+.auth-msg[hidden] { display: none; }
+.auth-msg.err { background: rgba(255, 93, 93, 0.12); border: 1px solid rgba(255, 93, 93, 0.35); color: #ffb4b4; }
+.auth-msg.ok { background: rgba(82, 232, 160, 0.12); border: 1px solid rgba(82, 232, 160, 0.35); color: #9af0c4; }
+.auth-submit { width: 100%; }
+.auth-forgot.link {
+  display: block; margin: 10px auto 0; padding: 4px; background: none; border: none; cursor: pointer;
+  color: #9fc6ff; font-size: 12.5px; text-decoration: underline; text-underline-offset: 3px;
+}
+.auth-forgot.link::before, .auth-forgot.link::after { content: none; }
+.auth-forgot.link:hover { color: #cfe6ff; }
+.auth-or { display: flex; align-items: center; gap: 10px; margin: 16px 0; color: var(--muted); font-size: 12px; }
+.auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: rgba(255, 255, 255, 0.12); }
+.auth-google {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 11px; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 14px;
+  background: rgba(255, 255, 255, 0.06); color: #eaf2ff; border: 1px solid rgba(160, 195, 255, 0.3);
+}
+.auth-google::before, .auth-google::after { content: none; }
+.auth-google:hover { filter: brightness(1.1); border-color: rgba(160, 195, 255, 0.55); }
+.auth-google .g-mark {
+  display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; color: #4285f4; font-weight: 900; font-size: 12px;
+}
+

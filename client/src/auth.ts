@@ -28,11 +28,35 @@ export interface Profile {
 
 type AuthListener = (profile: Profile | null) => void;
 
+/** Result of an email/password auth action, with a UI-friendly message. */
+export interface AuthResult {
+  ok: boolean;
+  error?: string;
+  /** True after sign-up when Supabase requires email confirmation first. */
+  pendingConfirm?: boolean;
+}
+
+/** Map Supabase's technical auth errors to short, friendly messages. */
+function friendlyAuthError(msg: string): string {
+  const m = msg.toLowerCase();
+  if (m.includes("invalid login")) return "Wrong email or password.";
+  if (m.includes("already registered") || m.includes("already been registered") || m.includes("already exists"))
+    return "That email is already registered — try logging in instead.";
+  if (m.includes("password should be") || m.includes("at least 6")) return "Password must be at least 6 characters.";
+  if (m.includes("unable to validate email") || m.includes("invalid email") || m.includes("invalid format"))
+    return "That doesn't look like a valid email address.";
+  if (m.includes("email not confirmed")) return "Please confirm your email first — check your inbox.";
+  if (m.includes("rate limit") || m.includes("too many") || m.includes("for security purposes"))
+    return "Too many attempts — please wait a minute and try again.";
+  return msg || "Something went wrong. Please try again.";
+}
+
 class Auth {
   private supabase: SupabaseClient | null = null;
   private session: Session | null = null;
   private profile: Profile | null = null;
   private listeners = new Set<AuthListener>();
+  private recoveryListeners = new Set<() => void>();
   private ready: Promise<void>;
 
   constructor() {
@@ -48,7 +72,12 @@ class Auth {
     this.ready = this.supabase.auth.getSession().then(async ({ data }) => {
       await this.adopt(data.session);
     });
-    this.supabase.auth.onAuthStateChange((_event, session) => {
+    this.supabase.auth.onAuthStateChange((event, session) => {
+      // A password-reset link lands here with a temporary recovery session —
+      // surface it so the UI can prompt for a new password.
+      if (event === "PASSWORD_RECOVERY") {
+        for (const fn of this.recoveryListeners) fn();
+      }
       void this.adopt(session);
     });
   }
@@ -109,6 +138,58 @@ class Auth {
       provider: "google",
       options: { redirectTo: location.origin },
     });
+  }
+
+  /** Register a new account with email + password. With email confirmation on,
+   *  returns `pendingConfirm: true` (no session yet until they click the link). */
+  async signUpWithEmail(email: string, password: string, displayName?: string): Promise<AuthResult> {
+    if (!this.supabase) return { ok: false, error: "Accounts aren't available right now." };
+    const name = displayName?.trim();
+    const { data, error } = await this.supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        emailRedirectTo: location.origin,
+        // Seed the profile trigger with a display name when one was provided.
+        data: name ? { full_name: name } : undefined,
+      },
+    });
+    if (error) return { ok: false, error: friendlyAuthError(error.message) };
+    // No session means Supabase is waiting on email confirmation.
+    if (!data.session) return { ok: true, pendingConfirm: true };
+    return { ok: true }; // adopt() fires via onAuthStateChange
+  }
+
+  /** Log in with an existing email + password. */
+  async signInWithEmail(email: string, password: string): Promise<AuthResult> {
+    if (!this.supabase) return { ok: false, error: "Accounts aren't available right now." };
+    const { error } = await this.supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) return { ok: false, error: friendlyAuthError(error.message) };
+    return { ok: true };
+  }
+
+  /** Send a password-reset email (the link returns to this origin). */
+  async sendPasswordReset(email: string): Promise<AuthResult> {
+    if (!this.supabase) return { ok: false, error: "Accounts aren't available right now." };
+    const { error } = await this.supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: location.origin,
+    });
+    if (error) return { ok: false, error: friendlyAuthError(error.message) };
+    return { ok: true };
+  }
+
+  /** Set a new password for the signed-in (or recovery) session. */
+  async updatePassword(newPassword: string): Promise<AuthResult> {
+    if (!this.supabase) return { ok: false, error: "Accounts aren't available right now." };
+    const { error } = await this.supabase.auth.updateUser({ password: newPassword });
+    if (error) return { ok: false, error: friendlyAuthError(error.message) };
+    return { ok: true };
+  }
+
+  /** Fires when a password-reset link is opened (prompt the user for a new one). */
+  onPasswordRecovery(fn: () => void): () => void {
+    this.recoveryListeners.add(fn);
+    return () => this.recoveryListeners.delete(fn);
   }
 
   async signOut(): Promise<void> {
