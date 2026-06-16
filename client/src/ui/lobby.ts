@@ -76,6 +76,9 @@ export class LobbyUI {
   private presenceUnsub: (() => void) | null = null;
   /** Re-request the public-room list whenever the socket (re)connects. */
   private statusUnsub: (() => void) | null = null;
+  /** Structure signature of the last full lobby render, so a color/crew change
+   *  updates in place instead of rebuilding the whole screen (which flickered). */
+  private lobbySig = "";
   /** AC2: friends already invited to this room, so we never invite twice
    *  (the panel re-renders on every presence change, which would otherwise
    *  reset each "Invited" button back to a clickable "Invite"). */
@@ -278,11 +281,13 @@ export class LobbyUI {
     const nameVal = (): string =>
       (this.root.querySelector("#name") as HTMLInputElement | null)?.value.trim() ?? "";
     for (const r of this.rooms) {
+      const mapTag = r.fog ? "🌫 Uncharted" : "🛰 Charted";
+      const timerTag = r.timer > 0 ? `⏱ ${r.timer}s/turn` : "⏱ No timer";
       const row = el(`
         <div class="room-row">
           <div class="room-meta">
             <span class="room-host">${escapeHtml(r.host)}</span>
-            <span class="room-code">${escapeHtml(r.code)}</span>
+            <span class="room-tags">${mapTag} · ${timerTag} · <span class="room-code">${escapeHtml(r.code)}</span></span>
           </div>
           <span class="room-count">${r.players}/${r.max}</span>
           <button class="room-join">Join</button>
@@ -308,6 +313,52 @@ export class LobbyUI {
     if (!taken) net.send({ t: "setColor", color: profile.favoriteColor });
   }
 
+  /** The crew list + (host-only) Add-AI button — markup shared by the full
+   *  render and the in-place update. */
+  private crewInnerHtml(): string {
+    const lobby = this.lobby!;
+    const isHost = lobby.players.find((p) => p.id === this.youId)?.isHost;
+    return `<ul class="players">
+        ${lobby.players
+          .map(
+            (p) => `
+          <li class="${p.connected ? "" : "offline"}">
+            <span class="dot ${p.color}"></span>
+            <span>${escapeHtml(p.name)}</span>
+            <span class="badge">${p.isAI ? "AI" : p.isHost ? "HOST" : ""}${p.id === this.youId ? " · you" : ""}</span>
+            ${isHost && p.isAI ? `<button class="ai-remove" data-id="${p.id}" title="Remove this AI">✕</button>` : ""}
+          </li>`,
+          )
+          .join("")}
+      </ul>
+      ${isHost && lobby.players.length < 4 ? `<div class="seg"><button class="seg-opt" id="addai">+ Add AI opponent</button></div>` : ""}`;
+  }
+
+  /** Fill a container with the colour swatches (taken ones dimmed). */
+  private buildSwatches(container: Element): void {
+    const lobby = this.lobby!;
+    const me = lobby.players.find((p) => p.id === this.youId);
+    container.replaceChildren();
+    const used = new Map(lobby.players.map((p) => [p.color, p.id] as const));
+    for (const c of PLAYER_COLORS) {
+      const taken = used.has(c) && used.get(c) !== this.youId;
+      const mine = me?.color === c;
+      const btn = el(
+        `<button class="swatch ${mine ? "selected" : ""}" ${taken ? "disabled" : ""} title="${taken ? "Taken" : c}" style="--sw:${COLOR_HEX[c]};${taken ? "opacity:0.3;cursor:not-allowed" : ""}"></button>`,
+      );
+      if (!taken) btn.addEventListener("click", () => net.send({ t: "setColor", color: c as PlayerColor }));
+      container.appendChild(btn);
+    }
+  }
+
+  /** Wire the Add-AI / remove-AI buttons within a scope. */
+  private wireCrew(scope: ParentNode): void {
+    scope.querySelector("#addai")?.addEventListener("click", () => net.send({ t: "addAi" }));
+    scope.querySelectorAll(".ai-remove").forEach((b) =>
+      b.addEventListener("click", () => net.send({ t: "removeAi", id: (b as HTMLElement).dataset.id! })),
+    );
+  }
+
   private renderLobby(): void {
     const lobby = this.lobby!;
     const me = lobby.players.find((p) => p.id === this.youId);
@@ -315,6 +366,26 @@ export class LobbyUI {
     // The link other players open to join: online players load this very site;
     // LAN players load the host's server URL.
     const shareUrl = this.mode === "online" ? location.origin : net.currentUrl;
+    const onlineInvite = this.mode === "online" && !!auth.currentProfile();
+    const startLabel = `START GAME · ${lobby.players.length} ${lobby.players.length === 1 ? "PLAYER" : "PLAYERS"}`;
+
+    // In-place update: when the screen is already up for this same room/role
+    // (e.g. someone changed colour or joined), refresh only the bits that
+    // change rather than rebuilding the whole screen — which flickered and
+    // reset the friends panel / scroll.
+    const sig = `${lobby.roomCode}|${isHost}|${lobby.started}|${onlineInvite}`;
+    if (this.lobbySig === sig && !lobby.started && this.root.querySelector(".roomcode-title")) {
+      const crewCtrl = this.root.querySelector("#crewctrl");
+      if (crewCtrl) { crewCtrl.innerHTML = this.crewInnerHtml(); this.wireCrew(crewCtrl); }
+      const colorsRow = this.root.querySelector("#colors");
+      if (colorsRow) this.buildSwatches(colorsRow);
+      const crewCount = this.root.querySelector("#crewcount");
+      if (crewCount) crewCount.textContent = String(lobby.players.length);
+      const startBtn = this.root.querySelector("#start");
+      if (startBtn) startBtn.textContent = startLabel;
+      return;
+    }
+    this.lobbySig = sig;
 
     const screen = el(`
       <div class="screen">
@@ -326,23 +397,8 @@ export class LobbyUI {
           </div>
 
           <div class="setup-row">
-            <div class="setup-label">Crew (${lobby.players.length})</div>
-            <div class="setup-ctrl setup-crew">
-              <ul class="players">
-                ${lobby.players
-                  .map(
-                    (p) => `
-                  <li class="${p.connected ? "" : "offline"}">
-                    <span class="dot ${p.color}"></span>
-                    <span>${escapeHtml(p.name)}</span>
-                    <span class="badge">${p.isAI ? "AI" : p.isHost ? "HOST" : ""}${p.id === this.youId ? " · you" : ""}</span>
-                    ${isHost && p.isAI ? `<button class="ai-remove" data-id="${p.id}" title="Remove this AI">✕</button>` : ""}
-                  </li>`,
-                  )
-                  .join("")}
-              </ul>
-              ${isHost && lobby.players.length < 4 ? `<div class="seg"><button class="seg-opt" id="addai">+ Add AI opponent</button></div>` : ""}
-            </div>
+            <div class="setup-label">Crew (<span id="crewcount">${lobby.players.length}</span>)</div>
+            <div class="setup-ctrl setup-crew" id="crewctrl">${this.crewInnerHtml()}</div>
           </div>
 
           <div class="setup-row">
@@ -350,7 +406,7 @@ export class LobbyUI {
             <div class="setup-ctrl"><div class="swatches" id="colors"></div></div>
           </div>
 
-          ${this.mode === "online" && auth.currentProfile() ? `
+          ${onlineInvite ? `
           <div class="setup-row">
             <div class="setup-label">Invite friends</div>
             <div class="setup-ctrl"><div class="fr-invite" id="invitefriends"><div class="fr-hint">Loading friends…</div></div></div>
@@ -371,7 +427,7 @@ export class LobbyUI {
               ? `<div class="glow-wrap">
                    <div class="glow-layer glow-far"><i></i></div>
                    <div class="glow-layer glow-near"><i></i></div>
-                   <button class="glow-btn" id="start">START GAME · ${lobby.players.length} ${lobby.players.length === 1 ? "PLAYER" : "PLAYERS"}</button>
+                   <button class="glow-btn" id="start">${startLabel}</button>
                  </div>`
               : `<p class="sp-sub">Waiting for the host to start…</p>`}
             <div class="error">${this.errorText}</div>
@@ -381,18 +437,8 @@ export class LobbyUI {
       </div>
     `);
 
-    // Color swatches: round orbs like the single-player menu; taken colors dim.
-    const colorsRow = screen.querySelector("#colors")!;
-    const used = new Map(lobby.players.map((p) => [p.color, p.id] as const));
-    for (const c of PLAYER_COLORS) {
-      const taken = used.has(c) && used.get(c) !== this.youId;
-      const mine = me?.color === c;
-      const btn = el(
-        `<button class="swatch ${mine ? "selected" : ""}" ${taken ? "disabled" : ""} title="${taken ? "Taken" : c}" style="--sw:${COLOR_HEX[c]};${taken ? "opacity:0.3;cursor:not-allowed" : ""}"></button>`,
-      );
-      if (!taken) btn.addEventListener("click", () => net.send({ t: "setColor", color: c as PlayerColor }));
-      colorsRow.appendChild(btn);
-    }
+    this.buildSwatches(screen.querySelector("#colors")!);
+    this.wireCrew(screen);
 
     // Segmented controls, identical to the single-player menu.
     if (isHost) {
@@ -409,31 +455,29 @@ export class LobbyUI {
           host.appendChild(b);
         }
       };
+      // Picking a setting both repaints the toggle AND tells the server, so the
+      // choice shows on the room card in everyone's lobby browser.
       const mapRow = screen.querySelector("#mapstyle")!;
       const paintMap = (): void =>
         seg(mapRow, [
-          { label: "Charted", hint: "Whole galaxy visible", selected: !this.fogMap, pick: () => { this.fogMap = false; paintMap(); } },
-          { label: "Uncharted", hint: "Fog — explore to reveal", selected: this.fogMap, pick: () => { this.fogMap = true; paintMap(); } },
+          { label: "Charted", hint: "Whole galaxy visible", selected: !this.fogMap, pick: () => { this.fogMap = false; net.send({ t: "setRoomConfig", fogMap: false }); paintMap(); } },
+          { label: "Uncharted", hint: "Fog — explore to reveal", selected: this.fogMap, pick: () => { this.fogMap = true; net.send({ t: "setRoomConfig", fogMap: true }); paintMap(); } },
         ]);
       paintMap();
 
       const timerRow = screen.querySelector("#turntimer")!;
+      const setTimer = (n: number): void => { this.turnSeconds = n; net.send({ t: "setRoomConfig", turnSeconds: n }); paintTimer(); };
       const paintTimer = (): void =>
         seg(timerRow, [
-          { label: "Off", selected: this.turnSeconds === 0, pick: () => { this.turnSeconds = 0; paintTimer(); } },
-          { label: "−5s", disabled: this.turnSeconds <= 15, pick: () => { this.turnSeconds = Math.max(15, this.turnSeconds - 5); paintTimer(); } },
+          { label: "Off", selected: this.turnSeconds === 0, pick: () => setTimer(0) },
+          { label: "−5s", disabled: this.turnSeconds <= 15, pick: () => setTimer(Math.max(15, this.turnSeconds - 5)) },
           { label: this.turnSeconds === 0 ? "No limit" : `${this.turnSeconds}s / turn` },
-          { label: "+5s", disabled: this.turnSeconds >= 180, pick: () => { this.turnSeconds = this.turnSeconds === 0 ? 15 : Math.min(180, this.turnSeconds + 5); paintTimer(); } },
+          { label: "+5s", disabled: this.turnSeconds >= 180, pick: () => setTimer(this.turnSeconds === 0 ? 15 : Math.min(180, this.turnSeconds + 5)) },
         ]);
       paintTimer();
+      // Push the initial defaults so a brand-new room shows its settings.
+      net.send({ t: "setRoomConfig", fogMap: this.fogMap, turnSeconds: this.turnSeconds });
     }
-
-    screen.querySelector("#addai")?.addEventListener("click", () => net.send({ t: "addAi" }));
-    screen.querySelectorAll(".ai-remove").forEach((b) =>
-      b.addEventListener("click", () =>
-        net.send({ t: "removeAi", id: (b as HTMLElement).dataset.id! }),
-      ),
-    );
 
     const startBtn = screen.querySelector("#start") as HTMLElement | null;
     startBtn?.addEventListener("click", () => {

@@ -148,8 +148,12 @@ io.on("connection", (socket) => {
         socketToRoom.delete(socket.id);
         if (room.isEmpty && !room.hasStarted) rooms.delete(ref.roomCode);
       }
-      // start / play-again / leave all change whether the room is joinable.
-      if (intent.t === "startGame" || intent.t === "playAgain" || intent.t === "leaveRoom") {
+      // start / play-again / leave change joinability; setRoomConfig changes
+      // the settings shown in the browser. All warrant a room-list refresh.
+      if (
+        intent.t === "startGame" || intent.t === "playAgain" ||
+        intent.t === "leaveRoom" || intent.t === "setRoomConfig"
+      ) {
         broadcastRoomList();
       }
     } catch (err) {

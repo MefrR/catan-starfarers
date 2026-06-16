@@ -64,13 +64,15 @@ export class Room {
   }
 
   /** Compact card for the lobby room list. */
-  summary(): { code: string; host: string; players: number; max: number } {
+  summary(): { code: string; host: string; players: number; max: number; fog: boolean; timer: number } {
     const host = [...this.members.values()].find((m) => m.isHost);
     return {
       code: this.code,
       host: host?.name ?? "Commander",
       players: this.members.size,
       max: this.config.playerCount,
+      fog: !!this.config.fogMap,
+      timer: this.config.turnSeconds ?? 0,
     };
   }
 
@@ -172,6 +174,14 @@ export class Room {
         }
         member.color = intent.color;
         this.broadcastLobby();
+        return;
+      }
+      case "setRoomConfig": {
+        // Host's pre-game choices (map style / timer) — stored so the lobby
+        // browser can show them. The index layer re-broadcasts the room list.
+        if (!member.isHost) return;
+        if (intent.fogMap !== undefined) this.config = { ...this.config, fogMap: intent.fogMap };
+        if (intent.turnSeconds !== undefined) this.config = { ...this.config, turnSeconds: intent.turnSeconds };
         return;
       }
       case "startGame": {

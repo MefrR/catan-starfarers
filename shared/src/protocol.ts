@@ -24,6 +24,7 @@ export type ClientIntent =
   | { t: "joinRoom"; roomCode: string; name: string }
   | { t: "listRooms" } // ask the server for the browsable public-room list
   | { t: "leaveBrowsing" } // stop receiving public-room list updates
+  | { t: "setRoomConfig"; fogMap?: boolean; turnSeconds?: number } // host: pre-game settings shown in the browser
   | { t: "rejoin"; roomCode: string; playerId: string }
   | { t: "setColor"; color: PlayerColor }
   | { t: "startGame"; config: Partial<GameConfig> }
@@ -81,6 +82,8 @@ export interface RoomSummary {
   host: string;
   players: number;
   max: number;
+  fog: boolean; // Uncharted (fog) vs Charted map
+  timer: number; // per-turn seconds (0 = no limit)
 }
 
 /** Server -> client messages. */
