@@ -2071,21 +2071,19 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   backdrop-filter: blur(6px);
   animation: heroDown 0.8s ease-out both;
 }
+.hero-emblem {
+  display: block; width: clamp(150px, 27vw, 260px); height: auto; margin: 2px auto 0;
+  filter: drop-shadow(0 10px 40px rgba(80, 210, 180, 0.32));
+  animation: heroUp 0.8s ease-out 0.25s both;
+}
 .hero-title {
-  display: flex; flex-direction: column; gap: 0; line-height: 1.04;
-  margin: 26px 0 0; font-weight: 900; letter-spacing: 0.06em;
-  font-size: clamp(40px, 9vw, 84px);
-}
-.hero-title span {
-  background: linear-gradient(92deg, #5b8cff, #39d8c8);
+  margin: 8px 0 0; text-align: center; font-weight: 900; letter-spacing: 0.16em;
+  font-size: clamp(34px, 7vw, 66px); line-height: 1;
+  background: linear-gradient(92deg, #43c9c6, #5cd6a4, #95e17a);
   -webkit-background-clip: text; background-clip: text; color: transparent;
-  animation: heroUp 0.8s ease-out 0.15s both;
+  animation: heroUp 0.8s ease-out 0.4s both;
 }
-.hero-title .hero-title-2 {
-  background: linear-gradient(92deg, #39d8c8, #52e8a0);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  animation-delay: 0.3s;
-}
+@media (max-width: 640px) { .hero-emblem { width: clamp(140px, 44vw, 220px); } }
 .hero-sub {
   margin: 18px 0 0; font-size: clamp(14px, 2.2vw, 18px); font-weight: 300;
   color: rgba(214, 226, 252, 0.82); line-height: 1.55; max-width: 520px;
