@@ -1,5 +1,11 @@
 import type { GameDriver } from "../game/store.js";
 import { net } from "../net.js";
+import { auth } from "../auth.js";
+
+/** Dev/testing chat codes are restricted to this single developer account
+ *  (matched by username, case-insensitive) — online AND offline. Everyone else's
+ *  "warp9" / "/encounter" etc. are treated as ordinary chat. */
+const DEV_USERNAME = "mefr";
 
 const el = (html: string): HTMLElement => {
   const t = document.createElement("template");
@@ -292,15 +298,14 @@ export class ChatBox {
     if (!text) return;
     this.input.value = "";
 
-    // Dev-mode toggle.
-    if (text.toLowerCase() === DEV_CODE || text.toLowerCase() === "/dev") {
-      this.toggleDev();
-      return;
-    }
-
-    // Dev/testing slash-commands (single-player only).
-    if (text.startsWith("/")) {
-      if (this.runDevCommand(text)) return;
+    // Dev/testing codes are limited to the developer account (@Mefr). For
+    // everyone else these strings fall through and are sent as ordinary chat.
+    if (this.isDevUser()) {
+      if (text.toLowerCase() === DEV_CODE || text.toLowerCase() === "/dev") {
+        this.toggleDev();
+        return;
+      }
+      if (text.startsWith("/") && this.runDevCommand(text)) return;
     }
 
     // Fling reaction: "<name> <3", "ass to <name>", "shit to <name>".
@@ -333,9 +338,18 @@ export class ChatBox {
     this.append(this.me()?.name ?? "You", "#ff6b9d", `${f.emoji} to ${who}`);
   }
 
+  /** True only for the signed-in developer account (@Mefr) — gates every dev
+   *  code, online and offline. Anyone signed out or with another username gets
+   *  no dev access. */
+  private isDevUser(): boolean {
+    const u = auth.currentProfile()?.username;
+    return !!u && u.trim().toLowerCase() === DEV_USERNAME;
+  }
+
   /**
-   * Dev/testing chat codes (single-player). Returns true if the text was a dev
-   * command (handled), false otherwise. `this.game.dev` is undefined online.
+   * Dev/testing chat codes (developer account only). Returns true if the text
+   * was a dev command (handled), false otherwise. `this.game.dev` is undefined
+   * online for the continuous toggle.
    */
   private runDevCommand(text: string): boolean {
     const [cmd, arg] = text.slice(1).trim().split(/\s+/, 2);
