@@ -15,3 +15,5 @@ almanac.txt
 *.pdf
 # official Catan art used only as visual reference — never publish; we ship original vectors
 *.png
+# ...except our own shipped public assets (logo, icons) which MUST be deployed
+!client/public/*.png
