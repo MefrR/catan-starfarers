@@ -209,7 +209,7 @@ async function boot(): Promise<void> {
       <div class="screen">
         <div class="hero">
           <div class="hero-badge">A faithful digital voyage · 2–4 commanders</div>
-          <h1 class="hero-title"><span>CATAN</span><span class="hero-title-2">STARFARERS</span></h1>
+          <img class="hero-logo" src="/starfarers-logo.png" alt="Catan: Starfarers" />
           <p class="hero-sub">Voyage into deep space. Command your fleet to 15 victory points.</p>
           <div class="hero-actions">
             <button id="single">Single Player</button>

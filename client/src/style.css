@@ -3434,3 +3434,7 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 }
 @media (max-width: 640px) { .more-legal { max-height: none; overflow: visible; } }
 
+
+/* Main-menu hero logo (replaces the old text title). */
+.hero-logo { display: block; width: clamp(240px, 42vw, 460px); height: auto; margin: 2px auto 0; filter: drop-shadow(0 10px 44px rgba(80, 210, 180, 0.30)); animation: heroUp 0.8s ease-out 0.3s both; }
+@media (max-width: 640px) { .hero-logo { width: clamp(220px, 72vw, 360px); } }
