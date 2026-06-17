@@ -152,7 +152,7 @@ export class LobbyUI {
     // immediately (the profile name rides along), bypassing the connect screen.
     if (autoJoinCode) {
       const nm = auth.currentProfile()?.displayName ?? "Commander";
-      net.send({ t: "joinRoom", roomCode: autoJoinCode.toUpperCase(), name: nm });
+      net.send({ t: "joinRoom", roomCode: autoJoinCode.toUpperCase(), name: nm, username: auth.currentProfile()?.username ?? undefined });
       this.renderConnect(); // shown only momentarily until the lobby arrives
       return;
     }
@@ -234,7 +234,7 @@ export class LobbyUI {
     screen.querySelector("#back")?.addEventListener("click", () => { net.send({ t: "leaveBrowsing" }); this.onBack?.(); });
     const hostBtn = screen.querySelector("#host") as HTMLElement;
     hostBtn.addEventListener("click", () => {
-      shatter(hostBtn, "#39d8c8", () => net.send({ t: "createRoom", name: name(), public: this.hostPublic }));
+      shatter(hostBtn, "#39d8c8", () => net.send({ t: "createRoom", name: name(), public: this.hostPublic, username: auth.currentProfile()?.username ?? undefined }));
     });
     // Public / Private visibility toggle for the room you host. (The active
     // segment uses the `.on` class — toggling `active` did nothing.)
@@ -248,7 +248,7 @@ export class LobbyUI {
     screen.querySelector("#join")!.addEventListener("click", () => {
       const code = (screen.querySelector("#code") as HTMLInputElement).value.trim().toUpperCase();
       if (!code) { this.errorText = "Enter a room code."; this.renderError(); return; }
-      net.send({ t: "joinRoom", roomCode: code, name: name() });
+      net.send({ t: "joinRoom", roomCode: code, name: name(), username: auth.currentProfile()?.username ?? undefined });
     });
     // Refresh the open-room list on demand.
     screen.querySelector("#refreshrooms")?.addEventListener("click", () => {
@@ -293,7 +293,7 @@ export class LobbyUI {
           <button class="room-join">Join</button>
         </div>`);
       row.querySelector(".room-join")!.addEventListener("click", () => {
-        net.send({ t: "joinRoom", roomCode: r.code, name: nameVal() });
+        net.send({ t: "joinRoom", roomCode: r.code, name: nameVal(), username: auth.currentProfile()?.username ?? undefined });
       });
       host.appendChild(row);
     }

@@ -20,8 +20,8 @@ export interface LobbyState {
 
 /** Intents the client sends to the server. The server validates everything. */
 export type ClientIntent =
-  | { t: "createRoom"; name: string; public?: boolean }
-  | { t: "joinRoom"; roomCode: string; name: string }
+  | { t: "createRoom"; name: string; public?: boolean; username?: string }
+  | { t: "joinRoom"; roomCode: string; name: string; username?: string }
   | { t: "listRooms" } // ask the server for the browsable public-room list
   | { t: "leaveBrowsing" } // stop receiving public-room list updates
   | { t: "setRoomConfig"; fogMap?: boolean; turnSeconds?: number } // host: pre-game settings shown in the browser

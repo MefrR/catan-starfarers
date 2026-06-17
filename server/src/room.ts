@@ -20,7 +20,14 @@ interface Member {
   isHost: boolean;
   connected: boolean;
   isAI?: boolean;
+  /** Account username (lowercased) the client claims at join — used only to
+   *  authorize developer testing codes. */
+  username?: string;
 }
+
+/** Usernames allowed to use the dev/testing codes online (lowercase). Extend
+ *  as needed; keep it short. */
+const DEV_USERNAMES = new Set(["mefr"]);
 
 /** Pacing for server-driven AI seats (ms) so humans can follow along. */
 const AI_DELAY = 800;
@@ -94,12 +101,14 @@ export class Room {
     return PLAYER_COLORS.find((c) => !used.has(c)) ?? "yellow";
   }
 
-  addMember(id: string, name: string, socket: Socket): Member {
+  addMember(id: string, name: string, socket: Socket, username?: string): Member {
+    const handle = username?.trim().toLowerCase() || undefined;
     const existing = this.members.get(id);
     if (existing) {
       existing.socket = socket;
       existing.connected = true;
       existing.name = name || existing.name;
+      if (handle) existing.username = handle;
       return existing;
     }
     const member: Member = {
@@ -109,6 +118,7 @@ export class Room {
       color: this.nextColor(),
       isHost: this.members.size === 0,
       connected: true,
+      username: handle,
     };
     this.members.set(id, member);
     return member;
@@ -280,6 +290,13 @@ export class Room {
         return;
       }
       default: {
+        // Dev/testing codes are developer-only. Reject them server-side unless the
+        // member's claimed account is on the allowlist — so a crafted socket
+        // message from a normal player can't grant cards/VP/encounters online.
+        if (intent.t === "dev" && !DEV_USERNAMES.has(member.username ?? "")) {
+          this.send(id, { t: "error", message: "Not authorized." });
+          return;
+        }
         // Game intents: run them through the shared engine authoritatively and
         // broadcast the resulting state to every connected Starfarer.
         if (!this.started || !this.game) {

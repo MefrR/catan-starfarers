@@ -100,7 +100,7 @@ io.on("connection", (socket) => {
         room.isPublic = intent.public !== false; // public by default
         rooms.set(code, room);
         const playerId = randomUUID();
-        room.addMember(playerId, intent.name, socket);
+        room.addMember(playerId, intent.name, socket, intent.username);
         socketToRoom.set(socket.id, { roomCode: code, playerId });
         browsers.delete(socket.id); // now in a room, not browsing
         room.broadcastLobby();
@@ -133,7 +133,7 @@ io.on("connection", (socket) => {
           return;
         }
         const playerId = randomUUID();
-        room.addMember(playerId, intent.name, socket);
+        room.addMember(playerId, intent.name, socket, intent.username);
         socketToRoom.set(socket.id, { roomCode: room.code, playerId });
         browsers.delete(socket.id);
         room.broadcastLobby();
