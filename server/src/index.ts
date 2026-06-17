@@ -43,6 +43,11 @@ const clientDist = resolveClientDist();
 app.get("/health", (_req, res) => res.json({ ok: true }));
 if (clientDist) {
   app.use(express.static(clientDist));
+  // Public legal pages at clean URLs. Google OAuth verification and app stores
+  // need real, directly-viewable links (not the in-app modal). The .html files
+  // are also served statically; these aliases give tidy /privacy and /terms URLs.
+  app.get("/privacy", (_req, res) => res.sendFile(path.join(clientDist, "privacy.html")));
+  app.get("/terms", (_req, res) => res.sendFile(path.join(clientDist, "terms.html")));
   // SPA fallback: any non-API route serves index.html so deep links / reloads work.
   app.get("*", (_req, res) => res.sendFile(path.join(clientDist, "index.html")));
 } else {
