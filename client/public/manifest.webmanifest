@@ -10,7 +10,7 @@
   "theme_color": "#070b16",
   "categories": ["games", "entertainment"],
   "icons": [
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/starfarers-logo.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
   ]
 }
