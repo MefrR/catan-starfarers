@@ -217,4 +217,40 @@ create policy "remove friendship" on public.friendships for delete to authentica
   using (auth.uid() = requester_id or auth.uid() = addressee_id);
 ```
 
+## Schema v4 — resumable online games (run this too)
+
+Lets an **in-progress online game survive a server restart** (a redeploy, or the
+free-tier instance spinning down after idle). The realtime server saves each
+active room to `active_games` and reloads them on boot, so players can press
+**Play Online** again and continue where they left off.
+
+This table is written **only by the server**, using the **service role key** —
+never the browser. RLS is enabled and no policies are added, so the anon key
+can't touch it; the service key bypasses RLS.
+
+```sql
+create table if not exists public.active_games (
+  room_code text primary key,
+  data jsonb not null,                 -- full room snapshot (config, members, game state)
+  updated_at timestamptz not null default now()
+);
+alter table public.active_games enable row level security;
+-- No policies on purpose: only the server's service-role key may read/write.
+```
+
+### Server env vars (set on Render — NOT in the client build)
+
+| Env var | Where | Secret? |
+|---|---|---|
+| `SUPABASE_URL` | server (Render) | No (same URL as the client's) |
+| `SUPABASE_SERVICE_KEY` | server (Render) | **YES — keep secret**, never ship to the browser |
+
+Find the service role key in *Project Settings → API → service_role*. If these
+are **unset**, the server runs exactly as before — games just won't survive a
+restart (everything else, including the 100s AI-takeover and 300s rejoin grace,
+still works in memory). `SUPABASE_SERVICE_ROLE_KEY` is also accepted as an alias.
+
+Optional tuning (defaults shown): `SF_AI_TAKEOVER_MS=100000` (AI takes over an
+absent seat) and `SF_SEAT_RELEASE_MS=300000` (the away player forfeits the seat).
+
 Phase: **presence/invites** land here when we build them next.

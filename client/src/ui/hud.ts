@@ -1043,6 +1043,13 @@ export class HUD {
           <div class="score-main">
             <span class="avatar" title="${escapeHtml(p.name)}">${avatarSvg(p.color)}</span>
             <span class="pname">${escapeHtml(p.name)}</span>
+            ${
+              p.id !== me.id && p.aiControlled
+                ? `<span class="score-status ai" title="${escapeHtml(p.name)} disconnected — AI is playing their fleet">AI</span>`
+                : p.id !== me.id && !p.connected
+                  ? `<span class="score-status away" title="${escapeHtml(p.name)} is away — AI takes over their fleet after 100s">away</span>`
+                  : ""
+            }
             ${bonusBadge}
             <span class="vp" style="color:${COLOR_HEX[p.color]}">${p.victoryPoints}<span class="vp-target">/${target}</span></span>
           </div>

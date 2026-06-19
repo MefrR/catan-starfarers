@@ -96,10 +96,12 @@ class Net {
     return url;
   }
 
-  /** Re-attach to the saved room — the server answers with fresh lobby + state. */
+  /** Re-attach to the saved room — the server answers with fresh lobby + state.
+   *  Stored in localStorage so it survives a full browser restart, letting the
+   *  player return to an in-progress online game. */
   private resync(): void {
     try {
-      const raw = sessionStorage.getItem("sf_session");
+      const raw = localStorage.getItem("sf_session");
       if (!raw) return;
       const s = JSON.parse(raw) as { roomCode: string; playerId: string };
       if (s?.roomCode && s?.playerId) {

@@ -32,9 +32,11 @@ interface SavedSession {
   playerId: string;
 }
 
+// localStorage (not sessionStorage) so the saved game survives a full browser
+// restart — the player can come back later and pick up where they left off.
 function loadSession(): SavedSession | null {
   try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
+    const raw = localStorage.getItem(SESSION_KEY);
     return raw ? (JSON.parse(raw) as SavedSession) : null;
   } catch {
     return null;
@@ -43,7 +45,7 @@ function loadSession(): SavedSession | null {
 
 function saveSession(s: SavedSession): void {
   try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
+    localStorage.setItem(SESSION_KEY, JSON.stringify(s));
   } catch {
     /* ignore */
   }
@@ -51,7 +53,7 @@ function saveSession(s: SavedSession): void {
 
 function clearSession(): void {
   try {
-    sessionStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_KEY);
   } catch {
     /* ignore */
   }
@@ -62,6 +64,9 @@ export class LobbyUI {
   private youId = "";
   private lobby: LobbyState | null = null;
   private errorText = "";
+  /** Shown on the connect screen after a failed auto-rejoin (game ended / seat
+   *  forfeited after the away grace period). */
+  private noticeText = "";
   private rejoining = false;
   private fogMap = false;
   private turnSeconds = 0; // host-chosen per-turn timer (0 = off)
@@ -137,9 +142,12 @@ export class LobbyUI {
         }
       } else if (msg.t === "error") {
         if (this.rejoining) {
-          // Stale saved session — fall back to the connect screen.
+          // The saved game is gone (ended) or our seat was forfeited after the
+          // away grace period — forget it and fall back to the connect screen,
+          // telling the player why so they know they can freely join another.
           this.rejoining = false;
           clearSession();
+          this.noticeText = msg.message;
           this.renderConnect();
           return;
         }
@@ -182,6 +190,7 @@ export class LobbyUI {
             <div class="setup-kicker">${this.mode === "online" ? "Play online" : "Play on your LAN"}</div>
             <h1 class="setup-title">JOIN THE VOYAGE</h1>
           </div>
+          ${this.noticeText ? `<div class="rejoin-notice">${escapeHtml(this.noticeText)}</div>` : ""}
 
           <div class="setup-row">
             <div class="setup-label">Commander</div>
@@ -258,6 +267,7 @@ export class LobbyUI {
       net.send({ t: "listRooms" });
     });
     this.root.replaceChildren(screen);
+    this.noticeText = ""; // shown once
     // Ask for the browsable public-room list (server pushes live updates too),
     // and re-ask whenever the socket (re)connects — the free-tier server naps
     // and forgets browsers, so the list would otherwise stay stale/empty.

@@ -368,6 +368,21 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   50% { box-shadow: 0 0 14px 4px color-mix(in srgb, var(--danger) 85%, transparent); filter: brightness(1.25); }
 }
 .score-row .pname { flex: 1; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Presence chip: a seat that's away (reconnecting) or being played by AI. */
+.score-status {
+  flex: 0 0 auto; font-size: 9px; font-weight: 800; letter-spacing: 0.06em;
+  text-transform: uppercase; padding: 1px 5px; border-radius: 6px; line-height: 1.5;
+}
+.score-status.away { color: #ffd27f; background: rgba(255, 178, 60, 0.16); }
+.score-status.ai { color: #8fd0ff; background: rgba(79, 168, 255, 0.18); animation: pulseSoft 1.8s ease-in-out infinite; }
+@keyframes pulseSoft { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+/* Notice shown on the Play Online connect screen after a failed auto-rejoin. */
+.rejoin-notice {
+  margin: 0 auto 14px; max-width: 460px; text-align: center;
+  font-size: 13px; line-height: 1.5; color: #ffd27f;
+  background: rgba(255, 178, 60, 0.12); border: 1px solid rgba(255, 178, 60, 0.3);
+  border-radius: 10px; padding: 10px 14px;
+}
 .score-row .vp { font-weight: 800; font-size: 28px; line-height: 1; min-width: 56px; text-align: right; }
 .score-row .vp-target { font-size: 12px; font-weight: 600; color: var(--muted); }
 .vp-bonus {

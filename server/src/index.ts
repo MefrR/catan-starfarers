@@ -6,8 +6,9 @@ import express from "express";
 import { Server as IOServer } from "socket.io";
 import { randomUUID } from "node:crypto";
 import { type ClientIntent, SOCKET_EVENT } from "@starfarers/shared";
-import { Room } from "./room.js";
+import { Room, type RoomSnapshot } from "./room.js";
 import { getLanAddress } from "./lan.js";
+import { saveRoom, deleteRoom, loadAllRooms, persistenceEnabled } from "./store.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -81,6 +82,57 @@ function makeRoomCode(): string {
   return code;
 }
 
+// --- Durable persistence wiring ---
+// Each room mirrors its state to Supabase so an in-progress game survives a
+// server restart / free-tier spin-down. Saves are debounced per room (game
+// intents fire fast) to coalesce bursts into one write.
+const saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+function cancelSave(code: string): void {
+  const t = saveTimers.get(code);
+  if (t) { clearTimeout(t); saveTimers.delete(code); }
+}
+function wireRoom(room: Room): void {
+  room.onPersist = () => {
+    cancelSave(room.code);
+    saveTimers.set(
+      room.code,
+      setTimeout(() => { saveTimers.delete(room.code); void saveRoom(room.code, room.snapshot()); }, 1500),
+    );
+  };
+  room.onUnpersist = () => { cancelSave(room.code); void deleteRoom(room.code); };
+  room.onReap = () => {
+    cancelSave(room.code);
+    rooms.delete(room.code);
+    void deleteRoom(room.code);
+    broadcastRoomList();
+  };
+}
+
+/** On boot, reload any in-progress games that were persisted before a restart. */
+async function restoreRooms(): Promise<void> {
+  if (!persistenceEnabled) return;
+  const snaps = await loadAllRooms();
+  let restored = 0;
+  for (const data of snaps) {
+    try {
+      const s = data as RoomSnapshot;
+      // Only resurrect live games — skip junk, finished games, and lobbies.
+      if (!s?.code || !s.started || !s.game || s.game.phaseState?.phase === "gameOver") {
+        if (s?.code) void deleteRoom(s.code);
+        continue;
+      }
+      const room = Room.fromSnapshot(s);
+      wireRoom(room);
+      room.armGraceForDisconnected(); // reclaim within the window, else auto-clean
+      rooms.set(room.code, room);
+      restored++;
+    } catch (err) {
+      console.warn("restore room failed", err);
+    }
+  }
+  if (restored) console.log(`  Restored ${restored} in-progress game(s) from storage`);
+}
+
 io.on("connection", (socket) => {
   socket.on(SOCKET_EVENT.intent, (intent: ClientIntent) => {
     try {
@@ -100,6 +152,7 @@ io.on("connection", (socket) => {
         const code = makeRoomCode();
         const room = new Room(code);
         room.isPublic = intent.public !== false; // public by default
+        wireRoom(room);
         rooms.set(code, room);
         const playerId = randomUUID();
         room.addMember(playerId, intent.name, socket, intent.username);
@@ -112,15 +165,27 @@ io.on("connection", (socket) => {
 
       if (intent.t === "rejoin") {
         const room = rooms.get(intent.roomCode.toUpperCase());
-        if (!room || !room.hasMember(intent.playerId)) {
+        if (!room) {
+          // The room is gone (server lost it and it wasn't persisted, or it
+          // ended). Tell the client so it forgets the stale session.
+          socket.emit(SOCKET_EVENT.message, { t: "error", message: "That game has ended." });
+          return;
+        }
+        const status = room.reattach(intent.playerId, socket);
+        if (status === "released") {
+          socket.emit(SOCKET_EVENT.message, {
+            t: "error",
+            message: "You were away too long — an AI took over your fleet, so this game is no longer yours to rejoin.",
+          });
+          return;
+        }
+        if (status === "missing") {
           socket.emit(SOCKET_EVENT.message, { t: "error", message: "Could not rejoin." });
           return;
         }
-        room.reattach(intent.playerId, socket);
         socketToRoom.set(socket.id, { roomCode: room.code, playerId: intent.playerId });
         browsers.delete(socket.id);
-        room.broadcastLobby();
-        room.broadcastState();
+        // reattach() already re-broadcast lobby + state for the resync.
         return;
       }
 
@@ -177,8 +242,10 @@ io.on("connection", (socket) => {
     if (room) {
       room.markDisconnected(ref.playerId);
       room.broadcastLobby();
-      // Keep started rooms alive so players can reconnect by id; only reap
-      // empty lobbies that never started.
+      room.broadcastState(); // so the table sees the seat go "away"
+      // Keep started rooms alive so players can reconnect by id (AI takes the
+      // seat over after the grace period); only reap empty lobbies that never
+      // started.
       if (room.isEmpty && !room.hasStarted) rooms.delete(ref.roomCode);
     }
     socketToRoom.delete(socket.id);
@@ -186,9 +253,13 @@ io.on("connection", (socket) => {
   });
 });
 
-httpServer.listen(PORT, "0.0.0.0", () => {
-  const lan = getLanAddress();
-  console.log("\n  Catan: Starfarers server running");
-  console.log(`  Local:   http://localhost:${PORT}`);
-  console.log(`  LAN:     http://${lan}:${PORT}   <- share this with your table\n`);
+// Restore any persisted in-progress games first, then start accepting clients.
+void restoreRooms().finally(() => {
+  httpServer.listen(PORT, "0.0.0.0", () => {
+    const lan = getLanAddress();
+    console.log("\n  Catan: Starfarers server running");
+    console.log(`  Local:   http://localhost:${PORT}`);
+    console.log(`  LAN:     http://${lan}:${PORT}   <- share this with your table`);
+    console.log(`  Game persistence: ${persistenceEnabled ? "on (Supabase)" : "off (set SUPABASE_URL + SUPABASE_SERVICE_KEY)"}\n`);
+  });
 });

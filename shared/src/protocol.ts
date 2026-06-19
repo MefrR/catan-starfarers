@@ -9,6 +9,9 @@ export interface LobbyPlayer {
   isHost: boolean;
   /** True for an AI seat the host added (no socket; played by the server). */
   isAI?: boolean;
+  /** True when a disconnected human's seat has been taken over by the server AI
+   *  after the grace period (distinct from a host-added AI). */
+  aiControlled?: boolean;
 }
 
 export interface LobbyState {

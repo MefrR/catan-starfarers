@@ -162,6 +162,9 @@ export interface PlayerState {
   name: string;
   color: PlayerColor;
   connected: boolean;
+  /** True when a disconnected human's seat is being played by the server AI
+   *  (takeover after the grace period). Distinct from a host-added AI seat. */
+  aiControlled?: boolean;
   hand: ResourceBag;
   victoryPoints: number;
   fameMedalPieces: number;
