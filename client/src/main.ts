@@ -100,7 +100,10 @@ async function boot(): Promise<void> {
     menuBg = null;
   };
 
-  const mountGame = (game: GameDriver, opts: { tutorial?: boolean } = {}): void => {
+  const mountGame = (
+    game: GameDriver,
+    opts: { tutorial?: boolean; onExitToOnline?: () => void } = {},
+  ): void => {
     // Mount straight into the game (no warp transition — it tested poorly).
     teardownGame?.();
     dropMenuBg();
@@ -117,6 +120,8 @@ async function boot(): Promise<void> {
     });
     app.replaceChildren(); // clear the menu; HUD mounts its own overlay
     const hud = new HUD(app, game, board);
+    // Multiplayer "Play Again" → leave the room and return to the hosting area.
+    hud.onExitToOnline = opts.onExitToOnline ?? null;
     // Z6: the guided first game attaches its coach bubble over the live HUD.
     const tut = opts.tutorial ? new TutorialDriver(game, board) : null;
     // The canvas resizes to the window asynchronously; recenter once layout
@@ -161,13 +166,24 @@ async function boot(): Promise<void> {
     const { NetworkGame } = await import("./game/netgame.js");
     const { net } = await import("./net.js");
     net.connect(mode); // open the socket BEFORE the lobby starts sending intents
+    // "Play Again" from the win screen: forget the saved session, tear the game
+    // down, restore the menu backdrop, and reopen the hosting area fresh.
+    const exitToOnline = (): void => {
+      try { localStorage.removeItem("sf_session"); } catch { /* ignore */ }
+      teardownGame?.();
+      board.clear();
+      ensureMenuBg();
+      void startNetwork(mode);
+    };
     new LobbyUI(
       app,
       (state, youId) => {
-        mountGame(new NetworkGame(state, youId));
+        mountGame(new NetworkGame(state, youId), { onExitToOnline: exitToOnline });
       },
       showLanding,
-      () => teardownGame?.(),
+      // Re-match: the room reset to a lobby — tear the finished game down and
+      // clear the board so it doesn't show behind the lobby (the overlap bug).
+      () => { teardownGame?.(); board.clear(); ensureMenuBg(); },
       mode,
       autoJoinCode,
     );

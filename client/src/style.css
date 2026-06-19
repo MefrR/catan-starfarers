@@ -1382,6 +1382,20 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 }
 .go-leave:hover { filter: brightness(1.1); border-color: rgba(160, 195, 255, 0.55); }
 .go-wait { font-size: 13px; color: var(--muted); font-style: italic; padding: 6px 0; }
+/* Re-match (primary) + Play Again (secondary) on the multiplayer win screen. */
+.go-rematch {
+  width: 100%; padding: 11px; border-radius: 12px; font-weight: 800;
+  cursor: pointer; border: 1px solid rgba(150, 190, 255, 0.6); color: #07101f;
+  background: linear-gradient(160deg, var(--accent), #6fa8ff);
+}
+.go-rematch:hover { filter: brightness(1.08); }
+.go-playagain-new {
+  width: 100%; padding: 10px; border-radius: 12px; font-weight: 700; cursor: pointer;
+  color: var(--text); background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(160, 195, 255, 0.3);
+}
+.go-playagain-new:hover { filter: brightness(1.1); border-color: rgba(160, 195, 255, 0.55); }
+.go-btn-sub { display: block; font-size: 11px; font-weight: 600; opacity: 0.75; margin-top: 2px; }
 
 /* --- Friendship ability picker (#2) --- */
 .friend-choices { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; width: 100%; }

@@ -234,6 +234,10 @@ export class HUD {
    *  the view onto the starting area exactly once (players can still pan). */
   private lastSetupFocusKey = "";
 
+  /** Multiplayer "Play Again" — leave the room and return to the online hosting
+   *  area (set by main.ts for network games). */
+  onExitToOnline: (() => void) | null = null;
+
   constructor(mount: HTMLElement, game: GameDriver, board: BoardRenderer) {
     this.root = mount;
     this.game = game;
@@ -662,7 +666,7 @@ export class HUD {
     // Quit: forget the session (and leave the room) so we don't auto-rejoin.
     modal.querySelector(".exit-yes")!.addEventListener("click", () => {
       if (mp) { try { this.game.dispatch({ t: "leaveRoom" }); } catch { /* ignore */ } }
-      try { sessionStorage.removeItem("sf_session"); } catch { /* ignore */ }
+      try { localStorage.removeItem("sf_session"); } catch { /* ignore */ }
       location.reload();
     });
     // Leave & continue (multiplayer): keep the session so reopening rejoins.
@@ -1771,12 +1775,12 @@ export class HUD {
     let footer: string;
     if (!isMulti) {
       footer = `<button class="go-newgame">New game</button>`;
-    } else if (amHost) {
-      footer = `<button class="go-playagain">Play again</button>
-                <button class="go-leave secondary">Leave to menu</button>`;
     } else {
-      footer = `<div class="go-wait">Waiting for the host to start a new game…</div>
-                <button class="go-leave secondary">Leave to menu</button>`;
+      // Two distinct choices (same for host & guests):
+      //  • Re-match — return to THIS room (same code) for another game together.
+      //  • Play Again — leave and go to the online hosting area to start fresh.
+      footer = `<button class="go-rematch">Re-match<span class="go-btn-sub">Same room${amHost ? "" : " — wait for host"}</span></button>
+                <button class="go-playagain-new secondary">Play Again<span class="go-btn-sub">New room</span></button>`;
     }
     const overlay = el(`
       <div class="gameover-overlay">
@@ -1790,12 +1794,27 @@ export class HUD {
         </div>
       </div>`);
     overlay.querySelector(".go-newgame")?.addEventListener("click", () => location.reload());
-    overlay.querySelector(".go-leave")?.addEventListener("click", () => location.reload());
-    overlay.querySelector(".go-playagain")?.addEventListener("click", () => {
-      this.game.dispatch({ t: "playAgain" });
-      // The server resets the room → broadcasts a fresh lobby; the lobby UI takes
-      // over for everyone. Drop the overlay so it doesn't linger over the lobby.
+    // Re-match → back to the SAME room. The host resets it (everyone present
+    // lands in the lobby together); a guest just waits for the host to do so.
+    overlay.querySelector(".go-rematch")?.addEventListener("click", () => {
+      if (amHost) {
+        this.game.dispatch({ t: "playAgain" });
+        // Server resets the room → broadcasts a fresh lobby; the lobby UI takes
+        // over (onReset clears the board). Drop the overlay so it can't linger.
+        overlay.remove();
+      } else {
+        // Stay in the room; show a waiting note until the host re-matches.
+        const acts = overlay.querySelector(".go-actions");
+        if (acts) acts.innerHTML = `<div class="go-wait">Re-matching — waiting for the host to start…</div>`;
+      }
+    });
+    // Play Again → drop this seat and return to the online hosting area to
+    // host or join a fresh room.
+    overlay.querySelector(".go-playagain-new")?.addEventListener("click", () => {
+      try { this.game.dispatch({ t: "leaveRoom" }); } catch { /* ignore */ }
       overlay.remove();
+      if (this.onExitToOnline) this.onExitToOnline();
+      else location.reload();
     });
     document.body.appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add("show"));

@@ -765,6 +765,16 @@ export class BoardRenderer {
     if (this.last) this.render(this.last);
   }
 
+  /** Wipe the board (returning to a menu / lobby) so a finished game isn't left
+   *  showing behind the next screen. */
+  clear(): void {
+    this.highlightIds.clear();
+    this.selectedShipId = null;
+    this.ambientItems.length = 0;
+    this.root.removeChildren();
+    this.last = null;
+  }
+
   /**
    * Drive a single FX-overlay graphic that continuously pulses + glows a green
    * ring over every highlighted build site (e.g. where a colony/trade ship can
