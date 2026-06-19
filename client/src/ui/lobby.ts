@@ -165,13 +165,10 @@ export class LobbyUI {
       return;
     }
 
-    const saved = loadSession();
-    if (saved) {
-      this.rejoining = true;
-      net.send({ t: "rejoin", roomCode: saved.roomCode, playerId: saved.playerId });
-    } else {
-      this.renderConnect();
-    }
+    // Don't silently jump back into a saved game. Show the connect screen; if
+    // there's a game in progress it appears as a "Rejoin" card you can click —
+    // or you can join another room / host a new game instead.
+    this.renderConnect();
   }
 
   private renderError(): void {
@@ -191,6 +188,19 @@ export class LobbyUI {
             <h1 class="setup-title">JOIN THE VOYAGE</h1>
           </div>
           ${this.noticeText ? `<div class="rejoin-notice">${escapeHtml(this.noticeText)}</div>` : ""}
+          ${
+            this.mode === "online" && loadSession()
+              ? `<div class="setup-row">
+                  <div class="setup-label">Your game</div>
+                  <div class="setup-ctrl">
+                    <button class="resume-card" id="rejoingame">
+                      <span class="resume-card-title">Rejoin game ${escapeHtml(loadSession()!.roomCode)}</span>
+                      <span class="resume-card-sub">Pick up your voyage in progress</span>
+                    </button>
+                  </div>
+                </div>`
+              : ""
+          }
 
           <div class="setup-row">
             <div class="setup-label">Commander</div>
@@ -265,6 +275,14 @@ export class LobbyUI {
       btn.classList.add("spin");
       window.setTimeout(() => btn.classList.remove("spin"), 600);
       net.send({ t: "listRooms" });
+    });
+    // Rejoin the in-progress game (the server resync) when the card is clicked.
+    screen.querySelector("#rejoingame")?.addEventListener("click", () => {
+      const s = loadSession();
+      if (!s) return;
+      this.rejoining = true;
+      this.errorText = "";
+      net.send({ t: "rejoin", roomCode: s.roomCode, playerId: s.playerId });
     });
     this.root.replaceChildren(screen);
     this.noticeText = ""; // shown once

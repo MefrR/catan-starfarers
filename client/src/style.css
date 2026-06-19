@@ -229,7 +229,7 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .screen button::after {
   content: none;
 }
-.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove):not(.seg-opt):not(.swatch):not(.glow-btn):not(.setup-back):not(.hero-resume):not(.hero-tutorial):not(.menu-music) {
+.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove):not(.seg-opt):not(.swatch):not(.glow-btn):not(.setup-back):not(.hero-resume):not(.hero-tutorial):not(.menu-music):not(.resume-card) {
   background: linear-gradient(92deg, rgba(91, 140, 255, 0.28), rgba(57, 216, 200, 0.24));
   color: #eaf2ff;
   border: 1px solid rgba(120, 190, 255, 0.42);
@@ -237,7 +237,7 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   overflow: visible;
   backdrop-filter: blur(6px);
 }
-.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove):not(.seg-opt):not(.swatch):not(.glow-btn):not(.setup-back):not(.hero-resume):not(.hero-tutorial):not(.menu-music):hover {
+.screen button:not(.color-pick):not(.mapstyle-pick):not(.ai-remove):not(.seg-opt):not(.swatch):not(.glow-btn):not(.setup-back):not(.hero-resume):not(.hero-tutorial):not(.menu-music):not(.resume-card):hover {
   border-color: rgba(98, 224, 205, 0.8);
   box-shadow: 0 0 22px rgba(57, 216, 200, 0.28);
 }
@@ -2128,6 +2128,22 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 }
 .hero-resume-title { font-size: 15px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
 .hero-resume-sub { font-size: 12px; color: rgba(255, 233, 168, 0.72); font-weight: 400; }
+/* Resume / Rejoin card — inside Single Player setup and the Play Online screen. */
+.resume-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  width: 100%; padding: 12px 18px; text-align: left;
+  background: rgba(255, 210, 63, 0.08);
+  border: 1px solid rgba(255, 210, 63, 0.38);
+  border-radius: 14px; color: #ffe9a8; cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+.resume-card:hover {
+  border-color: rgba(255, 210, 63, 0.8);
+  box-shadow: 0 0 22px rgba(255, 210, 63, 0.22);
+  transform: translateY(-1px);
+}
+.resume-card-title { font-size: 14px; font-weight: 700; letter-spacing: 0.04em; }
+.resume-card-sub { font-size: 12px; color: rgba(255, 233, 168, 0.72); font-weight: 400; }
 /* Z6: quiet text link under the hero actions that starts the guided game. */
 .hero-tutorial {
   margin-top: 14px; padding: 6px 12px;

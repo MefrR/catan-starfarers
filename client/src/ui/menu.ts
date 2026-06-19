@@ -6,6 +6,7 @@ import {
   type SetupMember,
 } from "@starfarers/shared";
 import type { Seat } from "../game/store.js";
+import { LocalGame } from "../game/store.js";
 import { shatter } from "./fx.js";
 import { auth } from "../auth.js";
 
@@ -14,6 +15,9 @@ const el = (html: string): HTMLElement => {
   t.innerHTML = html.trim();
   return t.content.firstElementChild as HTMLElement;
 };
+
+const escapeHtml = (s: string): string =>
+  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 
 const COLOR_NAME: Record<PlayerColor, string> = {
   yellow: "Yellow",
@@ -50,6 +54,8 @@ export class NewGameMenu {
   private root: HTMLElement;
   private onLaunch: (opts: LaunchOptions) => void;
   private onBack: (() => void) | undefined;
+  /** Resume the autosaved single-player game (offered only when one exists). */
+  private onResume: (() => void) | undefined;
   private color: PlayerColor = "yellow";
   private opponents = 2; // 0 = play solo (no AI rivals)
   private fogMap = false;
@@ -63,10 +69,12 @@ export class NewGameMenu {
     mount: HTMLElement,
     onLaunch: (opts: LaunchOptions) => void,
     onBack?: () => void,
+    onResume?: () => void,
   ) {
     this.root = mount;
     this.onLaunch = onLaunch;
     this.onBack = onBack;
+    this.onResume = onResume;
     // AB4: seed the commander identity from the signed-in profile so your name
     // and favorite color are pre-filled (you can still change them per game).
     const profile = auth.currentProfile();
@@ -78,6 +86,19 @@ export class NewGameMenu {
   }
 
   private render(): void {
+    // Offer to resume the last autosaved single-player game, if there is one.
+    const saved = this.onResume ? LocalGame.savedGame() : null;
+    const resumeHtml = saved
+      ? `<div class="setup-row">
+          <div class="setup-label">Continue</div>
+          <div class="setup-ctrl">
+            <button class="resume-card" id="resume">
+              <span class="resume-card-title">Resume last voyage</span>
+              <span class="resume-card-sub">${saved.myVp}/${saved.target} VP vs ${escapeHtml(saved.rivals.join(", ") || "—")}</span>
+            </button>
+          </div>
+        </div>`
+      : "";
     const screen = el(`
       <div class="screen">
         <div class="setup">
@@ -85,6 +106,7 @@ export class NewGameMenu {
             <div class="setup-kicker">Mission setup</div>
             <h1 class="setup-title">PREPARE FOR LAUNCH</h1>
           </div>
+          ${resumeHtml}
 
           <div class="setup-row">
             <div class="setup-label">Commander</div>
@@ -247,6 +269,10 @@ export class NewGameMenu {
       shatter(launchBtn, "#39d8c8", () => this.onLaunch(opts));
     });
     screen.querySelector("#back")?.addEventListener("click", () => this.onBack?.());
+    const resumeBtn = screen.querySelector("#resume") as HTMLElement | null;
+    resumeBtn?.addEventListener("click", () => {
+      shatter(resumeBtn, "#ffd23f", () => this.onResume?.());
+    });
 
     // AB4: prefill the commander name from the signed-in profile.
     (screen.querySelector("#name") as HTMLInputElement).value = this.defaultName;

@@ -197,14 +197,8 @@ async function boot(): Promise<void> {
 
   const showLanding = (): void => {
     // Hero landing: no boxed card — the title and pills float directly over
-    // the comet field, like the referenced hero design.
-    const saved = LocalGame.savedGame();
-    const resumeHtml = saved
-      ? `<button class="hero-resume" id="resume">
-           <span class="hero-resume-title">Resume Voyage</span>
-           <span class="hero-resume-sub">${saved.myVp}/${saved.target} VP vs ${saved.rivals.join(", ")}</span>
-         </button>`
-      : "";
+    // the comet field, like the referenced hero design. (Resuming a saved game
+    // lives inside Single Player / Play Online, not on the menu.)
     const screen = el(`
       <div class="screen">
         <div class="hero">
@@ -217,7 +211,6 @@ async function boot(): Promise<void> {
             <button class="secondary" id="online">Play Online</button>
             <button class="secondary hero-more" id="more">More</button>
           </div>
-          ${resumeHtml}
           <button class="hero-tutorial" id="tutorial">✦ First flight? Take the guided tutorial</button>
           <button class="hero-install" id="install" ${deferredInstall || (isIOS() && !isStandalone()) ? "" : "hidden"}>⤓ Install as app</button>
           <nav class="hero-foot">
@@ -232,7 +225,14 @@ async function boot(): Promise<void> {
     const single = screen.querySelector("#single") as HTMLElement;
     single.addEventListener("click", () => {
       ensureMenuBg();
-      shatter(single, "#5b8cff", () => new NewGameMenu(app, startSingle, showLanding));
+      // Resume of a saved single-player game now lives inside the Single Player
+      // setup screen (offered there when a save exists), not on the main menu.
+      shatter(single, "#5b8cff", () =>
+        new NewGameMenu(app, startSingle, showLanding, () => {
+          const game = LocalGame.resume();
+          if (game) mountGame(game);
+        }),
+      );
     });
     const online = screen.querySelector("#online") as HTMLElement;
     online.addEventListener("click", () => {
@@ -262,15 +262,6 @@ async function boot(): Promise<void> {
         // iOS Safari has no install API — walk the user through it.
         showIosInstallHelp();
       }
-    });
-    const resume = screen.querySelector("#resume") as HTMLElement | null;
-    resume?.addEventListener("click", () => {
-      const game = LocalGame.resume();
-      if (!game) {
-        resume.remove(); // slot vanished/corrupt — drop the button quietly
-        return;
-      }
-      shatter(resume, "#ffd23f", () => mountGame(game));
     });
     // Music toggle (top-left): turn the ambient soundtrack on/off from the menu.
     const musicBtn = el(
