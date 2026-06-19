@@ -10,6 +10,8 @@
   --red: #ff5d5d;
   --blue: #4fa8ff;
   --black: #8a8fa6;
+  --green: #52d273;
+  --white: #e9eef7;
   --good: #57e389;
   --danger: #ff6b6b;
 }
@@ -294,6 +296,8 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .dot.red { background: var(--red); color: var(--red); }
 .dot.blue { background: var(--blue); color: var(--blue); }
 .dot.black { background: var(--black); color: var(--black); }
+.dot.green { background: var(--green); color: var(--green); }
+.dot.white { background: var(--white); color: var(--white); }
 .badge { font-size: 11px; color: var(--muted); margin-left: auto; }
 .offline { opacity: 0.45; }
 .players li .ai-remove {
