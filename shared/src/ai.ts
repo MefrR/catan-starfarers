@@ -31,6 +31,8 @@ interface Knobs {
   buildTradeShips: boolean;
   /** Most colony ships the AI keeps in flight at once (expand on several fronts). */
   maxColonyShips: number;
+  /** Most trade ships in flight at once (more = grab more outposts). */
+  maxTradeShips: number;
   /** Build cannons to conquer pirate bases (each cleared base = +1 VP). */
   buildCannons: boolean;
   /** Pursue ice planets & pirate bases: build pods/cannons and settle them. */
@@ -39,6 +41,15 @@ interface Knobs {
   proposeTrades: boolean;
   /** Default gift offered to a friendly merchant / travelers (for fame). */
   encounterGift: number;
+  /** Push new colonies outward BEFORE upgrading home colonies into spaceports. */
+  expandFirst: boolean;
+  /** Only upgrade colonies at least this fraction of the map radius from centre
+   *  into spaceports — so a "fly further" AI builds them in mid/far space, not on
+   *  its starting cluster. 0 = upgrade any colony. */
+  spaceportMinDistFrac: number;
+  /** Buy a couple of boosters early (while ships are out) so the fleet reaches
+   *  deeper space rather than settling whatever's nearest home. */
+  earlyBoosters: boolean;
 }
 
 const KNOBS: Record<AiDifficulty, Knobs> = {
@@ -46,28 +57,40 @@ const KNOBS: Record<AiDifficulty, Knobs> = {
     boosterCap: 1,
     buildTradeShips: true,
     maxColonyShips: 1,
+    maxTradeShips: 1,
     buildCannons: false,
     clearSpecials: false,
-    proposeTrades: false,
+    proposeTrades: true, // every AI now initiates trades on its turn
     encounterGift: 0,
+    expandFirst: false,
+    spaceportMinDistFrac: 0,
+    earlyBoosters: false,
   },
   normal: {
     boosterCap: 3,
     buildTradeShips: true,
     maxColonyShips: 2,
+    maxTradeShips: 1,
     buildCannons: true,
     clearSpecials: true,
     proposeTrades: true,
     encounterGift: 1,
+    expandFirst: false,
+    spaceportMinDistFrac: 0,
+    earlyBoosters: false,
   },
   hard: {
-    boosterCap: 5,
+    boosterCap: 6,
     buildTradeShips: true,
     maxColonyShips: 3,
+    maxTradeShips: 3, // chase several outposts at once
     buildCannons: true,
     clearSpecials: true,
     proposeTrades: true,
     encounterGift: 1,
+    expandFirst: true, // colonise mid/far space before converting home colonies
+    spaceportMinDistFrac: 0.42, // spaceports only out past the inner cluster
+    earlyBoosters: true, // fly further
   },
 };
 
@@ -333,10 +356,23 @@ function tradeBuildAction(state: GameState, me: PlayerState): ClientIntent {
 
   const k = knobs(state);
 
+  const canBuildColonyShip =
+    canAfford(me.hand, BUILD_COSTS.colonyShip) &&
+    me.supply.transportShips > 0 &&
+    me.supply.colonies > 0 &&
+    hasOpenSpaceportSite(state, me) &&
+    countOwnShips(state, me, "colonyShip") < k.maxColonyShips;
+
+  // 0. Fly-further AIs (hard) push a new colony ship outward BEFORE converting a
+  //    home colony into a spaceport — they colonise mid/far space first.
+  if (k.expandFirst && canBuildColonyShip) {
+    return { t: "build", what: "colonyShip" };
+  }
+
   // 1. Upgrade a colony to a spaceport (net +1 VP, and a new launch pad for
-  //    expanding farther out). Prefer the colony farthest from home so the
-  //    fleet pushes outward rather than clustering at the start.
-  const upgradeColony = bestSpaceportColony(state, me);
+  //    expanding farther out). Prefer the colony farthest from home; the hard
+  //    AI only upgrades colonies already out past the inner cluster.
+  const upgradeColony = bestSpaceportColony(state, me, k.spaceportMinDistFrac);
   if (upgradeColony && canAfford(me.hand, BUILD_COSTS.spaceport)) {
     return { t: "build", what: "spaceport", targetId: upgradeColony.intersectionId };
   }
@@ -344,28 +380,33 @@ function tradeBuildAction(state: GameState, me: PlayerState): ClientIntent {
   // 2. Build a colony ship to expand, if we have a launch site and transport.
   //    Harder AIs keep several colony ships in flight to grab sites on multiple
   //    fronts before opponents can.
-  if (
-    canAfford(me.hand, BUILD_COSTS.colonyShip) &&
-    me.supply.transportShips > 0 &&
-    me.supply.colonies > 0 &&
-    hasOpenSpaceportSite(state, me) &&
-    countOwnShips(state, me, "colonyShip") < k.maxColonyShips
-  ) {
+  if (canBuildColonyShip) {
     return { t: "build", what: "colonyShip" };
   }
 
   // 3. Build a trade ship to race toward an outpost dock — a friendship marker
-  //    is worth +2 VP, so this is high-value expansion the AI used to ignore.
+  //    is worth +2 VP. Harder AIs keep several in flight to grab more outposts.
   if (
     k.buildTradeShips &&
     canAfford(me.hand, BUILD_COSTS.tradeShip) &&
     me.supply.transportShips > 0 &&
     me.supply.tradeStations > 0 &&
     hasOpenSpaceportSite(state, me) &&
-    !meHasTradeShip(state, me) &&
+    countOwnShips(state, me, "tradeShip") < k.maxTradeShips &&
     openDockExists(state)
   ) {
     return { t: "build", what: "tradeShip" };
+  }
+
+  // 3a. Fly further: a couple of early boosters so the fleet reaches deep space
+  //     instead of settling whatever's nearest home (hard AI).
+  if (
+    k.earlyBoosters &&
+    me.upgrades.booster < 2 &&
+    canAfford(me.hand, BUILD_COSTS.booster) &&
+    countShips(state, me) > 0
+  ) {
+    return { t: "build", what: "booster" };
   }
 
   // 3b. Freight pods are the gate the AI used to ignore: docking a trade station
@@ -424,11 +465,16 @@ function tradeBuildAction(state: GameState, me: PlayerState): ClientIntent {
     bankTradeToward(me, BUILD_COSTS.spaceport) ?? bankTradeToward(me, BUILD_COSTS.colonyShip);
   if (trade) return trade;
 
-  // 7. Otherwise try a player-to-player offer (once per turn) to fill a gap
-  //    toward a useful build that the bank can't cover from our surplus.
+  // 7. Otherwise initiate a player-to-player offer (once per turn) to fill a gap
+  //    toward a useful build that the bank can't cover from our surplus. Every
+  //    difficulty now does this — the AI actively trades on its turn.
   if (k.proposeTrades && (state.phaseState.tradeProposals ?? 0) === 0 && !state.phaseState.pendingTrade) {
     const offer =
-      proposeToward(me, BUILD_COSTS.spaceport) ?? proposeToward(me, BUILD_COSTS.colonyShip);
+      proposeToward(me, BUILD_COSTS.spaceport) ??
+      proposeToward(me, BUILD_COSTS.colonyShip) ??
+      proposeToward(me, BUILD_COSTS.tradeShip) ??
+      proposeToward(me, BUILD_COSTS.freightPod) ??
+      proposeToward(me, BUILD_COSTS.cannon);
     if (offer) return offer;
   }
 
@@ -633,10 +679,16 @@ function canDockHere(state: GameState, me: PlayerState, id: string): boolean {
  * Pick the player's colony to upgrade into a spaceport. Prefer the colony
  * farthest from the board centre so the fleet pushes outward from the crowded
  * home systems and claims sites/outposts on the frontier.
+ *
+ * `minDistFrac` (hard AI) skips colonies inside that fraction of the map radius,
+ * so spaceports only go up out in mid/far space — not on the starting cluster.
+ * If no colony qualifies and the AI can no longer expand outward, it falls back
+ * to the farthest colony it has so it still converts VP rather than stalling.
  */
 function bestSpaceportColony(
   state: GameState,
   me: PlayerState,
+  minDistFrac = 0,
 ): { intersectionId: string } | null {
   const colonies = state.buildings.filter((b) => b.owner === me.id && b.kind === "colony");
   if (colonies.length === 0) return null;
@@ -645,25 +697,35 @@ function bestSpaceportColony(
   const all = Object.values(state.intersections);
   let cx = 0;
   let cy = 0;
+  let maxR = 0;
   for (const inter of all) {
     cx += inter.x;
     cy += inter.y;
   }
   cx /= all.length || 1;
   cy /= all.length || 1;
-
-  let best: { intersectionId: string } | null = null;
-  let bestDist = -1;
-  for (const c of colonies) {
-    const inter = state.intersections[c.intersectionId];
-    if (!inter) continue;
-    const d = (inter.x - cx) ** 2 + (inter.y - cy) ** 2;
-    if (d > bestDist) {
-      bestDist = d;
-      best = c;
-    }
+  for (const inter of all) {
+    const d = Math.hypot(inter.x - cx, inter.y - cy);
+    if (d > maxR) maxR = d;
   }
-  return best ?? colonies[0]!;
+  const minDist = minDistFrac * maxR;
+
+  const ranked = colonies
+    .map((c) => {
+      const inter = state.intersections[c.intersectionId];
+      return { c, dist: inter ? Math.hypot(inter.x - cx, inter.y - cy) : 0 };
+    })
+    .sort((a, b) => b.dist - a.dist);
+
+  const far = ranked.find((r) => r.dist >= minDist);
+  if (far) return far.c;
+  // No colony out past the gate. Only fall back to a near one when we truly can't
+  // expand further (no launch site / out of ships or colonies) — otherwise keep
+  // pushing outward and convert a far colony later.
+  if (minDistFrac > 0 && hasOpenSpaceportSite(state, me) && me.supply.transportShips > 0 && me.supply.colonies > 0) {
+    return null;
+  }
+  return ranked[0]!.c;
 }
 
 function occupied(state: GameState, id: string): boolean {
