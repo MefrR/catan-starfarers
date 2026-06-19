@@ -48,6 +48,8 @@ if (clientDist) {
   // are also served statically; these aliases give tidy /privacy and /terms URLs.
   app.get("/privacy", (_req, res) => res.sendFile(path.join(clientDist, "privacy.html")));
   app.get("/terms", (_req, res) => res.sendFile(path.join(clientDist, "terms.html")));
+  app.get("/about", (_req, res) => res.sendFile(path.join(clientDist, "about.html")));
+  app.get("/how-to-play", (_req, res) => res.sendFile(path.join(clientDist, "how-to-play.html")));
   // SPA fallback: any non-API route serves index.html so deep links / reloads work.
   app.get("*", (_req, res) => res.sendFile(path.join(clientDist, "index.html")));
 } else {

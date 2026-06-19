@@ -220,6 +220,12 @@ async function boot(): Promise<void> {
           ${resumeHtml}
           <button class="hero-tutorial" id="tutorial">✦ First flight? Take the guided tutorial</button>
           <button class="hero-install" id="install" ${deferredInstall || (isIOS() && !isStandalone()) ? "" : "hidden"}>⤓ Install as app</button>
+          <nav class="hero-foot">
+            <a href="/about">About</a>
+            <a href="/how-to-play">How to play</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
+          </nav>
         </div>
       </div>
     `);

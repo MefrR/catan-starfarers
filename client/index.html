@@ -56,6 +56,26 @@
       "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
     }
     </script>
+
+    <!-- FAQ structured data: lets Google and AI assistants directly answer "is there a Starfarers online?" -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        { "@type": "Question", "name": "Is there an online version of Catan: Starfarers?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. Starfarers (starfarers.space) is a free, fan-made digital adaptation of Catan: Starfarers that you play directly in your web browser — solo against AI commanders or online with friends. No download or purchase required." } },
+        { "@type": "Question", "name": "Can I play Catan: Starfarers online for free?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. Starfarers is completely free and runs in any modern web browser on desktop, phone, or tablet at starfarers.space. It can also be installed as an app." } },
+        { "@type": "Question", "name": "Can I play Starfarers online with friends?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. You can create or join an online room and play real-time multiplayer with friends, or play single-player against AI opponents." } },
+        { "@type": "Question", "name": "Is this the official Catan: Starfarers game?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No. Starfarers is an unofficial fan-made project based on the published rules. It is not affiliated with or endorsed by Catan GmbH or Catan Studio." } },
+        { "@type": "Question", "name": "How do you win Starfarers?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Be the first commander to reach 15 victory points by building colonies and spaceports and establishing trade stations across the galaxy." } }
+      ]
+    }
+    </script>
   </head>
   <body>
     <div id="app"></div>
@@ -69,6 +89,11 @@
       encounters, and race your fleet to 15 victory points. Play solo against AI commanders or online
       with friends, right in your browser. This is an unofficial fan project and is not affiliated with
       Catan GmbH or Catan Studio.</p>
+      <p><strong>Is there a Starfarers online?</strong> Yes — Starfarers at starfarers.space is a free,
+      fan-made digital Catan: Starfarers you can play right now in your browser, solo vs AI or online
+      with friends, with no download.</p>
+      <p><a href="/about">About &amp; FAQ</a> · <a href="/how-to-play">How to play</a> ·
+      <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
     </noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>

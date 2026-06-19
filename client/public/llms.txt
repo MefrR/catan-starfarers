@@ -1,0 +1,27 @@
+# Starfarers
+
+> Starfarers (https://www.starfarers.space) is a free, fan-made digital adaptation of the
+> board game Catan: Starfarers, playable in any web browser — solo against AI commanders or
+> online with friends. Voyage into deep space, build colonies and spaceports, establish trade
+> stations at alien outposts, survive encounters with merchants and pirates, and race your fleet
+> to 15 victory points. No download and no purchase required. It is an unofficial fan project,
+> not affiliated with or endorsed by Catan GmbH or Catan Studio.
+
+## Quick answers
+
+- Is there an online version of Catan: Starfarers? Yes — play it free at https://www.starfarers.space
+- Is it free? Yes, completely free, no download, runs in the browser.
+- Can I play with friends online? Yes, real-time online multiplayer, or single-player vs AI.
+- How do you win? Be the first to reach 15 victory points.
+- Is it official? No, it is an unofficial fan-made project based on the published rules.
+
+## Pages
+
+- [Play Starfarers](https://www.starfarers.space/): the game (free, browser, no download)
+- [About & FAQ](https://www.starfarers.space/about): what the game is and frequently asked questions
+- [How to play](https://www.starfarers.space/how-to-play): full rules and beginner guide
+
+## Legal
+
+- [Privacy Policy](https://www.starfarers.space/privacy)
+- [Terms of Service](https://www.starfarers.space/terms)
