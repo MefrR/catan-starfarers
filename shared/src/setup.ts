@@ -59,6 +59,7 @@ export function createGameState(
     setup: "beginner",
     seed: Date.now() & 0xffff,
     randomizeLayout: cfg.fogMap,
+    balancedLayout: cfg.balancedLayout,
   });
   void homeColonySites; // retained helper (used by tests / future variants)
 

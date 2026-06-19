@@ -26,6 +26,7 @@ import {
 } from "./types.js";
 import {
   BUILD_COSTS,
+  FRIENDLY_ROBBER_VP,
   MAX_UPGRADES,
   OUTPOST_DOCKS,
   POST_ENCOUNTER_BASE_SPEED,
@@ -72,6 +73,33 @@ function handTotal(p: PlayerState): number {
 
 function rollDie(rng: Rng): number {
   return 1 + Math.floor(rng() * 6);
+}
+
+/**
+ * Produce the next [d1, d2] for a production roll. With the Deck-of-36 variant on
+ * (config.deck36Dice), draw from a deck containing every one of the 36 (d1,d2)
+ * combinations exactly once — so over a full cycle the number distribution is
+ * perfectly even (no long droughts or streaks). Otherwise roll two fair dice.
+ */
+function nextDice(state: GameState, rng: Rng): [number, number] {
+  if (!state.config.deck36Dice) return [rollDie(rng), rollDie(rng)];
+  if (!state.diceDeck || state.diceDeck.length === 0) {
+    // Fresh shuffled deck of codes 0..35 (code = (d1-1)*6 + (d2-1)).
+    const deck = Array.from({ length: 36 }, (_, i) => i);
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [deck[i], deck[j]] = [deck[j]!, deck[i]!];
+    }
+    state.diceDeck = deck;
+  }
+  const code = state.diceDeck.pop()!;
+  return [Math.floor(code / 6) + 1, (code % 6) + 1];
+}
+
+/** Friendly Bandit: with the variant on, a 7 can't target players under 3 VP. */
+function canStealFrom(state: GameState, p: PlayerState): boolean {
+  if (!state.config.friendlyRobber) return true;
+  return p.victoryPoints >= FRIENDLY_ROBBER_VP;
 }
 
 /** Move `n` of resource `r` from bank into a hand, clamped to what the bank has. */
@@ -427,8 +455,7 @@ function isOccupied(state: GameState, intersectionId: string): boolean {
 // --- Production phase ---
 
 function doProduction(state: GameState, rng: Rng): void {
-  const d1 = rollDie(rng);
-  const d2 = rollDie(rng);
+  const [d1, d2] = nextDice(state, rng);
   const sum = d1 + d2;
   state.phaseState.lastRoll = [d1, d2];
   state.phaseState.rollCount = (state.phaseState.rollCount ?? 0) + 1;
@@ -455,8 +482,9 @@ function doProduction(state: GameState, rng: Rng): void {
       const got = drawRandom(state.supplyBank, p.hand, 1, rng);
       if (got > 0) log(state, `${p.name} drew 1 card from the bank (a 7 was rolled).`);
     }
-    // Roller will choose an opponent to steal from (if any opponent holds cards).
-    if (state.players.some((p) => p.id !== roller.id && handTotal(p) > 0)) {
+    // Roller will choose an opponent to steal from (if any eligible opponent
+    // holds cards). Friendly Bandit excludes players under 3 VP.
+    if (state.players.some((p) => p.id !== roller.id && handTotal(p) > 0 && canStealFrom(state, p))) {
       state.phaseState.awaitingSteal = true;
       log(state, `${roller.name} may steal 1 card from a player.`);
     }
@@ -1585,6 +1613,8 @@ export function applyIntent(
       const target = state.players.find((p) => p.id === intent.targetId);
       if (!target || target.id === me.id) return fail(input, "Pick an opponent to steal from.");
       if (handTotal(target) <= 0) return fail(input, "That player has no cards to steal.");
+      if (!canStealFrom(state, target))
+        return fail(input, `Friendly Bandit: can't steal from players under ${FRIENDLY_ROBBER_VP} VP.`);
       drawRandom(target.hand, me.hand, 1, rng);
       ps.awaitingSteal = false;
       ps.lastSteal = { fromId: target.id, toId: me.id, seq: (ps.lastSteal?.seq ?? 0) + 1 };

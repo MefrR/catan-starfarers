@@ -22,6 +22,20 @@ export const VP = {
 } as const;
 
 export const DEFAULT_TARGET_VP = 15;
+/** Host-selectable victory-point target range (inclusive). */
+export const VP_MIN = 12;
+export const VP_MAX = 25;
+
+/** Friendly Bandit: a 7 can't steal from a player with fewer than this many VP. */
+export const FRIENDLY_ROBBER_VP = 3;
+
+/** Bot pacing presets (ms between AI actions), keyed by config.botSpeed. */
+export type BotSpeed = "relaxed" | "normal" | "fast";
+export const BOT_SPEED_MS: Record<BotSpeed, number> = {
+  relaxed: 1500,
+  normal: 800,
+  fast: 120,
+};
 
 /** Max upgrades attachable to a mothership. */
 export const MAX_UPGRADES: Record<UpgradeKind, number> = {

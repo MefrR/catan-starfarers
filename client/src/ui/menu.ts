@@ -1,5 +1,8 @@
 import {
   PLAYER_COLORS,
+  DEFAULT_TARGET_VP,
+  VP_MIN,
+  VP_MAX,
   type AiDifficulty,
   type GameConfig,
   type PlayerColor,
@@ -61,6 +64,12 @@ export class NewGameMenu {
   private fogMap = false;
   private aiDifficulty: AiDifficulty = "normal";
   private turnSeconds = 0; // 0 = no turn timer
+  private botSpeed: "relaxed" | "normal" | "fast" = "normal";
+  private targetVP = DEFAULT_TARGET_VP;
+  private friendlyRobber = false;
+  private hideBank = false;
+  private balancedLayout = true;
+  private deck36Dice = false;
 
   /** When signed in, default the commander name to the profile's display name. */
   private defaultName = "Commander";
@@ -128,6 +137,27 @@ export class NewGameMenu {
             <div class="setup-label">Galaxy</div>
             <div class="setup-ctrl">
               <div class="seg seg-wide" id="mapstyle"></div>
+            </div>
+          </div>
+
+          <div class="setup-row">
+            <div class="setup-label">Bot speed</div>
+            <div class="setup-ctrl">
+              <div class="seg" id="botspeed"></div>
+            </div>
+          </div>
+
+          <div class="setup-row">
+            <div class="setup-label">Victory target</div>
+            <div class="setup-ctrl">
+              <div class="seg" id="vptarget"></div>
+            </div>
+          </div>
+
+          <div class="setup-row">
+            <div class="setup-label">Variants</div>
+            <div class="setup-ctrl">
+              <div class="variant-chips" id="variants"></div>
             </div>
           </div>
 
@@ -258,12 +288,71 @@ export class NewGameMenu {
     };
     paintTimer();
 
+    // Bot speed — how fast AI seats take their turns.
+    const botRow = screen.querySelector("#botspeed")!;
+    const paintBot = (): void =>
+      seg(
+        botRow,
+        (
+          [
+            { v: "relaxed", label: "Relaxed", hint: "Natural pace" },
+            { v: "normal", label: "Normal", hint: "Moderate" },
+            { v: "fast", label: "Fast", hint: "Zero delay" },
+          ] as { v: "relaxed" | "normal" | "fast"; label: string; hint: string }[]
+        ).map((o) => ({
+          label: o.label,
+          hint: o.hint,
+          selected: o.v === this.botSpeed,
+          pick: () => { this.botSpeed = o.v; paintBot(); },
+        })),
+      );
+    paintBot();
+
+    // Victory target — 12 to 25 VP (− / value / +).
+    const vpRow = screen.querySelector("#vptarget")!;
+    const paintVP = (): void => {
+      vpRow.replaceChildren();
+      const minus = el(`<button class="seg-opt" ${this.targetVP <= VP_MIN ? "disabled" : ""}>−</button>`);
+      minus.addEventListener("click", () => { this.targetVP = Math.max(VP_MIN, this.targetVP - 1); paintVP(); });
+      const val = el(`<button class="seg-opt seg-val" disabled>${this.targetVP} VP</button>`);
+      const plus = el(`<button class="seg-opt" ${this.targetVP >= VP_MAX ? "disabled" : ""}>+</button>`);
+      plus.addEventListener("click", () => { this.targetVP = Math.min(VP_MAX, this.targetVP + 1); paintVP(); });
+      vpRow.append(minus, val, plus);
+    };
+    paintVP();
+
+    // Gameplay variants — toggle chips.
+    const varRow = screen.querySelector("#variants")!;
+    const paintVariants = (): void => {
+      varRow.replaceChildren();
+      const chip = (label: string, hint: string, on: boolean, toggle: () => void): void => {
+        const b = el(`<button class="variant-chip ${on ? "on" : ""}" title="${hint}">${label}</button>`);
+        b.addEventListener("click", () => { toggle(); paintVariants(); });
+        varRow.appendChild(b);
+      };
+      chip("Friendly Bandit", "A 7 can't steal from players under 3 VP", this.friendlyRobber, () => (this.friendlyRobber = !this.friendlyRobber));
+      chip("Hide Bank", "Hide the resource-bank counts", this.hideBank, () => (this.hideBank = !this.hideBank));
+      chip("Balanced Layout", "Fair number placement (no adjacent 6 & 8)", this.balancedLayout, () => (this.balancedLayout = !this.balancedLayout));
+      chip("Deck36 Dice", "Even dice distribution (deck of 36)", this.deck36Dice, () => (this.deck36Dice = !this.deck36Dice));
+    };
+    paintVariants();
+
     const launchBtn = screen.querySelector("#launch") as HTMLElement;
     launchBtn.addEventListener("click", () => {
       const name = (screen.querySelector("#name") as HTMLInputElement).value.trim() || "Commander";
       const opts: LaunchOptions = {
         seats: this.buildSeats(name),
-        config: { fogMap: this.fogMap, aiDifficulty: this.aiDifficulty, turnSeconds: this.turnSeconds },
+        config: {
+          fogMap: this.fogMap,
+          aiDifficulty: this.aiDifficulty,
+          turnSeconds: this.turnSeconds,
+          targetVictoryPoints: this.targetVP,
+          botSpeed: this.botSpeed,
+          friendlyRobber: this.friendlyRobber,
+          hideBank: this.hideBank,
+          balancedLayout: this.balancedLayout,
+          deck36Dice: this.deck36Dice,
+        },
       };
       // The button bursts into shards, then the warp takes us into the game.
       shatter(launchBtn, "#39d8c8", () => this.onLaunch(opts));

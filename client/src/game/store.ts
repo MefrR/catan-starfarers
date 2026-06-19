@@ -2,6 +2,7 @@ import {
   createGameState,
   applyIntent,
   RESOURCES,
+  BOT_SPEED_MS,
   type GameState,
   type GameConfig,
   type ClientIntent,
@@ -59,8 +60,6 @@ export interface GameDriver {
   onError?: (msg: string) => void;
 }
 
-/** AI move pacing (ms) so the human can watch opponents play. */
-const AI_DELAY = 750;
 /** Encounters resolve far slower so the human can actually read the card and
  *  what the AI chose before it flashes past (5s minimum per AI encounter act). */
 const ENCOUNTER_AI_DELAY = 5000;
@@ -287,9 +286,11 @@ export class LocalGame {
   }
 
   /** How long to wait before the AI's next act — slowed right down during an
-   *  encounter so the human can read what's happening. */
+   *  encounter so the human can read what's happening. Outside encounters the
+   *  delay follows the host-chosen bot speed (Relaxed / Normal / Fast). */
   private aiStepDelay(): number {
-    return this.state.phaseState.phase === "encounter" ? ENCOUNTER_AI_DELAY : AI_DELAY;
+    if (this.state.phaseState.phase === "encounter") return ENCOUNTER_AI_DELAY;
+    return BOT_SPEED_MS[this.state.config.botSpeed ?? "normal"];
   }
 
   private stepAI(seatId: string): void {

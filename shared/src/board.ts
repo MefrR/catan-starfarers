@@ -179,6 +179,12 @@ export interface GenerateBoardOptions {
    * so the galaxy's layout — not just its contents — differs every match.
    */
   randomizeLayout?: boolean;
+  /**
+   * Balanced number placement: when not explicitly false, repair the chit layout
+   * so no two "hot" numbers (6/8) share an intersection. Set false for a raw,
+   * fully-random placement (the "Balanced Layout off" host option).
+   */
+  balancedLayout?: boolean;
 }
 
 /**
@@ -546,7 +552,11 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
   // sit on planets that share an intersection. Repair after assignment by
   // swapping a conflicting hot number with a cool one elsewhere on the board.
   // Home planets are protected so the two-6s/two-8s starting rule is preserved.
-  separateHotNumbers(sectors, intersections, rand, homePlanetIds);
+  // Skipped when "Balanced Layout" is off (opts.balancedLayout === false), which
+  // allows raw/random chit placement (adjacent 6s & 8s become possible).
+  if (opts.balancedLayout !== false) {
+    separateHotNumbers(sectors, intersections, rand, homePlanetIds);
+  }
 
   return { sectors, intersections };
 }

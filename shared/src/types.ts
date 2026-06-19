@@ -394,6 +394,9 @@ export interface GameState {
   supplyBank: ResourceBag;
   encounterDeck: number[]; // remaining card ids (top = index 0)
   encounterDiscard: number[];
+  /** Deck-of-36 dice variant: remaining roll codes (0–35 → d1,d2). Lazily filled
+   *  and reshuffled when empty. Unused when config.deck36Dice is off. */
+  diceDeck?: number[];
   config: GameConfig;
   log: string[];
   stats?: GameStats;
@@ -412,6 +415,17 @@ export interface GameConfig {
   /** Optional per-turn time limit in seconds (host-chosen, 15–180 in 5s steps).
    *  0 / undefined = no timer. A successful trade adds TURN_TRADE_BONUS seconds. */
   turnSeconds?: number;
+  /** AI pacing — how long bots wait between actions. Defaults to "normal". */
+  botSpeed?: "relaxed" | "normal" | "fast";
+  /** Friendly Bandit: when true, a 7 can't steal from players under 3 VP. */
+  friendlyRobber?: boolean;
+  /** Hide the resource-bank counts from the in-game panel. Default false (shown). */
+  hideBank?: boolean;
+  /** Balanced number placement (no adjacent 6/8) vs fully random. Default true. */
+  balancedLayout?: boolean;
+  /** Deck-of-36 dice (every combination once per cycle = even distribution) vs
+   *  independent 2d6. Default false. */
+  deck36Dice?: boolean;
 }
 
 /** Time (seconds) added to the active player's turn timer after a successful

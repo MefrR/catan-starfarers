@@ -27,7 +27,18 @@ export type ClientIntent =
   | { t: "joinRoom"; roomCode: string; name: string; username?: string }
   | { t: "listRooms" } // ask the server for the browsable public-room list
   | { t: "leaveBrowsing" } // stop receiving public-room list updates
-  | { t: "setRoomConfig"; fogMap?: boolean; turnSeconds?: number } // host: pre-game settings shown in the browser
+  | {
+      t: "setRoomConfig"; // host: pre-game settings (shown in the browser / applied at start)
+      fogMap?: boolean;
+      turnSeconds?: number;
+      targetVictoryPoints?: number;
+      botSpeed?: "relaxed" | "normal" | "fast";
+      friendlyRobber?: boolean;
+      hideBank?: boolean;
+      balancedLayout?: boolean;
+      deck36Dice?: boolean;
+      isPublic?: boolean; // room visibility, now toggled inside the lobby
+    }
   | { t: "rejoin"; roomCode: string; playerId: string }
   | { t: "setColor"; color: PlayerColor }
   | { t: "startGame"; config: Partial<GameConfig> }

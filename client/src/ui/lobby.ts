@@ -1,5 +1,14 @@
 import { net, type NetMode } from "../net.js";
-import { type GameState, type LobbyState, type PlayerColor, type RoomSummary, PLAYER_COLORS } from "@starfarers/shared";
+import {
+  type GameState,
+  type LobbyState,
+  type PlayerColor,
+  type RoomSummary,
+  PLAYER_COLORS,
+  DEFAULT_TARGET_VP,
+  VP_MIN,
+  VP_MAX,
+} from "@starfarers/shared";
 import { shatter } from "./fx.js";
 import { auth } from "../auth.js";
 import { presence } from "../presence.js";
@@ -70,6 +79,12 @@ export class LobbyUI {
   private rejoining = false;
   private fogMap = false;
   private turnSeconds = 0; // host-chosen per-turn timer (0 = off)
+  private targetVP = DEFAULT_TARGET_VP;
+  private botSpeed: "relaxed" | "normal" | "fast" = "normal";
+  private friendlyRobber = false;
+  private hideBank = false;
+  private balancedLayout = true;
+  private deck36Dice = false;
   private onStart: StartHandler | undefined;
   private onBack: (() => void) | undefined;
   private onReset: (() => void) | undefined;
@@ -224,16 +239,6 @@ export class LobbyUI {
             </div>
           </div>
 
-          <div class="setup-row">
-            <div class="setup-label">Visibility</div>
-            <div class="setup-ctrl">
-              <div class="seg host-vis">
-                <button class="seg-opt ${this.hostPublic ? "on" : ""}" data-vis="public">Public</button>
-                <button class="seg-opt ${this.hostPublic ? "" : "on"}" data-vis="private">Private</button>
-              </div>
-            </div>
-          </div>
-
           <div class="setup-launch">
             <div class="glow-wrap">
               <div class="glow-layer glow-far"><i></i></div>
@@ -253,16 +258,9 @@ export class LobbyUI {
     screen.querySelector("#back")?.addEventListener("click", () => { net.send({ t: "leaveBrowsing" }); this.onBack?.(); });
     const hostBtn = screen.querySelector("#host") as HTMLElement;
     hostBtn.addEventListener("click", () => {
-      shatter(hostBtn, "#39d8c8", () => net.send({ t: "createRoom", name: name(), public: this.hostPublic, username: auth.currentProfile()?.username ?? undefined }));
-    });
-    // Public / Private visibility toggle for the room you host. (The active
-    // segment uses the `.on` class — toggling `active` did nothing.)
-    screen.querySelectorAll<HTMLElement>(".host-vis .seg-opt").forEach((b) => {
-      b.addEventListener("click", () => {
-        this.hostPublic = b.dataset.vis === "public";
-        screen.querySelectorAll<HTMLElement>(".host-vis .seg-opt").forEach((x) =>
-          x.classList.toggle("on", (x.dataset.vis === "public") === this.hostPublic));
-      });
+      // Rooms are created public by default; visibility is now toggled inside the
+      // lobby's host settings (Public / Private), alongside the other match rules.
+      shatter(hostBtn, "#39d8c8", () => net.send({ t: "createRoom", name: name(), public: true, username: auth.currentProfile()?.username ?? undefined }));
     });
     screen.querySelector("#join")!.addEventListener("click", () => {
       const code = (screen.querySelector("#code") as HTMLInputElement).value.trim().toUpperCase();
@@ -442,8 +440,24 @@ export class LobbyUI {
 
           ${isHost ? `
           <div class="setup-row">
+            <div class="setup-label">Visibility</div>
+            <div class="setup-ctrl"><div class="seg host-vis" id="visibility"></div></div>
+          </div>
+          <div class="setup-row">
             <div class="setup-label">Galaxy</div>
             <div class="setup-ctrl"><div class="seg seg-wide" id="mapstyle"></div></div>
+          </div>
+          <div class="setup-row">
+            <div class="setup-label">Bot speed</div>
+            <div class="setup-ctrl"><div class="seg" id="botspeed"></div></div>
+          </div>
+          <div class="setup-row">
+            <div class="setup-label">Victory target</div>
+            <div class="setup-ctrl"><div class="seg" id="vptarget"></div></div>
+          </div>
+          <div class="setup-row">
+            <div class="setup-label">Variants</div>
+            <div class="setup-ctrl"><div class="variant-chips" id="variants"></div></div>
           </div>
           <div class="setup-row">
             <div class="setup-label">Turn timer</div>
@@ -503,8 +517,72 @@ export class LobbyUI {
           { label: "+5s", disabled: this.turnSeconds >= 180, pick: () => setTimer(this.turnSeconds === 0 ? 15 : Math.min(180, this.turnSeconds + 5)) },
         ]);
       paintTimer();
+
+      // Room visibility — moved here from the connect screen (host-only).
+      const visRow = screen.querySelector("#visibility")!;
+      const setVis = (pub: boolean): void => { this.hostPublic = pub; net.send({ t: "setRoomConfig", isPublic: pub }); paintVis(); };
+      const paintVis = (): void =>
+        seg(visRow, [
+          { label: "Public", hint: "Listed in the browser", selected: this.hostPublic, pick: () => setVis(true) },
+          { label: "Private", hint: "Code only", selected: !this.hostPublic, pick: () => setVis(false) },
+        ]);
+      paintVis();
+
+      // Bot speed.
+      const botRow = screen.querySelector("#botspeed")!;
+      const setBot = (v: "relaxed" | "normal" | "fast"): void => { this.botSpeed = v; net.send({ t: "setRoomConfig", botSpeed: v }); paintBot(); };
+      const paintBot = (): void =>
+        seg(botRow, [
+          { label: "Relaxed", hint: "Natural", selected: this.botSpeed === "relaxed", pick: () => setBot("relaxed") },
+          { label: "Normal", hint: "Moderate", selected: this.botSpeed === "normal", pick: () => setBot("normal") },
+          { label: "Fast", hint: "Zero delay", selected: this.botSpeed === "fast", pick: () => setBot("fast") },
+        ]);
+      paintBot();
+
+      // Victory target — 12 to 25 VP.
+      const vpRow = screen.querySelector("#vptarget")!;
+      const setVP = (n: number): void => { this.targetVP = n; net.send({ t: "setRoomConfig", targetVictoryPoints: n }); paintVP(); };
+      const paintVP = (): void =>
+        seg(vpRow, [
+          { label: "−", disabled: this.targetVP <= VP_MIN, pick: () => setVP(Math.max(VP_MIN, this.targetVP - 1)) },
+          { label: `${this.targetVP} VP` },
+          { label: "+", disabled: this.targetVP >= VP_MAX, pick: () => setVP(Math.min(VP_MAX, this.targetVP + 1)) },
+        ]);
+      paintVP();
+
+      // Gameplay variants — toggle chips.
+      const varRow = screen.querySelector("#variants")!;
+      const paintVariants = (): void => {
+        varRow.replaceChildren();
+        const chip = (label: string, hint: string, on: boolean, send: (v: boolean) => void): void => {
+          const b = el(`<button class="variant-chip ${on ? "on" : ""}" title="${hint}">${label}</button>`);
+          b.addEventListener("click", () => { send(!on); paintVariants(); });
+          varRow.appendChild(b);
+        };
+        chip("Friendly Bandit", "A 7 can't steal from players under 3 VP", this.friendlyRobber,
+          (v) => { this.friendlyRobber = v; net.send({ t: "setRoomConfig", friendlyRobber: v }); });
+        chip("Hide Bank", "Hide the resource-bank counts", this.hideBank,
+          (v) => { this.hideBank = v; net.send({ t: "setRoomConfig", hideBank: v }); });
+        chip("Balanced Layout", "Fair number placement (no adjacent 6 & 8)", this.balancedLayout,
+          (v) => { this.balancedLayout = v; net.send({ t: "setRoomConfig", balancedLayout: v }); });
+        chip("Deck36 Dice", "Even dice distribution (deck of 36)", this.deck36Dice,
+          (v) => { this.deck36Dice = v; net.send({ t: "setRoomConfig", deck36Dice: v }); });
+      };
+      paintVariants();
+
       // Push the initial defaults so a brand-new room shows its settings.
-      net.send({ t: "setRoomConfig", fogMap: this.fogMap, turnSeconds: this.turnSeconds });
+      net.send({
+        t: "setRoomConfig",
+        fogMap: this.fogMap,
+        turnSeconds: this.turnSeconds,
+        targetVictoryPoints: this.targetVP,
+        botSpeed: this.botSpeed,
+        friendlyRobber: this.friendlyRobber,
+        hideBank: this.hideBank,
+        balancedLayout: this.balancedLayout,
+        deck36Dice: this.deck36Dice,
+        isPublic: this.hostPublic,
+      });
     }
 
     const startBtn = screen.querySelector("#start") as HTMLElement | null;
@@ -512,7 +590,17 @@ export class LobbyUI {
       shatter(startBtn, "#39d8c8", () =>
         net.send({
           t: "startGame",
-          config: { playerCount: lobby.players.length, fogMap: this.fogMap, turnSeconds: this.turnSeconds },
+          config: {
+            playerCount: lobby.players.length,
+            fogMap: this.fogMap,
+            turnSeconds: this.turnSeconds,
+            targetVictoryPoints: this.targetVP,
+            botSpeed: this.botSpeed,
+            friendlyRobber: this.friendlyRobber,
+            hideBank: this.hideBank,
+            balancedLayout: this.balancedLayout,
+            deck36Dice: this.deck36Dice,
+          },
         }),
       );
     });

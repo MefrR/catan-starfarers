@@ -1,6 +1,7 @@
 import {
   BALL_VALUE,
   BUILD_COSTS,
+  FRIENDLY_ROBBER_VP,
   MAX_UPGRADES,
   ENCOUNTER_CARDS,
   MOTHERSHIP_BALLS,
@@ -160,6 +161,8 @@ export class HUD {
   private autoRecenterOn = true;
   /** HUD-tools toggle: hide the corner minimap. Persisted. */
   private miniHidden = false;
+  /** Resource-bank panel open/closed (right column). Persisted. */
+  private bankOpen = false;
   private discardSel: Partial<Record<Resource, number>> = {};
   /** Last roll counter we played a dice animation for. */
   private lastAnimatedRoll = 0;
@@ -277,6 +280,7 @@ export class HUD {
       this.hoverInfoOn = localStorage.getItem("sf_hoverInfo") !== "0";
       this.autoRecenterOn = localStorage.getItem("sf_autoRecenter") !== "0";
       this.miniHidden = localStorage.getItem("sf_minimap") === "0";
+      this.bankOpen = localStorage.getItem("sf_bank") === "1";
     } catch { /* localStorage unavailable — keep defaults */ }
     this.board.setAutoRecenter(this.autoRecenterOn);
 
@@ -1061,6 +1065,35 @@ export class HUD {
     }
     scoreboard.appendChild(scoreRows);
 
+    // Resource bank panel (right column). Collapsible — "visible when you toggle
+    // it open". Hidden entirely when the host turned on "Hide Bank".
+    if (!state.config.hideBank) {
+      const bank = el(`<div class="bank-panel ${this.bankOpen ? "open" : ""}"></div>`);
+      const head = el(
+        `<button class="bank-head" title="Resource bank — cards left in the supply">
+           <span>Bank</span><span class="bank-caret">${this.bankOpen ? "▾" : "▸"}</span>
+         </button>`,
+      );
+      head.addEventListener("click", () => {
+        this.bankOpen = !this.bankOpen;
+        try { localStorage.setItem("sf_bank", this.bankOpen ? "1" : "0"); } catch { /* ignore */ }
+        this.rerender();
+      });
+      bank.appendChild(head);
+      if (this.bankOpen) {
+        const grid = el(`<div class="bank-grid"></div>`);
+        for (const r of RESOURCES) {
+          grid.appendChild(
+            el(`<span class="bank-res" title="${RESOURCE_LABEL[r]}: ${state.supplyBank[r]} in the bank" style="--res:${RES_COLOR[r]}">
+                  <span class="bank-ico">${resourceGlyphSvg(r)}</span><span class="bank-n">${state.supplyBank[r]}</span>
+                </span>`),
+          );
+        }
+        bank.appendChild(grid);
+      }
+      scoreboard.appendChild(bank);
+    }
+
     // M2: the activity log is now a section inside the Fleet sidebar (see
     // buildSidebar) rather than a separate floating panel.
     const bar = el(`<div class="hud-panel actionbar"></div>`);
@@ -1521,11 +1554,14 @@ export class HUD {
     this.act({ t: "discard", resources: res });
   }
 
-  /** Timed-out steal: take from the opponent holding the most cards. */
+  /** Timed-out steal: take from the eligible opponent holding the most cards
+   *  (Friendly Bandit excludes players under 3 VP). */
   private autoStealRichest(state: GameState, me: PlayerState): void {
+    const friendly = !!state.config.friendlyRobber;
     const victims = state.players
-      .filter((p) => p.id !== me.id)
+      .filter((p) => p.id !== me.id && (!friendly || p.victoryPoints >= FRIENDLY_ROBBER_VP))
       .map((p) => ({ id: p.id, n: RESOURCES.reduce((s, r) => s + p.hand[r], 0) }))
+      .filter((v) => v.n > 0)
       .sort((a, b) => b.n - a.n);
     const target = victims[0];
     if (target) this.act({ t: "stealTarget", targetId: target.id });
@@ -3711,15 +3747,22 @@ export class HUD {
   }
 
   private fillSteal(actions: HTMLElement, state: GameState, me: PlayerState): void {
-    actions.appendChild(el(`<div class="encounter">A 7! Steal 1 card from a player.</div>`));
+    // Friendly Bandit: players under 3 VP are off-limits.
+    const friendly = !!state.config.friendlyRobber;
+    actions.appendChild(
+      el(`<div class="encounter">A 7! Steal 1 card from a player.${friendly ? " <span class=\"enc-sub\">(Friendly Bandit: not players under 3 VP)</span>" : ""}</div>`),
+    );
     const row = el(`<div class="actions"></div>`);
     for (const p of state.players) {
       if (p.id === me.id) continue;
       const cards = RESOURCES.reduce((s, r) => s + p.hand[r], 0);
+      const eligible = !friendly || p.victoryPoints >= FRIENDLY_ROBBER_VP;
+      const canTake = cards > 0 && eligible;
+      const title = !eligible ? `Protected — under ${FRIENDLY_ROBBER_VP} VP (Friendly Bandit)` : `${cards} card${cards === 1 ? "" : "s"}`;
       const b = el(
-        `<button ${cards > 0 ? "" : "disabled"} style="--c:${COLOR_HEX[p.color]}">${escapeHtml(p.name)} (${cards})</button>`,
+        `<button ${canTake ? "" : "disabled"} title="${title}" style="--c:${COLOR_HEX[p.color]}">${escapeHtml(p.name)} (${cards})</button>`,
       );
-      if (cards > 0) b.addEventListener("click", () => this.act({ t: "stealTarget", targetId: p.id }));
+      if (canTake) b.addEventListener("click", () => this.act({ t: "stealTarget", targetId: p.id }));
       row.appendChild(b);
     }
     actions.appendChild(row);

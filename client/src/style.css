@@ -2144,6 +2144,36 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 }
 .resume-card-title { font-size: 14px; font-weight: 700; letter-spacing: 0.04em; }
 .resume-card-sub { font-size: 12px; color: rgba(255, 233, 168, 0.72); font-weight: 400; }
+
+/* Match-settings: gameplay-variant toggle chips (setup + lobby). */
+.variant-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.variant-chip {
+  padding: 7px 13px; border-radius: 999px; cursor: pointer; font-size: 12.5px; font-weight: 600;
+  color: #cdd8ef; background: rgba(120, 150, 220, 0.1);
+  border: 1px solid rgba(140, 170, 230, 0.28); transition: all 0.15s ease;
+}
+.variant-chip:hover { border-color: rgba(98, 224, 205, 0.6); }
+.variant-chip.on {
+  color: #06231d; font-weight: 800;
+  background: linear-gradient(160deg, #39d8c8, #52e8a0); border-color: transparent;
+}
+
+/* In-game resource bank panel (right column, under the scoreboard). */
+.bank-panel {
+  margin-top: 8px; border-radius: 12px; overflow: hidden;
+  background: rgba(12, 20, 38, 0.66); border: 1px solid rgba(120, 150, 220, 0.18);
+}
+.bank-head {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 12px; background: none; border: none; cursor: pointer;
+  color: #9fc6ff; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.bank-caret { color: #6f86b6; }
+.bank-grid { display: flex; flex-wrap: wrap; gap: 6px 10px; padding: 4px 12px 12px; }
+.bank-res { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 700; color: #eaf2ff; }
+.bank-ico { display: inline-flex; width: 16px; height: 16px; color: var(--res); }
+.bank-ico svg { width: 100%; height: 100%; }
+.bank-n { min-width: 14px; text-align: right; }
 /* Z6: quiet text link under the hero actions that starts the guided game. */
 .hero-tutorial {
   margin-top: 14px; padding: 6px 12px;

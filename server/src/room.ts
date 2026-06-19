@@ -8,6 +8,7 @@ import {
   type GameState,
   PLAYER_COLORS,
   DEFAULT_TARGET_VP,
+  BOT_SPEED_MS,
   SOCKET_EVENT,
 } from "@starfarers/shared";
 import { createGameState, applyIntent, aiObligation, aiTurnAction } from "@starfarers/shared";
@@ -61,8 +62,6 @@ export interface RoomSnapshot {
  *  as needed; keep it short. */
 const DEV_USERNAMES = new Set(["mefr"]);
 
-/** Pacing for server-driven AI seats (ms) so humans can follow along. */
-const AI_DELAY = 800;
 /** Encounters resolve far slower so players can read the card and the AI's
  *  choice before it flashes past (5s minimum per AI encounter act). */
 const ENCOUNTER_AI_DELAY = 5000;
@@ -402,6 +401,17 @@ export class Room {
         if (!member.isHost) return;
         if (intent.fogMap !== undefined) this.config = { ...this.config, fogMap: intent.fogMap };
         if (intent.turnSeconds !== undefined) this.config = { ...this.config, turnSeconds: intent.turnSeconds };
+        if (intent.targetVictoryPoints !== undefined)
+          this.config = { ...this.config, targetVictoryPoints: intent.targetVictoryPoints };
+        if (intent.botSpeed !== undefined) this.config = { ...this.config, botSpeed: intent.botSpeed };
+        if (intent.friendlyRobber !== undefined) this.config = { ...this.config, friendlyRobber: intent.friendlyRobber };
+        if (intent.hideBank !== undefined) this.config = { ...this.config, hideBank: intent.hideBank };
+        if (intent.balancedLayout !== undefined) this.config = { ...this.config, balancedLayout: intent.balancedLayout };
+        if (intent.deck36Dice !== undefined) this.config = { ...this.config, deck36Dice: intent.deck36Dice };
+        // Visibility is now toggled inside the lobby (host-only). Re-broadcast of
+        // the room list is handled by the index layer for setRoomConfig.
+        if (intent.isPublic !== undefined) this.isPublic = intent.isPublic;
+        this.broadcastLobby();
         return;
       }
       case "startGame": {
@@ -591,9 +601,10 @@ export class Room {
   }
 
   /** Delay before the AI's next act — slowed right down during an encounter so
-   *  players can read what's happening. */
+   *  players can read what's happening; otherwise the host-chosen bot speed. */
   private aiStepDelay(): number {
-    return this.game?.phaseState.phase === "encounter" ? ENCOUNTER_AI_DELAY : AI_DELAY;
+    if (this.game?.phaseState.phase === "encounter") return ENCOUNTER_AI_DELAY;
+    return BOT_SPEED_MS[this.config.botSpeed ?? "normal"];
   }
 
   private stepAi(seatId: string): void {
