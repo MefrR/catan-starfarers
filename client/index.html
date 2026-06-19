@@ -3,27 +3,73 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Catan: Starfarers</title>
+
+    <!-- SEO: title + description are what Google shows in results. -->
+    <title>Starfarers — Catan: Starfarers digital board game, play free online</title>
+    <meta name="description" content="Play Starfarers, a free fan-made digital adaptation of Catan: Starfarers. Voyage into deep space, build colonies and trade stations, and race to 15 victory points — solo vs AI or online with friends. No download, plays in your browser." />
+    <meta name="keywords" content="Starfarers, Starfarers digital, Catan Starfarers, Catan Starfarers online, Catan Starfarers digital, space board game, digital board game, online strategy game, play Catan Starfarers free" />
+    <meta name="author" content="Starfarers" />
+    <meta name="application-name" content="Starfarers" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#070b16" />
+    <link rel="canonical" href="https://www.starfarers.space/" />
+
     <!-- PWA: installable as an app ("Install app" in Chrome, lands in the app drawer). -->
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#070b16" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Starfarers" />
     <link rel="icon" type="image/png" href="/emblem-logo.png" />
     <link rel="apple-touch-icon" href="/emblem-logo.png" />
-    <!-- Social / link previews -->
-    <meta property="og:title" content="Catan: Starfarers" />
-    <meta property="og:description" content="Voyage into deep space. Command your fleet to 15 victory points — solo vs AI or online with friends." />
-    <meta property="og:image" content="/starfarers-logo-bg.jpg" />
+
+    <!-- Open Graph (Facebook, WhatsApp, Discord, etc.) -->
+    <meta property="og:site_name" content="Starfarers" />
+    <meta property="og:title" content="Starfarers — Catan: Starfarers digital board game" />
+    <meta property="og:description" content="Voyage into deep space and race to 15 victory points — solo vs AI or online with friends. A free, fan-made digital Catan: Starfarers you play in your browser." />
+    <meta property="og:image" content="https://www.starfarers.space/starfarers-logo-bg.jpg" />
+    <meta property="og:url" content="https://www.starfarers.space/" />
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Starfarers — Catan: Starfarers digital board game" />
+    <meta name="twitter:description" content="Voyage into deep space and race to 15 victory points — solo vs AI or online with friends. Free, plays in your browser." />
+    <meta name="twitter:image" content="https://www.starfarers.space/starfarers-logo-bg.jpg" />
+
+    <!-- Structured data: helps Google understand this is a free online game. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "VideoGame",
+      "name": "Starfarers",
+      "alternateName": ["Catan: Starfarers (digital)", "Starfarers Digital", "Catan Starfarers Online"],
+      "url": "https://www.starfarers.space/",
+      "image": "https://www.starfarers.space/starfarers-logo-bg.jpg",
+      "description": "A free, fan-made digital adaptation of Catan: Starfarers. Voyage into deep space, build colonies and trade stations, and race to 15 victory points — solo vs AI or online with friends.",
+      "applicationCategory": "GameApplication",
+      "operatingSystem": "Web browser",
+      "genre": ["Strategy", "Board game"],
+      "playMode": ["SinglePlayer", "MultiPlayer"],
+      "inLanguage": "en",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+    }
+    </script>
   </head>
   <body>
     <div id="app"></div>
     <canvas id="board"></canvas>
     <div id="ui"></div>
+    <!-- Crawlable text for engines that don't run JS (the game itself is canvas-rendered). -->
+    <noscript>
+      <h1>Starfarers — Catan: Starfarers digital board game</h1>
+      <p>Starfarers is a free, fan-made digital adaptation of Catan: Starfarers. Voyage into deep
+      space, explore planetary systems, build colonies and trade stations at alien outposts, survive
+      encounters, and race your fleet to 15 victory points. Play solo against AI commanders or online
+      with friends, right in your browser. This is an unofficial fan project and is not affiliated with
+      Catan GmbH or Catan Studio.</p>
+    </noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
