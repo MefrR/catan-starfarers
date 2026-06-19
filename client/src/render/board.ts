@@ -966,8 +966,13 @@ export class BoardRenderer {
         const tri: [number, number][] = [[q, r], [q + 1, r], [q, r + 1]];
         if (!sector.discovered) {
           // Fog: identical "???" discs to a disguised system/outpost — secret
-          // until a ship charts it (and finds nothing).
+          // until a ship charts it (and finds nothing). Draw the same hex fill
+          // behind the discs as a disguised system/outpost, or the darker void
+          // tint would give an empty cluster away before it's charted.
           const fogRad = scale * 0.6;
+          for (const [hq, hr] of tri) {
+            drawHex(tx(1.5 * hq), ty(Math.sqrt(3) * (hr + hq / 2)), 0x101a30, 0.4);
+          }
           for (const [hq, hr] of tri) {
             const dx = tx(1.5 * hq);
             const dy = ty(Math.sqrt(3) * (hr + hq / 2));
