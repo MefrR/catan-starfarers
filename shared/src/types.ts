@@ -285,6 +285,9 @@ export interface GamePhaseState {
   lastTrade?: { fromId: PlayerId; toId: PlayerId; seq: number };
   /** After a 7: reserve-pile bonus owed to the roller, drawn once the steal resolves. */
   pendingReserveDraw?: { playerId: PlayerId; count: number };
+  /** After a 7: every NON-roller draws 1 card from the bank — deferred until the
+   *  steal (and any discards) resolve, so the stealer never draws from the bank. */
+  pendingSevenBank?: boolean;
   /** The most recent reserve-pile draw — drives the fly-in animation of the specific cards gained. */
   reserveDraw?: { playerId: PlayerId; gains: Partial<ResourceBag>; seq: number };
   /** After building a trade station: the owner must choose a friendship ability. */

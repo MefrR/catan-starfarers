@@ -476,12 +476,11 @@ function doProduction(state: GameState, rng: Rng): void {
       state.phaseState.pendingDiscards = pending;
       log(state, "A 7 — over-limit players must discard half their cards.");
     }
-    // Each non-roller draws 1 random card from the supply bank.
-    for (const p of state.players) {
-      if (p.id === roller.id) continue;
-      const got = drawRandom(state.supplyBank, p.hand, 1, rng);
-      if (got > 0) log(state, `${p.name} drew 1 card from the bank (a 7 was rolled).`);
-    }
+    // Every NON-roller draws 1 card from the bank — but only AFTER the roller's
+    // steal (and any discards) resolve, so the stealer takes a card from a
+    // player and never also draws one from the bank. Flag it; resolved below or
+    // in stealTarget / discard.
+    state.phaseState.pendingSevenBank = true;
     // Roller will choose an opponent to steal from (if any eligible opponent
     // holds cards). Friendly Bandit excludes players under 3 VP.
     if (state.players.some((p) => p.id !== roller.id && handTotal(p) > 0 && canStealFrom(state, p))) {
@@ -496,16 +495,30 @@ function doProduction(state: GameState, rng: Rng): void {
   // bonus) on EVERY roll, including a 7. On a 7 it's deferred until the steal /
   // discards resolve, then fires (in stealTarget / discard).
   const draws = reserveDrawForVP(roller.victoryPoints);
-  if (draws > 0) {
-    const deferred = state.phaseState.awaitingSteal || !!state.phaseState.pendingDiscards;
-    if (deferred) {
-      state.phaseState.pendingReserveDraw = { playerId: roller.id, count: draws };
-    } else {
-      drawReserveBonus(state, rng);
-    }
+  const deferred = state.phaseState.awaitingSteal || !!state.phaseState.pendingDiscards;
+  if (deferred) {
+    if (draws > 0) state.phaseState.pendingReserveDraw = { playerId: roller.id, count: draws };
+  } else {
+    // Nothing to wait on (e.g. a 7 with no one to steal from / no discards):
+    // hand out the others' bank cards now, then the roller's reserve bonus.
+    giveSevenBankCards(state, rng);
+    if (draws > 0) drawReserveBonus(state, rng);
   }
 
   state.phaseState.phase = "tradeBuild";
+}
+
+/** Give every NON-roller 1 card from the bank after a 7 (deferred so it lands
+ *  after the steal). The roller is excluded — they take a card via the steal. */
+function giveSevenBankCards(state: GameState, rng: Rng): void {
+  if (!state.phaseState.pendingSevenBank) return;
+  state.phaseState.pendingSevenBank = false;
+  const rollerId = activePlayer(state).id;
+  for (const p of state.players) {
+    if (p.id === rollerId) continue;
+    const got = drawRandom(state.supplyBank, p.hand, 1, rng);
+    if (got > 0) log(state, `${p.name} drew 1 card from the bank (a 7 was rolled).`);
+  }
 }
 
 /** Draw the active roller's owed reserve-pile bonus cards (after a 7's steal). */
@@ -1307,10 +1320,12 @@ export function applyIntent(
         if (Object.keys(ps.pendingDiscards).length === 0) ps.pendingDiscards = undefined;
       }
       log(state, `${me.name} discarded ${owed} card(s).`);
-      // Once every discard is in and there is no steal left, the roller takes
-      // their deferred reserve-pile bonus (a 7: cards come after discarding).
-      if (!ps.pendingDiscards && !ps.awaitingSteal && ps.pendingReserveDraw) {
-        drawReserveBonus(state, rng);
+      // Once every discard is in and there's no steal left to wait on, the other
+      // players draw their bank cards, then the roller takes the reserve bonus.
+      // (If a steal is still pending, stealTarget will do this after the steal.)
+      if (!ps.pendingDiscards && !ps.awaitingSteal) {
+        giveSevenBankCards(state, rng);
+        if (ps.pendingReserveDraw) drawReserveBonus(state, rng);
       }
       return { state };
     }
@@ -1619,7 +1634,10 @@ export function applyIntent(
       ps.awaitingSteal = false;
       ps.lastSteal = { fromId: target.id, toId: me.id, seq: (ps.lastSteal?.seq ?? 0) + 1 };
       log(state, `${me.name} stole 1 card from ${target.name}.`);
-      // The 7's reserve-pile bonus is taken now, after the steal resolves.
+      // Now (after the steal) the other players each draw their bank card, then
+      // the roller takes the 7's reserve-pile bonus. (Discards are already done —
+      // stealTarget requires it above.)
+      giveSevenBankCards(state, rng);
       if (ps.pendingReserveDraw) drawReserveBonus(state, rng);
       return { state };
     }
