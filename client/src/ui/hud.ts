@@ -3584,28 +3584,25 @@ export class HUD {
         b.addEventListener("click", () => this.act({ t: "encounterChoice", choice: 0 }));
         choices.appendChild(b);
       } else if (enc.awaiting === "number") {
-        // Show what each offer actually does (e.g. "Give 2 → +1 fame & a free
-        // upgrade") so players can deliberately pick the reward they want — the
-        // outcome-only-after-pick hiding made free upgrades effectively
-        // unreachable (you couldn't tell which offer granted them).
+        // Outcomes stay HIDDEN until you commit — show only how much you offer,
+        // never what it grants. (The result panel reveals the gain/loss, with
+        // icons, after you pick.)
         choices.classList.add("col");
         for (const n of [0, 1, 2, 3]) {
-          const hint = card?.choiceHints?.[n] ?? (n === 0 ? "Offer nothing" : `Offer ${n}`);
+          const label = n === 0 ? "Offer nothing" : `Offer ${n}`;
           const b = el(
-            `<button class="secondary enc-opt"><span class="eo-n">${n}</span><span class="eo-hint">${escapeHtml(hint)}</span></button>`,
+            `<button class="secondary enc-opt"><span class="eo-n">${n}</span><span class="eo-hint">${label}</span></button>`,
           );
           b.addEventListener("click", () => this.act({ t: "encounterChoice", choice: n }));
           choices.appendChild(b);
         }
       } else {
-        // Yes / No with their descriptions, so the choice that wins a free
-        // upgrade (or trade ship) is clear instead of a blind guess.
+        // Plain Yes / No — the card text poses the question; the outcome (reward
+        // or risk) stays a surprise until you commit.
         choices.classList.add("col");
-        const yesHint = card?.yesHint ? `<span class="eo-hint">${escapeHtml(card.yesHint)}</span>` : "";
-        const noHint = card?.noHint ? `<span class="eo-hint">${escapeHtml(card.noHint)}</span>` : "";
-        const yes = el(`<button class="enc-opt"><span class="eo-n">Yes</span>${yesHint}</button>`);
+        const yes = el(`<button class="enc-opt"><span class="eo-n">Yes</span></button>`);
         yes.addEventListener("click", () => this.act({ t: "encounterChoice", choice: true }));
-        const no = el(`<button class="secondary enc-opt"><span class="eo-n">No</span>${noHint}</button>`);
+        const no = el(`<button class="secondary enc-opt"><span class="eo-n">No</span></button>`);
         no.addEventListener("click", () => this.act({ t: "encounterChoice", choice: false }));
         choices.append(yes, no);
       }
