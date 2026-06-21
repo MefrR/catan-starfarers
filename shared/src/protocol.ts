@@ -19,6 +19,8 @@ export interface LobbyState {
   players: LobbyPlayer[];
   started: boolean;
   config: GameConfig;
+  /** Room visibility (public = listed in the browser). Shown read-only to guests. */
+  isPublic: boolean;
 }
 
 /** Intents the client sends to the server. The server validates everything. */

@@ -326,6 +326,7 @@ export class Room {
       roomCode: this.code,
       started: this.started,
       config: this.config,
+      isPublic: this.isPublic,
       players: [...this.members.values()].map((m) => ({
         id: m.id,
         name: m.name,

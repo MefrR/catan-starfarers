@@ -360,6 +360,31 @@ export class LobbyUI {
       ${isHost && lobby.players.length < 4 ? `<div class="seg"><button class="seg-opt" id="addai">+ Add AI opponent</button></div>` : ""}`;
   }
 
+  /** Read-only summary of the host's match settings, shown to guests so they can
+   *  see (but not change) the room config. */
+  private roSettingsHtml(lobby: LobbyState): string {
+    const c = lobby.config;
+    const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+    const pill = (label: string, val: string): string =>
+      `<div class="setup-row"><div class="setup-label">${label}</div><div class="setup-ctrl"><span class="ro-pill">${escapeHtml(val)}</span></div></div>`;
+    const variants: [string, boolean][] = [
+      ["Friendly Bandit", !!c.friendlyRobber],
+      ["Hide Bank", !!c.hideBank],
+      ["Balanced Layout", c.balancedLayout !== false],
+      ["Deck36 Dice", !!c.deck36Dice],
+    ];
+    const chips = variants
+      .map(([n, on]) => `<span class="variant-chip ro ${on ? "on" : ""}">${n}</span>`)
+      .join("");
+    return `
+      ${pill("Visibility", lobby.isPublic ? "Public" : "Private")}
+      ${pill("Galaxy", c.fogMap ? "Uncharted" : "Charted")}
+      ${pill("Bot speed", cap(c.botSpeed ?? "normal"))}
+      ${pill("Victory target", `${c.targetVictoryPoints ?? 15} VP`)}
+      <div class="setup-row"><div class="setup-label">Variants</div><div class="setup-ctrl"><div class="variant-chips ro">${chips}</div></div></div>
+      ${pill("Turn timer", c.turnSeconds ? `${c.turnSeconds}s / turn` : "Off")}`;
+  }
+
   /** Fill a container with the colour swatches (taken ones dimmed). */
   private buildSwatches(container: Element): void {
     const lobby = this.lobby!;
@@ -399,7 +424,14 @@ export class LobbyUI {
     // (e.g. someone changed colour or joined), refresh only the bits that
     // change rather than rebuilding the whole screen — which flickered and
     // reset the friends panel / scroll.
-    const sig = `${lobby.roomCode}|${isHost}|${lobby.started}|${onlineInvite}`;
+    // Guests get a config signature too, so the host changing a setting forces a
+    // full re-render of their read-only summary (hosts keep the in-place path so
+    // their own toggles don't flicker the friends panel).
+    const c = lobby.config;
+    const configSig = isHost
+      ? ""
+      : `|${c.fogMap}|${c.turnSeconds}|${c.targetVictoryPoints}|${c.botSpeed}|${c.friendlyRobber}|${c.hideBank}|${c.balancedLayout}|${c.deck36Dice}|${lobby.isPublic}`;
+    const sig = `${lobby.roomCode}|${isHost}|${lobby.started}|${onlineInvite}${configSig}`;
     if (this.lobbySig === sig && !lobby.started && this.root.querySelector(".roomcode-title")) {
       const crewCtrl = this.root.querySelector("#crewctrl");
       if (crewCtrl) { crewCtrl.innerHTML = this.crewInnerHtml(); this.wireCrew(crewCtrl); }
@@ -463,6 +495,8 @@ export class LobbyUI {
             <div class="setup-label">Turn timer</div>
             <div class="setup-ctrl"><div class="seg" id="turntimer"></div></div>
           </div>` : ""}
+
+          ${!isHost ? this.roSettingsHtml(lobby) : ""}
 
           <div class="setup-launch">
             ${isHost
