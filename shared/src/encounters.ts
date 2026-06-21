@@ -322,6 +322,17 @@ export function encounterShake(state: GameState, playerId: PlayerId, rng: Rng): 
     const won = enc.duel.subjectRoll >= enc.duel.oppRoll;
     const card = ENCOUNTER_CARDS[enc.cardId]!;
     logTo(state, `${subject.name} ${enc.duel.subjectRoll} vs ${opp.name} ${enc.duel.oppRoll} — ${won ? "victory!" : "defeat."}`);
+    // Stash the result so the client can reveal both motherships' rolls together
+    // (with a WON/LOST verdict) before the outcome resolves.
+    state.phaseState.duelResult = {
+      subjectId: subject.id,
+      opponentId: opp.id,
+      subjectRoll: enc.duel.subjectRoll,
+      oppRoll: enc.duel.oppRoll,
+      won,
+      stat: enc.duel.stat,
+      seq: (state.phaseState.duelResult?.seq ?? 0) + 1,
+    };
     enc.duel = undefined;
     enc.awaiting = "resolve";
     card.resolveDuel?.({ state, subject, choice: won, rng, log: (l) => logTo(state, l) }, won);

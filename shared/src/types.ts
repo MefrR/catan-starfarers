@@ -290,6 +290,17 @@ export interface GamePhaseState {
   pendingSevenBank?: boolean;
   /** The most recent reserve-pile draw — drives the fly-in animation of the specific cards gained. */
   reserveDraw?: { playerId: PlayerId; gains: Partial<ResourceBag>; seq: number };
+  /** The most recently resolved mothership duel — drives a side-by-side reveal of
+   *  both shake results (each player's colour) with a WON/LOST verdict. */
+  duelResult?: {
+    subjectId: PlayerId;
+    opponentId: PlayerId;
+    subjectRoll: number;
+    oppRoll: number;
+    won: boolean;
+    stat: "combat" | "speed";
+    seq: number;
+  };
   /** After building a trade station: the owner must choose a friendship ability. */
   pendingFriendship?: PendingFriendship;
   /** A live player-to-player trade offer awaiting a response. */

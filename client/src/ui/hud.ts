@@ -182,6 +182,8 @@ export class HUD {
   private lastAnimatedTrade = 0;
   /** Last upgrade-purchase seq we animated (R10: upgrade pip blooms for all). */
   private lastAnimatedUpgrade = 0;
+  /** Seq of the last duel result we played the side-by-side reveal for. */
+  private lastDuelReveal = 0;
   /** Per-player friendship-marker count seen last render (#8: detect new +2 VP gains). */
   private prevMarkerCount: Record<string, number> = {};
   /** True until the first render, so initial markers don't trigger the +2 VP fly. */
@@ -213,7 +215,10 @@ export class HUD {
    *  the exact narration lines the card produced (its descriptive outcome). */
   private encLogMark = 0;
   /** Snapshot of each player's fame/medals/hand taken when an encounter opens. */
-  private encSnapshot: Record<string, { fame: number; medals: number; hand: ResourceBag; ships: number }> = {};
+  private encSnapshot: Record<
+    string,
+    { fame: number; medals: number; hand: ResourceBag; ships: number; upgrades: Record<UpgradeKind, number>; jumps: number }
+  > = {};
   /** Whether the center-screen game-over results overlay is already shown. */
   private gameOverShown = false;
   /** R1/R2: collapse toggles for the side panels on small screens. */
@@ -3321,7 +3326,18 @@ export class HUD {
       this.shownEncounter = null;
       this.shownConfirmCount = -1;
       this.removeEncounterOverlay();
-      this.playEncounterResult(state, subjectId, subjectId === me.id);
+      // If it resolved via a duel, reveal both motherships' rolls side by side
+      // FIRST (the climactic "who got what" moment), then the gain/loss chips.
+      const dr = state.phaseState.duelResult;
+      if (dr && dr.seq > this.lastDuelReveal) {
+        this.lastDuelReveal = dr.seq;
+        this.showDuelReveal(state, dr);
+        this.diceTimers.push(
+          window.setTimeout(() => this.playEncounterResult(state, subjectId, subjectId === me.id), 1900),
+        );
+      } else {
+        this.playEncounterResult(state, subjectId, subjectId === me.id);
+      }
     }
   }
 
@@ -3333,6 +3349,8 @@ export class HUD {
         medals: p.victoryMedals,
         hand: { ...p.hand },
         ships: state.ships.filter((s) => s.owner === p.id).length,
+        upgrades: { ...p.upgrades },
+        jumps: state.phaseState.spaceJumps?.[p.id] ?? 0,
       };
     }
   }
@@ -3381,41 +3399,56 @@ export class HUD {
     if (enc.awaiting === "duel" && enc.duel) {
       const opp = state.players.find((p) => p.id === enc.duel!.opponentId);
       const statLabel = enc.duel.stat === "combat" ? "combat strength" : "speed";
-      cardEl.appendChild(el(`<div class="enc-subject">Duel — compare ${statLabel}</div>`));
-      // Once BOTH motherships have shaken, colour each row so it's instantly
-      // clear who won (subject wins ties, matching the engine).
+      cardEl.appendChild(el(`<div class="enc-subject">Mothership duel — higher ${statLabel} wins</div>`));
+      // Both rolls are hidden until BOTH motherships have shaken, then revealed
+      // together (the dramatic side-by-side moment the duel was missing).
       const bothIn = enc.duel.subjectRoll != null && enc.duel.oppRoll != null;
-      const subjWon = bothIn && (enc.duel.subjectRoll ?? 0) >= (enc.duel.oppRoll ?? 0);
-      const row = (p: PlayerState | undefined, roll: number | undefined, role: string, isSubject: boolean): HTMLElement => {
+      const subjWon = (enc.duel.subjectRoll ?? 0) >= (enc.duel.oppRoll ?? 0);
+      const side = (
+        p: PlayerState | undefined,
+        roll: number | undefined,
+        role: string,
+        isSubject: boolean,
+      ): string => {
         const name = p ? escapeHtml(p.name) : "Rival";
-        const col = p ? COLOR_HEX[p.color] : "#fff";
-        let cls = "enc-rost";
-        let tag = roll != null ? `— shook <b>${roll}</b>` : "— …";
-        if (bothIn) {
-          const won = isSubject ? subjWon : !subjWon;
-          cls += won ? " duel-win" : " duel-loss";
-          tag += won ? ` <span class="duel-tag win">WON</span>` : ` <span class="duel-tag loss">lost</span>`;
-        }
-        return el(`<div class="${cls}" style="color:${col}">${role}: <b>${name}</b> ${tag}</div>`);
+        const col = p ? COLOR_HEX[p.color] : "#9fb0d0";
+        const ups = p?.upgrades ?? { booster: 0, cannon: 0, freightPod: 0 };
+        const won = isSubject ? subjWon : !subjWon;
+        const stateCls = bothIn ? (won ? "win" : "loss") : "waiting";
+        const rollHtml = bothIn
+          ? `<div class="duel-roll reveal" style="color:${col}">${roll ?? "?"}</div>`
+          : `<div class="duel-roll pending">${roll != null ? "✓" : "…"}</div>`;
+        const verdict = bothIn
+          ? `<div class="duel-verdict ${won ? "win" : "loss"}">${won ? "▲ WON" : "▼ LOST"}</div>`
+          : "";
+        return `<div class="duel-side ${stateCls} ${bothIn && !won ? "shake-out" : ""}">
+            <div class="duel-role">${role}</div>
+            <div class="duel-ship" style="--shipc:${col}">${mothershipSvg(col, ups)}</div>
+            <div class="duel-name" style="color:${col}">${name}</div>
+            ${rollHtml}
+            ${verdict}
+          </div>`;
       };
-      const roster = el(`<div class="enc-roster" style="flex-direction:column;gap:6px"></div>`);
-      roster.appendChild(row(subject, enc.duel.subjectRoll, "Pilot", true));
-      roster.appendChild(row(opp, enc.duel.oppRoll, "Rival", false));
-      cardEl.appendChild(roster);
+      cardEl.appendChild(
+        el(`<div class="enc-duel ${bothIn ? "resolved" : ""}">
+            ${side(subject, enc.duel.subjectRoll, "Pilot", true)}
+            <div class="duel-vs">VS</div>
+            ${side(opp, enc.duel.oppRoll, "Rival", false)}
+          </div>`),
+      );
       const iAmSubject = enc.subjectId === me.id && enc.duel.subjectRoll == null;
       const iAmOpp = enc.duel.opponentId === me.id && enc.duel.oppRoll == null;
       const choices = el(`<div class="enc-choices"></div>`);
       if (iAmSubject || iAmOpp) {
-        if (iAmOpp) cardEl.querySelector(".enc-text")!.textContent = "You act as the rival — shake your mothership!";
+        if (iAmOpp) cardEl.querySelector(".enc-text")!.textContent = "You're the rival — shake your mothership!";
         const b = el(`<button>🎲 Shake the mothership</button>`);
         b.addEventListener("click", () => {
-          // One shake per dueller: disable instantly so a fast double-tap (or
-          // multiplayer latency) can't fire a second, rejected shake.
           (b as HTMLButtonElement).disabled = true;
+          sfx.play("shake");
           this.act({ t: "encounterShake" });
         });
         choices.appendChild(b);
-      } else {
+      } else if (!bothIn) {
         choices.appendChild(el(`<div class="enc-wait">Waiting for both motherships to shake…</div>`));
       }
       cardEl.appendChild(choices);
@@ -3628,6 +3661,41 @@ export class HUD {
     document.querySelectorAll(".encounter-overlay").forEach((n) => n.remove());
   }
 
+  /** Side-by-side reveal of a finished duel: both motherships in their owners'
+   *  colours, the two shake numbers popped in together, and a WON/LOST verdict. */
+  private showDuelReveal(state: GameState, dr: NonNullable<GameState["phaseState"]["duelResult"]>): void {
+    document.querySelectorAll(".duel-reveal-overlay").forEach((n) => n.remove());
+    const subj = state.players.find((p) => p.id === dr.subjectId);
+    const opp = state.players.find((p) => p.id === dr.opponentId);
+    const statLabel = dr.stat === "combat" ? "Combat" : "Speed";
+    const sideHtml = (p: PlayerState | undefined, roll: number, role: string, won: boolean): string => {
+      const col = p ? COLOR_HEX[p.color] : "#9fb0d0";
+      const ups = p?.upgrades ?? { booster: 0, cannon: 0, freightPod: 0 };
+      return `<div class="duel-side ${won ? "win" : "loss"}" style="--shipc:${col}">
+          <div class="duel-role">${role}</div>
+          <div class="duel-ship">${mothershipSvg(col, ups)}</div>
+          <div class="duel-name" style="color:${col}">${escapeHtml(p?.name ?? "Rival")}</div>
+          <div class="duel-roll reveal" style="color:${col}">${roll}</div>
+          <div class="duel-verdict ${won ? "win" : "loss"}">${won ? "▲ WON" : "▼ LOST"}</div>
+        </div>`;
+    };
+    const ov = el(`<div class="duel-reveal-overlay">
+        <div class="duel-reveal-card">
+          <div class="dr-title">${statLabel} duel</div>
+          <div class="enc-duel resolved">
+            ${sideHtml(subj, dr.subjectRoll, "Pilot", dr.won)}
+            <div class="duel-vs">VS</div>
+            ${sideHtml(opp, dr.oppRoll, "Rival", !dr.won)}
+          </div>
+        </div>
+      </div>`);
+    document.body.appendChild(ov);
+    requestAnimationFrame(() => ov.classList.add("show"));
+    sfx.play(dr.won ? "medal" : "steal");
+    window.setTimeout(() => ov.classList.remove("show"), 1650);
+    window.setTimeout(() => ov.remove(), 2000);
+  }
+
   /** Show the encounter outcome in the center, then fly gains to hand / sidebar. */
   private playEncounterResult(state: GameState, subjectId: string, mine: boolean): void {
     const subject = state.players.find((p) => p.id === subjectId);
@@ -3639,6 +3707,11 @@ export class HUD {
     const resDeltas = RESOURCES.map((r) => ({ r, d: subject.hand[r] - snap.hand[r] }));
     const gained = resDeltas.filter((x) => x.d > 0);
     const lost = resDeltas.filter((x) => x.d < 0);
+    // Mothership upgrades gained (a free upgrade!) or scrapped (a combat loss),
+    // plus any space jump granted — these were previously invisible in the result.
+    const UPG_KINDS: UpgradeKind[] = ["booster", "cannon", "freightPod"];
+    const upgDeltas = UPG_KINDS.map((k) => ({ k, d: subject.upgrades[k] - (snap.upgrades[k] ?? 0) })).filter((x) => x.d !== 0);
+    const jumpDelta = (state.phaseState.spaceJumps?.[subjectId] ?? 0) - snap.jumps;
 
     // Prefer the card's own narration (the descriptive sentences it logged while
     // resolving) so the player reads WHAT happened — e.g. "You capture the pirate
@@ -3656,7 +3729,9 @@ export class HUD {
       medalDelta * 2 +
       fameDelta +
       gained.reduce((s, x) => s + x.d, 0) +
-      lost.reduce((s, x) => s + x.d, 0);
+      lost.reduce((s, x) => s + x.d, 0) +
+      upgDeltas.reduce((s, x) => s + x.d * 2, 0) +
+      jumpDelta;
     const tone = swing > 0 ? "gain" : swing < 0 ? "loss" : "even";
     const verdict =
       tone === "gain"
@@ -3674,6 +3749,14 @@ export class HUD {
     if (fameDelta < 0) chips += chip("loss fame", fameGlyphSvg(), `${fameDelta} fame`);
     for (const g of gained) chips += chip("gain res", resourceGlyphSvg(g.r), `+${g.d} ${RESOURCE_LABEL[g.r]}`);
     for (const l of lost) chips += chip("loss res", resourceGlyphSvg(l.r), `${l.d} ${RESOURCE_LABEL[l.r]}`);
+    // Mothership upgrades: a free upgrade shows its actual icon (+1 Booster), a
+    // combat loss shows the scrapped part (−1 …). Space jumps show too.
+    const UPG_LABEL: Record<UpgradeKind, string> = { booster: "Booster", cannon: "Cannon", freightPod: "Freight pod" };
+    for (const u of upgDeltas) {
+      const cls = u.d > 0 ? "gain upg" : "loss upg";
+      chips += chip(cls, upgradeIco(u.k), `${u.d > 0 ? "+" : ""}${u.d} ${UPG_LABEL[u.k]}`);
+    }
+    if (jumpDelta > 0) chips += chip("gain", `<span class="er-jump">✦</span>`, `+${jumpDelta} space jump`);
     const sparks = Array.from({ length: 12 }, (_v, i) => {
       const a = (Math.PI * 2 * i) / 12 + 0.26;
       const d = 90 + (i % 3) * 38;
@@ -3742,6 +3825,21 @@ export class HUD {
           this.flyToken(resourceGlyphSvg(g.r), RES_COLOR[g.r], center, to, 700 + i * 130, null);
           i++;
         }
+      }
+    }
+    // A gained upgrade flies onto the mothership (mine: left sidebar art; rival:
+    // their scoreboard row) so you SEE the new part land, not just read it.
+    const UPG_COLOR: Record<UpgradeKind, string> = { booster: "#ffb24a", cannon: "#7fb6ff", freightPod: "#ff7d7d" };
+    let upTo: { x: number; y: number } | null = null;
+    if (mine) {
+      const art = this.root.querySelector(".sidebar-left .ms-art");
+      if (art) { const b = art.getBoundingClientRect(); upTo = { x: b.left + b.width / 2, y: b.top + b.height / 2 }; }
+    } else {
+      upTo = rowCenter;
+    }
+    for (const u of upgDeltas) {
+      if (u.d > 0 && upTo) {
+        for (let k = 0; k < Math.min(u.d, 2); k++) { this.flyToken(upgradeIco(u.k), UPG_COLOR[u.k], center, upTo, 760 + i * 130, null); i++; }
       }
     }
 
