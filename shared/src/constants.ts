@@ -26,7 +26,9 @@ export const DEFAULT_TARGET_VP = 15;
 export const VP_MIN = 12;
 export const VP_MAX = 25;
 
-/** Friendly Bandit: a 7 can't steal from a player with fewer than this many VP. */
+/** Friendly Bandit: a 7 can't steal from a player who has earned fewer than this
+ *  many VP *beyond the starting total* (everyone begins with VP.startingTotal, so
+ *  the protection is relative to the start, not an absolute VP count). */
 export const FRIENDLY_ROBBER_VP = 3;
 
 /** Bot pacing presets (ms between AI actions), keyed by config.botSpeed. */

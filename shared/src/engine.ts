@@ -96,10 +96,13 @@ function nextDice(state: GameState, rng: Rng): [number, number] {
   return [Math.floor(code / 6) + 1, (code % 6) + 1];
 }
 
-/** Friendly Bandit: with the variant on, a 7 can't target players under 3 VP. */
+/** Friendly Bandit: with the variant on, a 7 can't target a player who has earned
+ *  fewer than FRIENDLY_ROBBER_VP points beyond the starting total. Since everyone
+ *  starts at VP.startingTotal (4), the threshold is measured from the start so the
+ *  protection actually shields newcomers instead of never triggering. */
 function canStealFrom(state: GameState, p: PlayerState): boolean {
   if (!state.config.friendlyRobber) return true;
-  return p.victoryPoints >= FRIENDLY_ROBBER_VP;
+  return p.victoryPoints - VP.startingTotal >= FRIENDLY_ROBBER_VP;
 }
 
 /** Move `n` of resource `r` from bank into a hand, clamped to what the bank has. */
@@ -1629,7 +1632,7 @@ export function applyIntent(
       if (!target || target.id === me.id) return fail(input, "Pick an opponent to steal from.");
       if (handTotal(target) <= 0) return fail(input, "That player has no cards to steal.");
       if (!canStealFrom(state, target))
-        return fail(input, `Friendly Bandit: can't steal from players under ${FRIENDLY_ROBBER_VP} VP.`);
+        return fail(input, `Friendly Bandit: can't steal from players who haven't earned ${FRIENDLY_ROBBER_VP} VP yet.`);
       drawRandom(target.hand, me.hand, 1, rng);
       ps.awaitingSteal = false;
       ps.lastSteal = { fromId: target.id, toId: me.id, seq: (ps.lastSteal?.seq ?? 0) + 1 };
