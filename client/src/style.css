@@ -2228,12 +2228,10 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   margin-top: 8px; border-radius: 12px; overflow: hidden;
   background: rgba(12, 20, 38, 0.66); border: 1px solid rgba(120, 150, 220, 0.18);
 }
-.bank-head {
-  width: 100%; display: flex; align-items: center; justify-content: space-between;
-  padding: 7px 12px; background: none; border: none; cursor: pointer;
-  color: #9fc6ff; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+.bank-title {
+  padding: 7px 12px 2px; color: #9fc6ff; font-size: 12px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
 }
-.bank-caret { color: #6f86b6; }
 .bank-grid { display: flex; flex-wrap: wrap; gap: 6px 10px; padding: 4px 12px 12px; }
 .bank-res { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 700; color: #eaf2ff; }
 .bank-ico { display: inline-flex; width: 16px; height: 16px; color: var(--res); }

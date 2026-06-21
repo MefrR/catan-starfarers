@@ -161,8 +161,6 @@ export class HUD {
   private autoRecenterOn = true;
   /** HUD-tools toggle: hide the corner minimap. Persisted. */
   private miniHidden = false;
-  /** Resource-bank panel open/closed (right column). Persisted. */
-  private bankOpen = false;
   private discardSel: Partial<Record<Resource, number>> = {};
   /** Last roll counter we played a dice animation for. */
   private lastAnimatedRoll = 0;
@@ -289,7 +287,6 @@ export class HUD {
       this.hoverInfoOn = localStorage.getItem("sf_hoverInfo") !== "0";
       this.autoRecenterOn = localStorage.getItem("sf_autoRecenter") !== "0";
       this.miniHidden = localStorage.getItem("sf_minimap") === "0";
-      this.bankOpen = localStorage.getItem("sf_bank") === "1";
     } catch { /* localStorage unavailable — keep defaults */ }
     this.board.setAutoRecenter(this.autoRecenterOn);
 
@@ -1074,32 +1071,22 @@ export class HUD {
     }
     scoreboard.appendChild(scoreRows);
 
-    // Resource bank panel (right column). Collapsible — "visible when you toggle
-    // it open". Hidden entirely when the host turned on "Hide Bank".
-    if (!state.config.hideBank) {
-      const bank = el(`<div class="bank-panel ${this.bankOpen ? "open" : ""}"></div>`);
-      const head = el(
-        `<button class="bank-head" title="Resource bank — cards left in the supply">
-           <span>Bank</span><span class="bank-caret">${this.bankOpen ? "▾" : "▸"}</span>
-         </button>`,
-      );
-      head.addEventListener("click", () => {
-        this.bankOpen = !this.bankOpen;
-        try { localStorage.setItem("sf_bank", this.bankOpen ? "1" : "0"); } catch { /* ignore */ }
-        this.rerender();
-      });
-      bank.appendChild(head);
-      if (this.bankOpen) {
-        const grid = el(`<div class="bank-grid"></div>`);
-        for (const r of RESOURCES) {
-          grid.appendChild(
-            el(`<span class="bank-res" title="${RESOURCE_LABEL[r]}: ${state.supplyBank[r]} in the bank" style="--res:${RES_COLOR[r]}">
-                  <span class="bank-ico">${resourceGlyphSvg(r)}</span><span class="bank-n">${state.supplyBank[r]}</span>
-                </span>`),
-          );
-        }
-        bank.appendChild(grid);
+    // Resource bank — folded into the Race-to-N tracker (no separate toggle): it
+    // shows when the tracker is expanded and is gone when it's compact, so the
+    // whole thing appears/disappears with the bar. Hidden entirely when the host
+    // turned on "Hide Bank".
+    if (!state.config.hideBank && !this.scoreCompact) {
+      const bank = el(`<div class="bank-panel open"></div>`);
+      bank.appendChild(el(`<div class="bank-title">Bank</div>`));
+      const grid = el(`<div class="bank-grid"></div>`);
+      for (const r of RESOURCES) {
+        grid.appendChild(
+          el(`<span class="bank-res" title="${RESOURCE_LABEL[r]}: ${state.supplyBank[r]} in the bank" style="--res:${RES_COLOR[r]}">
+                <span class="bank-ico">${resourceGlyphSvg(r)}</span><span class="bank-n">${state.supplyBank[r]}</span>
+              </span>`),
+        );
       }
+      bank.appendChild(grid);
       scoreboard.appendChild(bank);
     }
 
@@ -2635,11 +2622,16 @@ export class HUD {
           this.board.onIntersectionClick = (id) => {
             if (occupied.has(id)) return;
             const sid = this.selectedShipId!;
-            this.selectedShipId = null;
-            this.mode = "idle";
-            this.board.setSelectedShip(null);
-            this.board.clearHighlights();
-            this.act({ t: "spaceJump", shipId: sid, toIntersectionId: id }, { center: true });
+            // A space jump is a one-shot reward — confirm the destination with a
+            // Yes/No popup over the tapped point (like a normal move) so a stray
+            // tap can't waste it.
+            this.mapConfirm(id, () => {
+              this.selectedShipId = null;
+              this.mode = "idle";
+              this.board.setSelectedShip(null);
+              this.board.clearHighlights();
+              this.act({ t: "spaceJump", shipId: sid, toIntersectionId: id }, { center: true });
+            });
           };
         }
         return;
