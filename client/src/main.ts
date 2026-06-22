@@ -13,6 +13,7 @@ import { recordLocalGame, recordOnlineGame } from "./social.js";
 import { LocalGame } from "./game/store.js";
 import type { GameDriver, Seat } from "./game/store.js";
 import { music } from "./audio.js";
+import { startAnalytics, trackGameStart, trackGameFinish } from "./analytics.js";
 
 const el = (html: string): HTMLElement => {
   const t = document.createElement("template");
@@ -113,10 +114,24 @@ async function boot(): Promise<void> {
     // Accounts: record results to the signed-in profile when a game ends
     // (best-effort, no-ops when signed out). Online games are recorded by each
     // human client writing its own result row; single-player records the human.
+    let finishLogged = false;
     const unsubRecord = game.subscribe((state) => {
       if (state.phaseState.phase !== "gameOver") return;
       if (game.isMultiplayer) void recordOnlineGame(state, game.humanId);
       else void recordLocalGame(state, game.humanId);
+      // Analytics: count the finish once. Single-player only — multiplayer
+      // finishes would be reported by every client, so they're left to the
+      // server-side game_start count (one per game).
+      if (!finishLogged && !game.isMultiplayer) {
+        finishLogged = true;
+        const winner = state.players.find((p) => p.id === state.phaseState.winner);
+        trackGameFinish({
+          mode: "sp",
+          players: state.players.length,
+          humanWon: state.phaseState.winner === game.humanId,
+          winnerVp: winner?.victoryPoints ?? null,
+        });
+      }
     });
     app.replaceChildren(); // clear the menu; HUD mounts its own overlay
     const hud = new HUD(app, game, board);
@@ -138,6 +153,13 @@ async function boot(): Promise<void> {
 
   const startSingle = (opts: LaunchOptions): void => {
     const game = new LocalGame(opts.seats, opts.config);
+    // Count single-player games here (multiplayer games are counted server-side).
+    trackGameStart({
+      mode: "sp",
+      players: opts.seats.length,
+      difficulty: opts.config.aiDifficulty,
+      fog: opts.config.fogMap,
+    });
     mountGame(game);
   };
 
@@ -301,6 +323,9 @@ async function boot(): Promise<void> {
     ensureMenuBg();
     app.replaceChildren(screen);
   };
+
+  // Usage analytics: log the visit + start the online-presence heartbeat.
+  startAnalytics();
 
   // Resolve any existing session (and consume an OAuth redirect) before the
   // first paint, so the account chip + menu prefills show the right state.

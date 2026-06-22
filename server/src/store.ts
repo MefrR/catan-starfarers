@@ -65,6 +65,54 @@ export async function deleteRoom(roomCode: string): Promise<void> {
   }
 }
 
+// --- Analytics ---------------------------------------------------------------
+// Visitor / gameplay counters land in a separate `analytics_events` table.
+// Writes are fire-and-forget; reads go through one `analytics_summary()` RPC.
+
+const EVENTS_ENDPOINT = `${URL}/rest/v1/analytics_events`;
+const SUMMARY_RPC = `${URL}/rest/v1/rpc/analytics_summary`;
+
+/** Record one analytics event (page_open / game_start / game_finish). No-op when
+ *  Supabase is unconfigured; never throws, so it can't disrupt play. */
+export async function logEvent(type: string, anonId?: string, meta?: unknown): Promise<void> {
+  if (!ENABLED) return;
+  try {
+    await fetch(EVENTS_ENDPOINT, {
+      method: "POST",
+      headers: headers({ Prefer: "return=minimal" }),
+      body: JSON.stringify({ type, anon_id: anonId ?? null, meta: meta ?? null }),
+    });
+  } catch (err) {
+    console.warn("[store] logEvent failed", type, err);
+  }
+}
+
+export interface AnalyticsSummary {
+  visitors_today: number;
+  views_today: number;
+  visitors_total: number;
+  games_today: number;
+  games_total: number;
+  finishes_today: number;
+}
+
+/** Aggregate dashboard numbers in one round-trip. Returns null when unconfigured
+ *  or on any failure. */
+export async function analyticsSummary(): Promise<AnalyticsSummary | null> {
+  if (!ENABLED) return null;
+  try {
+    const res = await fetch(SUMMARY_RPC, { method: "POST", headers: headers(), body: "{}" });
+    if (!res.ok) {
+      console.warn("[store] analyticsSummary", res.status, await res.text());
+      return null;
+    }
+    return (await res.json()) as AnalyticsSummary;
+  } catch (err) {
+    console.warn("[store] analyticsSummary failed", err);
+    return null;
+  }
+}
+
 /** Load every persisted room snapshot on boot. Returns [] on any failure. */
 export async function loadAllRooms(): Promise<unknown[]> {
   if (!ENABLED) return [];

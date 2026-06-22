@@ -8,9 +8,73 @@ import { randomUUID } from "node:crypto";
 import { type ClientIntent, SOCKET_EVENT } from "@starfarers/shared";
 import { Room, type RoomSnapshot } from "./room.js";
 import { getLanAddress } from "./lan.js";
-import { saveRoom, deleteRoom, loadAllRooms, persistenceEnabled } from "./store.js";
+import { saveRoom, deleteRoom, loadAllRooms, persistenceEnabled, logEvent, analyticsSummary } from "./store.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
+// Optional gate for the /stats dashboard: when set, the page + API require
+// ?key=<token>. Leave unset to keep the aggregate numbers public.
+const STATS_TOKEN = process.env.STATS_TOKEN ?? "";
+
+// Self-contained live dashboard served at /stats. Reuses any ?key= from its own
+// URL when polling the JSON endpoint, and refreshes every 5s.
+const STATS_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Starfarers · Live Stats</title>
+<style>
+  :root{color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    color:#e7ecf6;background:radial-gradient(1200px 800px at 70% -10%,#16203b,#0a0e1a 60%) fixed;min-height:100vh}
+  .wrap{max-width:880px;margin:0 auto;padding:32px 20px 60px}
+  h1{font-size:22px;margin:0 0 2px;letter-spacing:.5px}
+  .sub{color:#8aa;opacity:.7;font-size:13px;margin-bottom:24px}
+  .grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+  .card{background:rgba(150,170,210,.07);border:1px solid rgba(150,170,210,.16);
+    border-radius:16px;padding:20px 22px}
+  .card.hero{grid-column:1/-1;background:linear-gradient(135deg,rgba(57,216,200,.16),rgba(91,140,255,.12));
+    border-color:rgba(57,216,200,.3)}
+  .label{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:#9fb0cf;opacity:.85}
+  .num{font-size:46px;font-weight:800;line-height:1.05;margin-top:6px;
+    font-variant-numeric:tabular-nums}
+  .hero .num{font-size:64px;background:linear-gradient(90deg,#39d8c8,#7fa8ff);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#39d8c8;
+    margin-right:8px;box-shadow:0 0 0 0 rgba(57,216,200,.6);animation:p 2s infinite}
+  @keyframes p{0%{box-shadow:0 0 0 0 rgba(57,216,200,.5)}70%{box-shadow:0 0 0 12px rgba(57,216,200,0)}100%{box-shadow:0 0 0 0 rgba(57,216,200,0)}}
+  .foot{margin-top:22px;font-size:12px;color:#8aa;opacity:.6}
+  .err{color:#ff8a8a}
+</style></head><body><div class="wrap">
+  <h1>🚀 Starfarers · Live Stats</h1>
+  <div class="sub">Auto-refreshing every 5s · "today" resets at midnight Dubai time</div>
+  <div class="grid">
+    <div class="card hero"><div class="label"><span class="dot"></span>Players online now</div><div class="num" id="online_now">–</div></div>
+    <div class="card"><div class="label">Visitors today</div><div class="num" id="visitors_today">–</div></div>
+    <div class="card"><div class="label">Games started today</div><div class="num" id="games_today">–</div></div>
+    <div class="card"><div class="label">Page views today</div><div class="num" id="views_today">–</div></div>
+    <div class="card"><div class="label">Games finished today</div><div class="num" id="finishes_today">–</div></div>
+    <div class="card"><div class="label">Visitors all-time</div><div class="num" id="visitors_total">–</div></div>
+    <div class="card"><div class="label">Games all-time</div><div class="num" id="games_total">–</div></div>
+  </div>
+  <div class="foot" id="foot"></div>
+</div><script>
+  var key = new URLSearchParams(location.search).get('key');
+  var url = '/api/stats' + (key ? '?key=' + encodeURIComponent(key) : '');
+  function fmt(n){ return (typeof n==='number') ? n.toLocaleString() : '–'; }
+  async function tick(){
+    try{
+      var r = await fetch(url, {cache:'no-store'});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      var d = await r.json();
+      ['online_now','visitors_today','games_today','views_today','finishes_today','visitors_total','games_total']
+        .forEach(function(k){ var e=document.getElementById(k); if(e) e.textContent = fmt(d[k]); });
+      document.getElementById('foot').textContent = 'Updated ' + new Date().toLocaleTimeString();
+    }catch(e){
+      document.getElementById('foot').innerHTML = '<span class="err">Could not load stats: ' + e.message + '</span>';
+    }
+  }
+  tick(); setInterval(tick, 5000);
+</script></body></html>`;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
@@ -42,6 +106,65 @@ function resolveClientDist(): string | null {
 }
 const clientDist = resolveClientDist();
 app.get("/health", (_req, res) => res.json({ ok: true }));
+
+// --- Analytics -------------------------------------------------------------
+// "Who's online" is tracked in memory: every open client (single-player OR
+// multiplayer) pings every ~20s with a persistent anon id. We count ids seen in
+// the last 45s. Persisted counters (visitors / games per day) live in Supabase.
+app.use(express.json({ limit: "8kb" }));
+
+const ONLINE_WINDOW_MS = 45_000;
+const lastSeen = new Map<string, number>(); // anonId -> ms
+function touchOnline(anonId: unknown): void {
+  if (typeof anonId === "string" && anonId.length > 0 && anonId.length <= 64) {
+    lastSeen.set(anonId, Date.now());
+  }
+}
+function onlineNow(): number {
+  const cutoff = Date.now() - ONLINE_WINDOW_MS;
+  let n = 0;
+  for (const [id, t] of lastSeen) {
+    if (t < cutoff) lastSeen.delete(id);
+    else n++;
+  }
+  return n;
+}
+
+// Heartbeat: presence only, no DB write (cheap, fires every ~20s per client).
+app.post("/api/ping", (req, res) => {
+  touchOnline(req.body?.anonId);
+  res.json({ ok: true });
+});
+
+// A recorded event (page_open / game_start / game_finish). Also refreshes
+// presence. Unknown types are ignored so the table can't be spammed arbitrarily.
+const ALLOWED_EVENTS = new Set(["page_open", "game_start", "game_finish"]);
+app.post("/api/event", (req, res) => {
+  const { type, anonId, meta } = (req.body ?? {}) as { type?: string; anonId?: string; meta?: unknown };
+  touchOnline(anonId);
+  if (typeof type === "string" && ALLOWED_EVENTS.has(type)) {
+    void logEvent(type, typeof anonId === "string" ? anonId : undefined, meta);
+  }
+  res.json({ ok: true });
+});
+
+function statsAuthorized(req: express.Request): boolean {
+  return STATS_TOKEN.length === 0 || req.query.key === STATS_TOKEN;
+}
+
+// Live dashboard numbers (JSON). Public unless STATS_TOKEN is set.
+app.get("/api/stats", async (req, res) => {
+  if (!statsAuthorized(req)) { res.status(401).json({ error: "unauthorized" }); return; }
+  const summary = await analyticsSummary();
+  res.json({ online_now: onlineNow(), ...(summary ?? {}) });
+});
+
+// Human-readable live dashboard. Polls /api/stats every few seconds.
+app.get("/stats", (req, res) => {
+  if (!statsAuthorized(req)) { res.status(401).type("html").send("<h1>401 — add ?key=…</h1>"); return; }
+  res.type("html").send(STATS_PAGE);
+});
+
 if (clientDist) {
   app.use(express.static(clientDist));
   // Public legal pages at clean URLs. Google OAuth verification and app stores
@@ -215,6 +338,11 @@ io.on("connection", (socket) => {
         return;
       }
       room.handleIntent(ref.playerId, intent);
+      // Count a multiplayer game once, when it actually starts (one event per
+      // game, host-side — clients never log MP starts, to avoid N-fold counts).
+      if (intent.t === "startGame" && room.hasStarted) {
+        void logEvent("game_start", undefined, { mode: "mp", players: room.summary().players });
+      }
       // A player who left the room is no longer mapped to it; reap empty lobbies.
       if (intent.t === "leaveRoom") {
         socketToRoom.delete(socket.id);
