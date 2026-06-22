@@ -14,6 +14,26 @@
     <meta name="theme-color" content="#070b16" />
     <link rel="canonical" href="https://www.starfarers.space/" />
 
+    <!-- Critical first-paint styles + a static splash (see #app below). This makes
+         the app name and purpose visible in the RAW HTML, before the JS bundle
+         loads (or if it never does) — so a cold server, a slow connection, or a
+         non-JS crawler/reviewer still sees a real, branded homepage. -->
+    <style>
+      body { margin: 0; background: #070b16; color: #cdd8ef;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      #boot-splash { position: fixed; inset: 0; z-index: 10; display: flex;
+        flex-direction: column; align-items: center; justify-content: center;
+        text-align: center; padding: 24px; }
+      #boot-splash h1 { margin: 0 0 16px; font-weight: 900; letter-spacing: 0.16em;
+        text-transform: uppercase; font-size: clamp(34px, 7vw, 64px); line-height: 1;
+        background: linear-gradient(92deg, #43c9c6, #5cd6a4, #95e17a);
+        -webkit-background-clip: text; background-clip: text; color: transparent; }
+      #boot-splash p { max-width: 560px; margin: 0 0 10px; line-height: 1.6;
+        font-size: 15px; color: #b6c4e0; }
+      #boot-splash .muted { font-size: 12.5px; color: #8a99bd; opacity: 0.8; }
+      #boot-splash b { color: #e1eafc; }
+    </style>
+
     <!-- PWA: installable as an app ("Install app" in Chrome, lands in the app drawer). -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -78,7 +98,19 @@
     </script>
   </head>
   <body>
-    <div id="app"></div>
+    <!-- The app replaces #app's contents on boot (showLanding); until then this
+         static splash is what loads/crawls first. -->
+    <div id="app">
+      <div id="boot-splash">
+        <h1>Starfarers</h1>
+        <p><b>Starfarers</b> is a free, fan-made digital adaptation of the
+        <i>Catan: Starfarers</i> board game — play solo against AI commanders or
+        online with friends, right in your web browser. Signing in with Google is
+        optional and only saves your player profile, game history, and friends list.</p>
+        <p class="muted">Loading the galaxy… · Unofficial fan project, not affiliated
+        with or endorsed by Catan GmbH.</p>
+      </div>
+    </div>
     <canvas id="board"></canvas>
     <div id="ui"></div>
     <!-- Crawlable text for engines that don't run JS (the game itself is canvas-rendered). -->
