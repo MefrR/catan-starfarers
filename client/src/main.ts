@@ -244,6 +244,13 @@ async function boot(): Promise<void> {
           <img class="hero-emblem" src="/emblem-logo.png" alt="Catan: Starfarers" />
           <h1 class="hero-title">STARFARERS</h1>
           <p class="hero-sub">Voyage into deep space. Command your fleet to 15 victory points.</p>
+          <p class="hero-purpose">
+            <b>Starfarers</b> is a free, fan-made digital adaptation of the
+            <i>Catan: Starfarers</i> board game that you play right in your browser —
+            solo against AI commanders or online with friends. Signing in with Google
+            is optional and only saves your player profile, game history, and friends
+            list. Unofficial fan project; not affiliated with or endorsed by Catan GmbH.
+          </p>
           <div class="hero-actions">
             <button id="single">Single Player</button>
             <button class="secondary" id="online">Play Online</button>

@@ -2167,6 +2167,14 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   color: rgba(214, 226, 252, 0.82); line-height: 1.55; max-width: 520px;
   animation: heroUp 0.8s ease-out 0.45s both;
 }
+/* Plain-language purpose statement (also satisfies OAuth homepage review). */
+.hero-purpose {
+  margin: 14px 0 0; font-size: 13px; font-weight: 300;
+  color: rgba(190, 204, 232, 0.62); line-height: 1.6; max-width: 560px;
+  animation: heroUp 0.8s ease-out 0.55s both;
+}
+.hero-purpose b { color: rgba(225, 234, 252, 0.85); font-weight: 600; }
+.hero-purpose i { font-style: italic; }
 .hero-actions {
   display: flex; gap: 14px; margin-top: 34px; flex-wrap: wrap; justify-content: center;
   animation: heroUp 0.8s ease-out 0.6s both;
