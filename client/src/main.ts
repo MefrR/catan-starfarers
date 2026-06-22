@@ -241,8 +241,8 @@ async function boot(): Promise<void> {
       <div class="screen">
         <div class="hero">
           <div class="hero-badge">A faithful digital voyage · 2–4 commanders</div>
-          <img class="hero-emblem" src="/emblem-logo.png" alt="Catan: Starfarers" />
-          <h1 class="hero-title">STARFARERS</h1>
+          <img class="hero-emblem" src="/emblem-logo.png" alt="Starfarers" />
+          <h1 class="hero-title">Starfarers</h1>
           <p class="hero-sub">Voyage into deep space. Command your fleet to 15 victory points.</p>
           <p class="hero-purpose">
             <b>Starfarers</b> is a free, fan-made digital adaptation of the
