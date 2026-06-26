@@ -17,3 +17,6 @@ almanac.txt
 *.png
 # ...except our own shipped public assets (logo, icons) which MUST be deployed
 !client/public/*.png
+
+# local audit backup (not source of truth)
+backup/

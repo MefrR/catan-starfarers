@@ -15,6 +15,12 @@ const PORT = Number(process.env.PORT ?? 3000);
 // ?key=<token>. Leave unset to keep the aggregate numbers public.
 const STATS_TOKEN = process.env.STATS_TOKEN ?? "";
 
+// Socket.IO CORS allow-list. In production set ALLOWED_ORIGINS to your site(s)
+// (comma-separated, e.g. "https://starfarers.space,https://www.starfarers.space")
+// so other websites can't open sockets to the server. Unset → "*" for LAN/dev.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? "")
+  .split(",").map((s) => s.trim()).filter(Boolean);
+
 // Self-contained live dashboard served at /stats. Reuses any ?key= from its own
 // URL when polling the JSON endpoint, and refreshes every 5s.
 const STATS_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -80,7 +86,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const httpServer = createServer(app);
 const io = new IOServer(httpServer, {
-  cors: { origin: "*" },
+  cors: { origin: ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS : "*" },
   // Be tolerant of mobile latency / a backgrounded tab pausing timers: wait
   // longer for a missed heartbeat before declaring a client gone, so a brief
   // network blip doesn't kick players mid-game (they also auto-rejoin).
@@ -112,6 +118,26 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 // multiplayer) pings every ~20s with a persistent anon id. We count ids seen in
 // the last 45s. Persisted counters (visitors / games per day) live in Supabase.
 app.use(express.json({ limit: "8kb" }));
+// Behind Render's proxy, the real client IP is in X-Forwarded-For; trust one hop
+// so req.ip reflects the visitor (needed for per-IP rate limiting below).
+app.set("trust proxy", 1);
+
+// Simple in-memory per-IP rate limit for the public write endpoints, so a script
+// can't flood the analytics table or inflate counts. Generous enough that real
+// clients (one page-open + a ping every 20s) never hit it.
+const RATE_LIMIT = 120; // requests per window
+const RATE_WINDOW_MS = 60_000;
+const rateHits = new Map<string, { n: number; t: number }>();
+function rateLimited(ip: string): boolean {
+  const now = Date.now();
+  const r = rateHits.get(ip);
+  if (!r || now - r.t > RATE_WINDOW_MS) {
+    rateHits.set(ip, { n: 1, t: now });
+    return false;
+  }
+  r.n++;
+  return r.n > RATE_LIMIT;
+}
 
 const ONLINE_WINDOW_MS = 45_000;
 const lastSeen = new Map<string, number>(); // anonId -> ms
@@ -132,6 +158,7 @@ function onlineNow(): number {
 
 // Heartbeat: presence only, no DB write (cheap, fires every ~20s per client).
 app.post("/api/ping", (req, res) => {
+  if (rateLimited(req.ip ?? "")) { res.status(429).json({ ok: false }); return; }
   touchOnline(req.body?.anonId);
   res.json({ ok: true });
 });
@@ -140,6 +167,7 @@ app.post("/api/ping", (req, res) => {
 // presence. Unknown types are ignored so the table can't be spammed arbitrarily.
 const ALLOWED_EVENTS = new Set(["page_open", "game_start", "game_finish"]);
 app.post("/api/event", (req, res) => {
+  if (rateLimited(req.ip ?? "")) { res.status(429).json({ ok: false }); return; }
   const { type, anonId, meta } = (req.body ?? {}) as { type?: string; anonId?: string; meta?: unknown };
   touchOnline(anonId);
   if (typeof type === "string" && ALLOWED_EVENTS.has(type)) {

@@ -238,19 +238,33 @@ export class Room {
     return PLAYER_COLORS.find((c) => !used.has(c)) ?? "yellow";
   }
 
+  /** Normalise a member's display name. The name is capped (a crafted socket
+   *  could otherwise send a huge string that bloats every broadcast), and any
+   *  player without a signed-in account handle is a GUEST: their name always
+   *  carries a single "(Guest)" suffix so they can't pose as a registered
+   *  commander. (Account handles are still client-claimed and unverified — this
+   *  labels the common case; true impersonation-proofing needs token auth.) */
+  private resolveName(name: string, handle?: string): string {
+    let base = (name ?? "").trim().slice(0, 24);
+    if (!base) base = `Starfarer ${this.members.size + 1}`;
+    if (handle) return base; // signed-in: keep their name as-is
+    return `${base.replace(/\s*\(guest\)\s*$/i, "")} (Guest)`;
+  }
+
   addMember(id: string, name: string, socket: Socket, username?: string): Member {
     const handle = username?.trim().toLowerCase() || undefined;
+    const displayName = this.resolveName(name, handle);
     const existing = this.members.get(id);
     if (existing) {
       existing.socket = socket;
       existing.connected = true;
-      existing.name = name || existing.name;
+      if (name) existing.name = displayName;
       if (handle) existing.username = handle;
       return existing;
     }
     const member: Member = {
       id,
-      name: name || `Starfarer ${this.members.size + 1}`,
+      name: displayName,
       socket,
       color: this.nextColor(),
       isHost: this.members.size === 0,
@@ -530,12 +544,18 @@ export class Room {
         return;
       }
       default: {
-        // Dev/testing codes are developer-only. Reject them server-side unless the
-        // member's claimed account is on the allowlist — so a crafted socket
-        // message from a normal player can't grant cards/VP/encounters online.
-        if (intent.t === "dev" && !DEV_USERNAMES.has(member.username ?? "")) {
-          this.send(id, { t: "error", message: "Not authorized." });
-          return;
+        // Dev/testing codes can grant VP/cards/encounters, so they must NOT be
+        // reachable in normal online play. The username is only client-claimed
+        // (no token auth), so the real gate is a server env flag: dev intents are
+        // rejected unless ALLOW_DEV_TOOLS=1 is set on the server AND the claimed
+        // account is on the allowlist. Production leaves the flag unset → no
+        // online cheating, regardless of what a crafted socket message claims.
+        if (intent.t === "dev") {
+          const devEnabled = process.env.ALLOW_DEV_TOOLS === "1";
+          if (!devEnabled || !DEV_USERNAMES.has(member.username ?? "")) {
+            this.send(id, { t: "error", message: "Not authorized." });
+            return;
+          }
         }
         // Game intents: run them through the shared engine authoritatively and
         // broadcast the resulting state to every connected Starfarer.
