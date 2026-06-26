@@ -6,12 +6,7 @@
 
 import type { Resource } from "@starfarers/shared";
 import { resourceGlyphSvg, civAvatarSvg } from "./icons.js";
-
-const el = (html: string): HTMLElement => {
-  const t = document.createElement("template");
-  t.innerHTML = html.trim();
-  return t.content.firstElementChild as HTMLElement;
-};
+import { el } from "./dom.js";
 
 // --- Resource colors (match the in-game hand cubes). ---
 const ORE = "#d8453a";

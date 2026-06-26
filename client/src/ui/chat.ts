@@ -1,17 +1,12 @@
 import type { GameDriver } from "../game/store.js";
 import { net } from "../net.js";
 import { auth } from "../auth.js";
+import { el, escapeHtml } from "./dom.js";
 
 /** Dev/testing chat codes are restricted to this single developer account
  *  (matched by username, case-insensitive) — online AND offline. Everyone else's
  *  "warp9" / "/encounter" etc. are treated as ordinary chat. */
 const DEV_USERNAME = "mefr";
-
-const el = (html: string): HTMLElement => {
-  const t = document.createElement("template");
-  t.innerHTML = html.trim();
-  return t.content.firstElementChild as HTMLElement;
-};
 
 const COLOR_HEX: Record<string, string> = {
   yellow: "#ffd23f",
@@ -512,9 +507,3 @@ function parseFling(text: string): { emoji: string; target: string } | null {
   return null;
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
-  );
-}

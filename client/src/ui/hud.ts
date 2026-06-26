@@ -31,12 +31,7 @@ import type { BoardRenderer } from "../render/board.js";
 import { ChatBox } from "./chat.js";
 import { sfx, music } from "../audio.js";
 import { ShakerStreaks } from "../render/streaks.js";
-
-const el = (html: string): HTMLElement => {
-  const t = document.createElement("template");
-  t.innerHTML = html.trim();
-  return t.content.firstElementChild as HTMLElement;
-};
+import { el, escapeHtml } from "./dom.js";
 
 const RES_COLOR: Record<Resource, string> = {
   ore: "#d8453a",
@@ -4815,13 +4810,6 @@ function spaceportIco(): string {
     <circle cx="12" cy="3.4" r="1.3" fill="#ffd23f" stroke="${PIECE_INK}" stroke-width="0.5"/>
     <path d="M12 4.7 V5" stroke="${PIECE_INK}" stroke-width="0.6"/>
   </svg>`;
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
-  );
 }
 
 /** Seconds → "m:ss" for the turn-timer chip. */

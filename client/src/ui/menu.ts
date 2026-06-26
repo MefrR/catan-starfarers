@@ -12,15 +12,7 @@ import type { Seat } from "../game/store.js";
 import { LocalGame } from "../game/store.js";
 import { shatter } from "./fx.js";
 import { auth } from "../auth.js";
-
-const el = (html: string): HTMLElement => {
-  const t = document.createElement("template");
-  t.innerHTML = html.trim();
-  return t.content.firstElementChild as HTMLElement;
-};
-
-const escapeHtml = (s: string): string =>
-  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+import { el, escapeHtml } from "./dom.js";
 
 const COLOR_NAME: Record<PlayerColor, string> = {
   yellow: "Yellow",

@@ -9,12 +9,7 @@ import {
   sendRequest, acceptRequest, removeFriendship, type FriendUser,
 } from "../friends.js";
 import { avatarSvgById, AVATAR_CHOICES } from "./icons.js";
-
-const el = (html: string): HTMLElement => {
-  const t = document.createElement("template");
-  t.innerHTML = html.trim();
-  return t.content.firstElementChild as HTMLElement;
-};
+import { el, escapeHtml } from "./dom.js";
 
 const COLOR_HEX: Record<PlayerColor, string> = {
   yellow: "#ffd23f",
@@ -32,9 +27,6 @@ const COLOR_NAME: Record<PlayerColor, string> = {
   green: "Green",
   white: "White",
 };
-
-const escapeHtml = (s: string): string =>
-  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 const initials = (name: string): string =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "C";

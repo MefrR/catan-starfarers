@@ -10,6 +10,7 @@ import {
   VP_MAX,
 } from "@starfarers/shared";
 import { shatter } from "./fx.js";
+import { el, escapeHtml } from "./dom.js";
 import { auth } from "../auth.js";
 import { presence } from "../presence.js";
 import { listFriends } from "../friends.js";
@@ -27,12 +28,6 @@ const COLOR_HEX: Record<PlayerColor, string> = {
 };
 
 type StartHandler = (state: GameState, youId: string) => void;
-
-const el = (html: string): HTMLElement => {
-  const t = document.createElement("template");
-  t.innerHTML = html.trim();
-  return t.content.firstElementChild as HTMLElement;
-};
 
 const SESSION_KEY = "sf_session";
 
@@ -707,6 +702,3 @@ export class LobbyUI {
   }
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
-}
