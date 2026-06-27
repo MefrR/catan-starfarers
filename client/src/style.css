@@ -528,6 +528,16 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   position: fixed; inset: 0; z-index: 50;
   display: grid; place-items: center; pointer-events: none;
 }
+/* #46: the streak shader is a full-screen background layer so its effect is
+   centred behind the shaker box (it was grid-placed + unsized, so it bunched to
+   one side). The stage sits on top via normal stacking order. */
+.shake-overlay .shake-stars {
+  position: fixed; inset: 0; pointer-events: none;
+}
+.shake-overlay .shake-stars canvas {
+  position: fixed; inset: 0; width: 100vw; height: 100vh; display: block;
+  mix-blend-mode: screen;
+}
 .shake-stage {
   display: flex; flex-direction: column; align-items: center; gap: 18px;
   padding: 26px 38px; border-radius: 22px;
