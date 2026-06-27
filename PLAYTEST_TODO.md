@@ -124,9 +124,11 @@ bottom {3,4,11,5,8,9,10}.
     AI captures the travelers' free upgrade & extra fame. Verified headlessly.)
 
 ## 7. TRADING
-32. Accept/decline prompt centered & visible to all. — 🔶 Phase 2 (needs your
-    advice: would move the trade prompt into a center overlay like encounters; a
-    sizeable UI redesign vs. the current bottom-bar tray.)
+32. Accept/decline prompt centered & visible to all. — 🟡 (the live offer + every
+    player's response already render in the bottom-bar trade tray, which spectators
+    see too, so it IS visible to all. Promoting it to a full center overlay like the
+    encounter card is a stylistic redesign with no functional gain — left as a
+    decision: say the word if you want the center-overlay treatment.)
 33. Initiator must pick who accepted (not auto-first). — ✅ (already the behavior:
     the proposer sees every responder and finalizes with a specific player via the
     per-row "Trade" / "Accept counter" button — `finalizeTrade({withId})`. It never
@@ -144,13 +146,21 @@ bottom {3,4,11,5,8,9,10}.
     a half-composed counter from a previous offer is dropped, and once no offer is
     live the bank give/want selection is cleared — closing the gap where the engine
     settled an as-is accept without the click path that normally resets it.)
-37. "Any" button on either side of a trade. — 🔶 Phase 2
+37. "Any" button on either side of a trade. — 🔶 NEEDS YOUR SPEC (ambiguous: a
+    wildcard isn't in physical Starfarers, so "Any" could mean (a) "give me any 1
+    resource — you pick" on the Want side, which needs engine wildcard support, or
+    (b) a quick-fill/clear helper. Tell me which and I'll add it; the click-a-card
+    flow already makes building a specific offer fast in the meantime.)
 38a. Let player decline even when AI accepts. — ✅ (a plain as-is accept is now
      RECORDED, not auto-settled, so the proposer always finalizes — a human can
      still cancel/decline their own offer after a bot says yes. The AI proposer
      honours an as-is acceptance on its next tick (never reneges). Verified
      headlessly + 3-AI sim still completes with no trade hangs.)
-39. Consolidate redundant trade-window rows. — 🔶 Phase 2
+39. Consolidate redundant trade-window rows. — 🟡 (the trade window is already one
+    consolidated bottom-bar tray: a single "Give" stepper row + a single "Want"
+    stepper row + the action buttons (Bank / Offer / Cancel). No duplicate rows
+    remain after the N8/P6c consolidation. If a specific row still reads as
+    redundant to you, point it out and I'll merge it.)
 
 ## 8. MOTHERSHIP, SPEED & COMBAT
 38b. Booster speed glitch (stayed 3, should be ≥4). — ✅ (root cause: the shake
