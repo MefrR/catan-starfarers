@@ -3913,10 +3913,25 @@ export class HUD {
       }
     }
 
+    // #29: the result is the final encounter step — let the player click it away
+    // to advance immediately, and scale how long it lingers to the chosen game
+    // speed (Relaxed waits longer, Fast clears quickly) so AI results don't flash
+    // by. Click-to-dismiss works for the human's own and spectated results alike.
+    const speed = this.game.getState().config.botSpeed ?? "normal";
+    const hold = speed === "relaxed" ? 5200 : speed === "fast" ? 2200 : 3400;
+    let dismissed = false;
+    const dismiss = (): void => {
+      if (dismissed) return;
+      dismissed = true;
+      toast.classList.remove("show");
+      window.setTimeout(() => toast.remove(), 350);
+    };
+    toast.style.cursor = "pointer";
+    toast.title = "Click to continue";
+    toast.addEventListener("click", dismiss);
     // Untracked timers (see flyToken): a result toast must always clean itself up
     // even if a dice roll clears diceTimers in the meantime.
-    window.setTimeout(() => toast.classList.remove("show"), 3400);
-    window.setTimeout(() => toast.remove(), 3750);
+    window.setTimeout(dismiss, hold);
   }
 
   private fillFriendshipChoice(actions: HTMLElement, civ: AlienCiv, options: string[]): void {

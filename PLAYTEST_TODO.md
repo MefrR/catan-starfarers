@@ -102,7 +102,11 @@ bottom {3,4,11,5,8,9,10}.
     (rewards are now DEFERRED to closeEncounter, applied after the giveResources
     payment step: merchant, travelers, and the Pirate's Bargain rob. Verified
     headlessly — reward only lands after payment.)
-29. Click to advance every encounter step incl. final; player-set AI step speed. — 🔶 Phase 2
+29. Click to advance every encounter step incl. final; player-set AI step speed. — ✅
+    (the per-step choices already need a click; the FINAL result toast is now
+    click-to-dismiss too, so AI results don't flash by, and its linger scales to the
+    existing game-speed setting — Relaxed ~5.2s, Normal ~3.4s, Fast ~2.2s — which is
+    the player-set AI step speed.)
 30. Encounter resource prompt must not cover the player's own resources. — ✅ (the
     "choose which resources to give" card now anchors near the top of the screen
     (like the pick-a-ship prompt) so the player's hand along the bottom stays
