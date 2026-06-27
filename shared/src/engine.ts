@@ -1681,6 +1681,16 @@ export function applyIntent(
       if (anyDiscardsPending()) return fail(input, "Resolve discards first.");
       if (stealPending()) return fail(input, "Steal a card first.");
       if (ps.pendingFriendship) return fail(input, "Choose your friendship ability first.");
+      // #20: a colony ship may not loiter on a colony site — if one ends the turn
+      // parked on an establishable site, settle it now so it can't sit there a
+      // second turn blocking the spot. (Colony only: a trade station grants a
+      // player-chosen friendship card, so those stay a manual bubble action — #21.)
+      for (const s of state.ships.filter((sh) => sh.owner === me.id && sh.kind === "colonyShip")) {
+        const it = state.intersections[s.intersectionId];
+        if (it && it.adjacentPlanets.length === 2 && !state.buildings.some((b) => b.intersectionId === it.id)) {
+          doEstablishColony(state, me, s.id, rng); // ignores the error if it can't settle here
+        }
+      }
       endTurn(state);
       return { state };
     }

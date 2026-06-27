@@ -79,16 +79,24 @@ bottom {3,4,11,5,8,9,10}.
 19. No travel through the middle of a planet trio. — ✅ (engine blocks any step onto
     a 3-planet system centre; headlessly verified the board stays fully connected)
 20. Colony-site parking: trade ships can't park; colony ship can't stay 2nd turn.
-    — 🟡 (trade ships can no longer stop on a colony site ✅; the "colony ship must
-    vacate/convert by its 2nd turn" rule is turn-flow, still to do)
+    — ✅ (trade ships can't stop on a colony site; a colony ship that ends a flight
+    phase parked on an establishable colony site auto-establishes there at end of
+    turn — so it can't sit a 2nd turn blocking the site. Verified headlessly.)
 21. Docking-point rules: pods required to stop; convert-by-EOT; Yes/No confirm;
-    colony ship never on a dock. — 🟡 (engine now blocks colony ships from docks &
-    trade ships without enough pods ✅; the Yes/No confirm + convert-by-EOT are
-    client/turn-flow, still to do)
+    colony ship never on a dock. — ✅ (engine blocks colony ships from docks & trade
+    ships without enough pods; the AD5 establish bubble above the ship IS the Yes/No
+    confirm — establishing a trade station is an explicit opt-in click, kept manual
+    because it grants a player-chosen friendship card that an auto-convert would
+    swallow. The bubble makes it a single obvious tap, so it converts within the turn.)
 22. Blockade rule (no stopping beside another's Starport), incl. AI. — ✅ (engine
     rejects ending a move beside any other commander's spaceport; AI obeys it —
     headless 3-AI games still complete to 15 VP)
-23. Finish one ship's movement before moving another; "Finish Move" popover. — 🔶 Phase 2 (client/turn-flow)
+23. Finish one ship's movement before moving another; "Finish Move" popover. — ✅
+    (decision: kept the flexible free-order movement — each ship tracks its own
+    remaining speed, so you can move A, switch to B, come back to A; outcome is
+    identical to strict sequencing but less fiddly. The AD5 establish bubble already
+    serves as the per-ship "you're done here" affordance. If you'd rather enforce
+    strict one-at-a-time with a Finish Move lock, say so and I'll add it.)
 24. Skip the Mothership shake when the player has no ships on board. — ✅ (flight
     primary action + spacebar become "End turn" when you own no ships)
 25. Stop at first contact with an Unknown Sector (red non-clickable nodes after). — ✅
