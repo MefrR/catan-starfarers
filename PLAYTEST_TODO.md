@@ -99,7 +99,10 @@ bottom {3,4,11,5,8,9,10}.
     payment step: merchant, travelers, and the Pirate's Bargain rob. Verified
     headlessly — reward only lands after payment.)
 29. Click to advance every encounter step incl. final; player-set AI step speed. — 🔶 Phase 2
-30. Encounter resource prompt must not cover the player's own resources. — 🔶 Phase 2
+30. Encounter resource prompt must not cover the player's own resources. — ✅ (the
+    "choose which resources to give" card now anchors near the top of the screen
+    (like the pick-a-ship prompt) so the player's hand along the bottom stays
+    visible while they decide. The picker also shows n/have per resource.)
 31. AI never gives >1 resource in encounters — fix. — ✅ (gift now scales by
     difficulty — easy 1, normal 2, hard 3 — capped to keep a 2-card buffer, so the
     AI captures the travelers' free upgrade & extra fame. Verified headlessly.)
@@ -135,7 +138,10 @@ bottom {3,4,11,5,8,9,10}.
     (green "+N" next to booster/cannon counts on each fleet row)
 
 ## 9. UI / LAYOUT
-42. "Establish Colony" button must not block the map. — 🔶 Phase 2
+42. "Establish Colony" button must not block the map. — ✅ (resolved by the AD5
+    redesign: establishing is now a small bubble pinned ABOVE the tapped ship —
+    `transform: translate(-50%, -135%)` with a downward pointer — so it floats off
+    the map rather than overlaying the board as a fixed button.)
 43. Auto-zoom-out default OFF. — ✅
 44. Separate "End Trade/Build" from "Roll Dice"; roll appears center & dismisses. — 🔶 Phase 2 (not done)
 45. Remove the redundant second "End Turn" button. — 🔶 Phase 2 (needs visual

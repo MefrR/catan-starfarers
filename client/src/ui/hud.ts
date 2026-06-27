@@ -3575,7 +3575,10 @@ export class HUD {
       const choices = el(`<div class="enc-choices"></div>`);
       if (enc.awaiting === "giveResources") {
         // Surrender N resources of your choice — pick which from your hand.
+        // #30: anchor the card near the top so it never covers the player's own
+        // resource hand at the bottom of the screen while they decide what to give.
         choices.classList.add("col");
+        overlay.classList.add("give-pick");
         const owed = enc.lossCount ?? 0;
         cardEl.querySelector(".enc-text")!.textContent =
           `Hand over ${owed} resource(s) — choose which from your hand.`;

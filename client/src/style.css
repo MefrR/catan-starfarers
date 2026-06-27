@@ -1217,6 +1217,9 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
    (backdrop is pointer-events:none) stay fully tappable underneath. */
 .encounter-overlay.pick-ship { place-items: start center; padding-top: 18px; }
 .encounter-overlay.pick-ship .encounter-card { width: min(360px, 92vw); }
+/* #30: when choosing which resources to give, anchor the card near the top so it
+   never hides the player's own resource hand along the bottom of the screen. */
+.encounter-overlay.give-pick { place-items: start center; padding-top: 18px; }
 /* Plain, quiet buttons inside the card — no star-button light layers. */
 .encounter-card button::before,
 .encounter-card button::after {
