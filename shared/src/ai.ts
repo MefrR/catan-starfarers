@@ -61,7 +61,7 @@ const KNOBS: Record<AiDifficulty, Knobs> = {
     buildCannons: false,
     clearSpecials: false,
     proposeTrades: true, // every AI now initiates trades on its turn
-    encounterGift: 0,
+    encounterGift: 1, // #31: even easy AI gifts 1 for the fame
     expandFirst: false,
     spaceportMinDistFrac: 0,
     earlyBoosters: false,
@@ -74,7 +74,7 @@ const KNOBS: Record<AiDifficulty, Knobs> = {
     buildCannons: true,
     clearSpecials: true,
     proposeTrades: true,
-    encounterGift: 1,
+    encounterGift: 2, // #31: gift up to 2 — captures the travelers' free upgrade
     expandFirst: false,
     spaceportMinDistFrac: 0,
     earlyBoosters: false,
@@ -87,7 +87,7 @@ const KNOBS: Record<AiDifficulty, Knobs> = {
     buildCannons: true,
     clearSpecials: true,
     proposeTrades: true,
-    encounterGift: 1,
+    encounterGift: 3, // #31: gift up to 3 — max fame + the free upgrade
     expandFirst: true, // colonise mid/far space before converting home colonies
     spaceportMinDistFrac: 0.42, // spaceports only out past the inner cluster
     earlyBoosters: true, // fly further
@@ -242,8 +242,11 @@ export function aiTurnAction(state: GameState, seatId: string): ClientIntent | n
         // "number" offers: give a modest gift if we can afford it (harder AIs
         // pay for fame more readily).
         if (ps.encounter.awaiting === "number") {
+          // #31: gift as much as the difficulty wants, scaled down only to keep a
+          // 2-card buffer — so a healthy AI actually offers 2-3 (extra fame and,
+          // for the travelers, a free upgrade) instead of always 1.
           const want = knobs(state).encounterGift;
-          const offer = handTotal(me) >= want + 2 ? want : 0;
+          const offer = Math.max(0, Math.min(want, handTotal(me) - 2));
           return { t: "encounterChoice", choice: offer };
         }
         // yes/no: cooperate (help / surrender small tribute) by default.

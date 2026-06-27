@@ -100,7 +100,9 @@ bottom {3,4,11,5,8,9,10}.
     headlessly — reward only lands after payment.)
 29. Click to advance every encounter step incl. final; player-set AI step speed. — 🔶 Phase 2
 30. Encounter resource prompt must not cover the player's own resources. — 🔶 Phase 2
-31. AI never gives >1 resource in encounters — fix. — 🔶 Phase 2
+31. AI never gives >1 resource in encounters — fix. — ✅ (gift now scales by
+    difficulty — easy 1, normal 2, hard 3 — capped to keep a 2-card buffer, so the
+    AI captures the travelers' free upgrade & extra fame. Verified headlessly.)
 
 ## 7. TRADING
 32. Accept/decline prompt centered & visible to all. — 🔶 Phase 2
