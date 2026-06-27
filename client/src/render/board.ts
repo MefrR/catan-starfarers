@@ -1274,13 +1274,16 @@ export class BoardRenderer {
         sy = node.y;
       }
       const pc = ownerColor.get(ship.owner) ?? "yellow";
-      // P8-5: a ship damaged in an encounter (frozen for the turn) is drawn red
-      // with a warning ring so the player can see why it can't move.
+      // #54: a ship damaged in an encounter (frozen for the turn) keeps its
+      // OWNER colour (so it's never confused with the red player's ships) and is
+      // marked instead with a distinct cyan "frozen" ring — a colour no player
+      // can pick.
+      const FROZEN_CYAN = 0x49e0ff;
       const damaged = ship.id === state.phaseState.frozenShipId;
       // P8-7: ships parked on an outpost docking point are drawn larger so
       // players can clearly see who is established inside the outpost.
       const onDock = !!inter.dockingPointOf;
-      const color = damaged ? 0xff3b30 : OWNER_FILL[pc];
+      const color = OWNER_FILL[pc];
       // Q1: ships in general a bit larger; Q3: ships docked inside an outpost
       // drawn bigger so the occupant is unmistakable. Travelling ships are
       // doubled (0.2 → 0.4) so colony/trade ships read clearly on the map.
@@ -1288,13 +1291,16 @@ export class BoardRenderer {
       const selected = ship.id === this.selectedShipId;
       const g = new Graphics();
       if (selected) g.circle(sx, sy, r * 1.5).stroke({ color: 0x57e389, width: 3, alpha: 0.95 });
-      if (damaged) g.circle(sx, sy, r * 1.5).stroke({ color: 0xff3b30, width: 3, alpha: 0.9 });
+      if (damaged) g.circle(sx, sy, r * 1.5).stroke({ color: FROZEN_CYAN, width: 3, alpha: 0.95 });
       this.drawShip(g, ship.kind, sx, sy, r, color);
       g.eventMode = "static";
-      g.cursor = "pointer";
+      // #55: a damaged (frozen) ship can't move, so clicking it must do NOTHING
+      // (previously it spawned green move-nodes everywhere and only errored on a
+      // move attempt). It keeps its hover tooltip but no click/select.
+      g.cursor = damaged ? "default" : "pointer";
       g.hitArea = new Circle(sx, sy, r * 1.4 + 22);
       const id = ship.id;
-      g.on("pointertap", () => this.onShipClick?.(id));
+      if (!damaged) g.on("pointertap", () => this.onShipClick?.(id));
       shipLayer.addChild(g);
 
       // Flight cue: breathe a green ring around my ships that can still move,
