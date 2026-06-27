@@ -73,8 +73,16 @@ bottom {3,4,11,5,8,9,10}.
 
 ## 4. NUMBER TOKENS & LAYOUT MODES
 15. Official Layout (ON by default) using the disc table above + "Unbalanced
-    Layout" button. — 🔶 Phase 2 (needs map-gen rewrite; data decoded above)
-16. "Balanced Layout" mode (same tokens, randomized, no illegal duplicates). — 🔶 Phase 2
+    Layout" button. — 🟡 (the official disc DISTRIBUTION is now used: the 19 regular
+    discs + the 5 reserve discs hidden under the specials + the four official home
+    trios (with the 3/12 & 2/11 either-or discs), preserving the two-6s/two-8s
+    opening. Verified headlessly across seeds. The "Unbalanced" button = the
+    existing Balanced-Layout toggle (#16). REMAINING: placing each disc on its exact
+    printed symbol-group position is tied to the topology rewrite (#6/#7).)
+16. "Balanced Layout" mode (same tokens, randomized, no illegal duplicates). — ✅
+    (already implemented: `balancedLayout` config + the separateHotNumbers repair so
+    no two 6/8 share a corner, home opening protected; toggle exposed in menu/lobby.
+    Turning it off gives the raw/unbalanced placement.)
 
 ## 5. MOVEMENT, PARKING & BLOCKADES
 19. No travel through the middle of a planet trio. — ✅ (engine blocks any step onto

@@ -74,8 +74,24 @@ function shuffle<T>(arr: T[], rand: () => number): T[] {
   return a;
 }
 
-/** Standard Catan number chits (no 7), cycled to cover all planets. */
-const NUMBER_BAG = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12];
+// --- Official Starfarers number-disc distribution (#15) ---
+// Decoded from the printed discs (see PLAYTEST_TODO.md). The board has exactly 24
+// non-home planets (8 systems × 3): 19 carry an ordinary production disc and 5 are
+// covered by a special token (pirate base / ice planet) with a face-down "reserve"
+// disc that's revealed when the special is cleared.
+/** 19 ordinary discs for the non-home, non-special planets (top + bottom halves). */
+const OFFICIAL_REGULAR = [3, 4, 4, 11, 12, 2, 5, 5, 6, 9, 10, 10, 3, 4, 11, 5, 8, 9, 10];
+/** 5 reserve discs hidden under the special tokens, revealed on clearing them. */
+const OFFICIAL_RESERVE = [3, 9, 10, 11, 11];
+/** The four Catanian home trios (α β γ δ). An entry [a,b] is an either/or disc on
+ *  the printed board (β shows 3-or-12, δ shows 2-or-11) — resolved per game. Two
+ *  homes carry an 8 and two carry a 6, preserving the two-6s/two-8s opening. */
+const OFFICIAL_HOME_TRIOS: (number | [number, number])[][] = [
+  [4, 8, 11],
+  [8, 10, [3, 12]],
+  [3, 6, 5],
+  [[2, 11], 6, 9],
+];
 
 /** Planet colour triples for planetary systems (each system gets 3 planets). */
 const SYSTEM_PALETTES: PlanetColor[][] = [
@@ -229,10 +245,9 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
     }
   }
 
-  // Number chits, shuffled, cycled if we run out.
-  const numbers = shuffle(NUMBER_BAG, rand);
-  let numIdx = 0;
-  const nextNumber = (): number => numbers[numIdx++ % numbers.length]!;
+  // #15: non-home planet numbers are assigned in a post-pass from the official
+  // disc pools (regular discs vs reserve-under-special discs), once specials are
+  // placed — so here they start as 0 placeholders.
 
   // Randomize the rest of the board content each game (P3): the colour triple for
   // each planetary system, which civilization staffs each outpost, and where the
@@ -399,17 +414,18 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
   // (Home systems sit on the bottom edge with column gaps, so their hot planets
   // never share a corner with each other — no within-home 6/8 adjacency.)
   const homeCount = homeSystems.length;
-  const hotForHome = shuffle([6, 6, 8, 8].slice(0, homeCount), rand);
-  const coolPool = shuffle(
-    NUMBER_BAG.filter((n) => !HOT_NUMBERS.has(n)),
-    rand,
-  );
-  let coolIdx = 0;
-  const nextCool = (): number => coolPool[coolIdx++ % coolPool.length]!;
+  // #15: the four official Catanian home trios, assigned to the homes in random
+  // order, each trio's planets shuffled, and the either/or discs (β 3-or-12,
+  // δ 2-or-11) resolved per game. Two homes carry an 8 and two a 6 → the
+  // two-6s/two-8s opening is preserved no matter the order.
+  const trioTemplates = shuffle(OFFICIAL_HOME_TRIOS.map((t) => [...t]), rand);
   const homeNumbers: number[][] = [];
   for (let h = 0; h < homeCount; h++) {
-    const trip = [nextCool(), nextCool(), nextCool()];
-    trip[Math.floor(rand() * 3)] = hotForHome[h] ?? nextCool();
+    const tpl = trioTemplates[h % trioTemplates.length]!;
+    const trip = shuffle(
+      tpl.map((n) => (Array.isArray(n) ? (rand() < 0.5 ? n[0]! : n[1]!) : n)),
+      rand,
+    );
     homeNumbers.push(trip);
   }
   const homePlanetIds = new Set<string>();
@@ -437,7 +453,7 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
         color: isHome ? (HOME_TRIPLES[sysIdx]?.[k] ?? palette[k]!) : palette[k]!,
         x,
         y,
-        number: isHome ? homeNumbers[sysIdx]![k]! : nextNumber(),
+        number: isHome ? homeNumbers[sysIdx]![k]! : 0,
         explored: true,
         special: "none",
       };
@@ -553,6 +569,23 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
     planet.special = tok.special;
     planet.specialValue = tok.value;
   });
+
+  // #15: hand out the official disc distribution to the non-home planets now that
+  // specials are placed. The 19 ordinary discs go on ordinary planets; the 5
+  // reserve discs go on the special-covered planets (revealed when cleared). Pools
+  // are sized to match exactly (19 + 5 = 24 non-home planets); cycle defensively
+  // if a degenerate board ever has a different count.
+  {
+    const nonHome = sectors
+      .filter((s) => s.kind === "planetarySystem" && !s.home)
+      .flatMap((s) => s.planets);
+    const specialPlanets = nonHome.filter((p) => p.special !== "none");
+    const regularPlanets = nonHome.filter((p) => p.special === "none");
+    const reservePool = shuffle([...OFFICIAL_RESERVE], rand);
+    const regularPool = shuffle([...OFFICIAL_REGULAR], rand);
+    specialPlanets.forEach((p, i) => { p.number = reservePool[i % reservePool.length]!; });
+    regularPlanets.forEach((p, i) => { p.number = regularPool[i % regularPool.length]!; });
+  }
 
   // Q8: never let the two "hot" numbers (6 and 8 — the highest-frequency chits)
   // sit on planets that share an intersection. Repair after assignment by
