@@ -180,12 +180,19 @@ export function aiObligation(state: GameState, seatId: string): ClientIntent | n
             const w = offer.want[r] ?? 0;
             if (w > 0) counterWant[r] = r === drop ? w - 1 : w;
           }
-          return {
-            t: "respondTrade",
-            accept: true,
-            counterGive: { ...offer.give },
-            counterWant,
-          };
+          // #35: never counter with "give me X for nothing" — if dropping a card
+          // empties what we'd pay back, it's a free grab the engine rejects, so
+          // just decline instead of generating an illegal counter-offer.
+          const counterWantTotal = RESOURCES.reduce((s, r) => s + (counterWant[r] ?? 0), 0);
+          const counterGiveTotal = RESOURCES.reduce((s, r) => s + (offer.give[r] ?? 0), 0);
+          if (counterWantTotal > 0 && counterGiveTotal > 0) {
+            return {
+              t: "respondTrade",
+              accept: true,
+              counterGive: { ...offer.give },
+              counterWant,
+            };
+          }
         }
       }
       return { t: "respondTrade", accept: false };

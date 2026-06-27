@@ -108,7 +108,9 @@ bottom {3,4,11,5,8,9,10}.
 32. Accept/decline prompt centered & visible to all. — 🔶 Phase 2
 33. Initiator must pick who accepted (not auto-first). — 🔶 Phase 2
 34. AI withdraws trade after ~1s; bots trade too fast; guarantee human a turn. — 🔶 Phase 2
-35. Illegal AI counter-offers ("1 Food for nothing"). — 🔶 Phase 2
+35. Illegal AI counter-offers ("1 Food for nothing"). — ✅ (the AI no longer
+    produces a counter that asks for nothing back — it declines instead. Verified
+    headlessly with the reported 1-food-for-1-goods case.)
 36. Trade window not refreshing after accept/decline; stale bank selection. — 🔶 Phase 2
 37. "Any" button on either side of a trade. — 🔶 Phase 2
 38a. Let player decline even when AI accepts. — 🔶 Phase 2
