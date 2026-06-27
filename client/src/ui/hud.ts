@@ -2749,7 +2749,7 @@ export class HUD {
     this.selectedShipId = shipId;
     this.mode = "moveShip";
     this.moveTargets =
-      remaining > 0 ? reachable(state, ship.intersectionId, remaining) : new Map();
+      remaining > 0 ? reachable(state, ship, me, remaining) : new Map();
     this.render(state); // re-render to show establish buttons + highlights
   }
 
@@ -4583,7 +4583,21 @@ function revealsNew(state: GameState, id: string): boolean {
 }
 
 /** BFS reachable destinations within `speed`; returns dest id -> path (steps). */
-function reachable(state: GameState, start: string, speed: number): Map<string, string[]> {
+function reachable(
+  state: GameState,
+  ship: GameState["ships"][number],
+  me: PlayerState,
+  speed: number,
+): Map<string, string[]> {
+  const start = ship.intersectionId;
+  // A node that is the shared corner of a 3-planet system (the trio CENTRE) can be
+  // neither entered nor passed through (#19) — keep it out of the graph entirely.
+  const isCentre = (id: string): boolean =>
+    (state.intersections[id]?.adjacentPlanets.length ?? 0) >= 3;
+  const occupied = (id: string): boolean =>
+    state.buildings.some((b) => b.intersectionId === id) ||
+    state.ships.some((s) => s.intersectionId === id);
+
   const prev = new Map<string, string>();
   const dist = new Map<string, number>([[start, 0]]);
   const queue: string[] = [start];
@@ -4596,18 +4610,39 @@ function reachable(state: GameState, start: string, speed: number): Map<string, 
     if (cur !== start && revealsNew(state, cur)) continue;
     for (const nb of state.intersections[cur]?.neighbors ?? []) {
       if (dist.has(nb)) continue;
+      if (isCentre(nb)) continue; // never route through a trio centre
       dist.set(nb, d + 1);
       prev.set(nb, cur);
       queue.push(nb);
     }
   }
-  const occupied = (id: string): boolean =>
-    state.buildings.some((b) => b.intersectionId === id) ||
-    state.ships.some((s) => s.intersectionId === id);
+
+  // A node is a legal place to STOP only if the engine's doMoveShip would accept
+  // it — so the green dots match exactly where this ship may actually end up.
+  const canStop = (id: string): boolean => {
+    if (id === start || occupied(id)) return false;
+    const inter = state.intersections[id];
+    if (!inter) return false;
+    // Blockade (#22): can't end beside another commander's spaceport.
+    for (const nb of inter.neighbors) {
+      if (state.buildings.some((b) => b.intersectionId === nb && b.kind === "spaceport" && b.owner !== me.id))
+        return false;
+    }
+    if (inter.dockingPointOf) {
+      // Outpost dock (#21): trade ships only, and only with enough freight pods.
+      if (ship.kind !== "tradeShip") return false;
+      const docked = state.tradeStations.filter((t) => t.outpostId === inter.dockingPointOf).length;
+      if ((me.upgrades.freightPod ?? 0) <= docked) return false;
+    } else if (ship.kind === "tradeShip" && inter.adjacentPlanets.length === 2) {
+      // Colony site (#20): a trade ship may pass by but can't park there.
+      return false;
+    }
+    return true;
+  };
 
   const out = new Map<string, string[]>();
   for (const [id] of dist) {
-    if (id === start || occupied(id)) continue;
+    if (!canStop(id)) continue;
     const path: string[] = [];
     let node = id;
     while (node !== start) {

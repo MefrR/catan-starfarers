@@ -993,6 +993,18 @@ function doMoveShip(
   ship.movedThisTurn = ship.distanceMoved >= budget;
   revealAround(state, dest, rng);
   resolveAdjacentSpecials(state, player, dest, rng);
+  // A trade ship that lands ON an outpost docking point establishes a trade
+  // station right away if it can (the stopping rules above already guaranteed it
+  // has enough freight pods). Picks the first free dock; the player still chooses
+  // the friendship-card ability it grants. Errors are ignored (e.g. no station in
+  // supply) — the ship simply stays docked.
+  if (ship.kind === "tradeShip" && destInter.dockingPointOf) {
+    const outpostId = destInter.dockingPointOf;
+    const used = new Set(state.tradeStations.filter((t) => t.outpostId === outpostId).map((t) => t.dock));
+    let dock = 0;
+    while (used.has(dock) && dock < OUTPOST_DOCKS) dock++;
+    doEstablishTradeStation(state, player, shipId, dock);
+  }
   recomputeVp(state);
   log(state, `${player.name} moved a ship.`);
   return undefined;
