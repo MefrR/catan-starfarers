@@ -105,7 +105,8 @@ bottom {3,4,11,5,8,9,10}.
      of the post-encounter speed calc; not yet fixed.)
 39b. Initial shake shows Speed only (no Combat); keep text on screen longer. — ✅
 40. Bead order low→high: Black, Red, Yellow, Yellow, Blue. — ✅
-41. Surface Scientist bonus boosters/weapons near stats ("2+2", +2 colored). — 🔶 Phase 2
+41. Surface Scientist bonus boosters/weapons near stats ("2+2", +2 colored). — ✅
+    (green "+N" next to booster/cannon counts on each fleet row)
 
 ## 9. UI / LAYOUT
 42. "Establish Colony" button must not block the map. — 🔶 Phase 2
