@@ -1296,12 +1296,21 @@ export class BoardRenderer {
       hot.on("pointertap", () => this.onIntersectionClick?.(bid));
     }
 
+    // The three (orientation-rotated) lobe hex-centres of an outpost — the same
+    // points drawOutpost paints its docking rings on. Shared by the station pips
+    // and the docked-ship placement so both land exactly on the painted docks.
+    const outpostLobesFor = (q: number, r: number): { x: number; y: number }[] =>
+      ([[q, r], [q + 1, r], [q, r + 1]] as [number, number][]).map(([hq, hr]) => ({
+        x: tx(1.5 * hq, Math.sqrt(3) * (hr + hq / 2)),
+        y: ty(1.5 * hq, Math.sqrt(3) * (hr + hq / 2)),
+      }));
+
     // Trade stations: owner-coloured pips arranged around each outpost centre.
     for (const sector of state.sectors) {
       if (sector.kind !== "outpost") continue;
       const ocx = tx(1.5 * sector.q + 0.5, Math.sqrt(3) * (sector.r + sector.q / 2 + 0.5));
       const ocy = ty(1.5 * sector.q + 0.5, Math.sqrt(3) * (sector.r + sector.q / 2 + 0.5));
-      const dockPos = this.dockNodePositions(ocx, ocy, scale);
+      const dockPos = this.dockNodePositions(ocx, ocy, scale, outpostLobesFor(sector.q, sector.r));
       for (const ts of state.tradeStations.filter((t) => t.outpostId === sector.id)) {
         const pos = dockPos[ts.dock % dockPos.length]!;
         const sx = pos.x;
@@ -1336,9 +1345,14 @@ export class BoardRenderer {
       // *node*, not the hub centre — it takes the next free dock (one past the
       // stations already established there), matching the painted nodes.
       if (inter.dockingPointOf) {
-        const dockPos = this.dockNodePositions(sx, sy, scale);
+        const op = sectorById.get(inter.dockingPointOf);
+        // Centre the dock ring on the OUTPOST hub (sx/sy is the ship's own node,
+        // which IS the hub centre), using the outpost's real lobes.
+        const dockPos = op
+          ? this.dockNodePositions(sx, sy, scale, outpostLobesFor(op.q, op.r))
+          : [];
         const taken = state.tradeStations.filter((t) => t.outpostId === inter.dockingPointOf).length;
-        const node = dockPos[taken % dockPos.length]!;
+        const node = dockPos.length ? dockPos[taken % dockPos.length]! : { x: sx, y: sy };
         sx = node.x;
         sy = node.y;
       }
@@ -1896,15 +1910,24 @@ export class BoardRenderer {
    * rings offset ±0.62 rad along the lobe arc. Trade-station pips and docked
    * ships use this so they land on the painted rings, not near the hub.
    */
-  private dockNodePositions(cx: number, cy: number, scale: number): { x: number; y: number }[] {
-    const ringOut = scale * 0.58 * 0.55; // lobeR * 0.55 (matches drawOutpost)
+  private dockNodePositions(
+    cx: number,
+    cy: number,
+    scale: number,
+    lobes: { x: number; y: number }[],
+  ): { x: number; y: number }[] {
+    // Mirror drawOutpost EXACTLY: each ring sits on the outer arc of a lobe, off
+    // the line from the hub to that lobe by ±0.62 rad, at lobeR*0.55. The lobes
+    // are the real (orientation-rotated) hex centres — using assumed 0/120/240°
+    // angles instead made the pips/ships drift off the painted docks (badly in
+    // landscape).
+    const ringOut = scale * 0.58 * 0.55; // lobeR * 0.55
     const pts: { x: number; y: number }[] = [];
-    for (let i = 0; i < 3; i++) {
-      const a = (Math.PI * 2 * i) / 3;
-      const lx = cx + Math.cos(a) * scale;
-      const ly = cy + Math.sin(a) * scale;
+    for (const l of lobes) {
+      const away = Math.atan2(l.y - cy, l.x - cx);
       for (const off of [-0.62, 0.62]) {
-        pts.push({ x: lx + Math.cos(a + off) * ringOut, y: ly + Math.sin(a + off) * ringOut });
+        const a = away + off;
+        pts.push({ x: l.x + Math.cos(a) * ringOut, y: l.y + Math.sin(a) * ringOut });
       }
     }
     return pts;
