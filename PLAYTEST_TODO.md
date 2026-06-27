@@ -57,9 +57,12 @@ bottom {3,4,11,5,8,9,10}.
 ## 3. MAP GENERATION & ACCURACY
 6. Map dimensions ≤ 15 hexes tall, correct width. — 🔶 Phase 2 (layout rewrite)
 7. Correct, less-symmetrical sector placement. — 🔶 Phase 2
-8. Randomize system placement between games. — 🔶 Phase 2
+8. Randomize system placement between games. — ✅ (placement now randomizes EVERY
+   game, not just fog; verified headlessly: different seeds → different outpost
+   positions)
 9. Home planets: only dice numbers vary, not resources; no duplicate type in a
-   sector. — 🔶 Phase 2
+   sector. — ✅ (4 fixed home triples, each 3 distinct resources; resources fixed
+   across games, only numbers vary — verified headlessly)
 10. Ice=2 (req 3 & 4 pods), Pirate=3 (req 4,5,6 weapons). — ✅
 11. Show planet under ice/pirate at ~20% token opacity. — ✅ (token ~20% + the
     production number now shows under special planets)

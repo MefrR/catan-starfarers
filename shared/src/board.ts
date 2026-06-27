@@ -202,7 +202,10 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
   // the map, and the two "basic" civs (Green Folk & Merchants) in the BOTTOM
   // half — but exactly where, within each half, is reshuffled every game. The
   // central hub and the bottom Catanian home row stay fixed.
-  if (opts.randomizeLayout) {
+  // #8: randomize the positions of systems / outposts / empty clusters EVERY
+  // game (this used to be fog-only, which left charted games identical each time).
+  // Fog now only controls VISIBILITY, not placement. The home row + hub stay put.
+  {
     const upper = slots.filter((s) => s.role !== "home" && s.role !== "hub");
     // Halves by visual row: rows 0–2 = top, rows 3–4 = bottom.
     const topHalf = shuffle(upper.filter((s) => s.vrow <= 2), rand);
@@ -411,20 +414,17 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
   }
   const homePlanetIds = new Set<string>();
 
-  // The Catanian home systems collectively start with a fixed resource spread
-  // (matching the original opening): 3 fuel, 2 food, 3 ore, 2 carbon, 2 goods.
+  // #9: the Catanian home systems have FIXED resources — only their dice numbers
+  // vary between games. Each home sector shows 3 DIFFERENT resources (never a
+  // duplicate type within a sector), and across the four homes the spread totals
+  // 3 fuel, 3 ore, 2 food, 2 carbon, 2 goods (the original opening).
   // colors → resources: orange=fuel, green=food, red=ore, blue=carbon, multicolor=goods.
-  const homeColorPool = shuffle<PlanetColor>(
-    [
-      "orange", "orange", "orange",
-      "green", "green",
-      "red", "red", "red",
-      "blue", "blue",
-      "multicolor", "multicolor",
-    ],
-    rand,
-  );
-  let homeColorIdx = 0;
+  const HOME_TRIPLES: PlanetColor[][] = [
+    ["orange", "red", "green"],        // fuel, ore, food
+    ["orange", "red", "blue"],         // fuel, ore, carbon
+    ["orange", "green", "multicolor"], // fuel, food, goods
+    ["red", "blue", "multicolor"],     // ore, carbon, goods
+  ];
 
   // Build planetary-system sectors with 3 planet-hexes each.
   orderedSystems.forEach((sys, sysIdx) => {
@@ -434,7 +434,7 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
       const { x, y } = hexCenter(hq, hr);
       const planet: Planet = {
         id: `${sys.sectorId}_p${k}`,
-        color: isHome ? (homeColorPool[homeColorIdx++] ?? palette[k]!) : palette[k]!,
+        color: isHome ? (HOME_TRIPLES[sysIdx]?.[k] ?? palette[k]!) : palette[k]!,
         x,
         y,
         number: isHome ? homeNumbers[sysIdx]![k]! : nextNumber(),
