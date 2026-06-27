@@ -136,7 +136,11 @@ bottom {3,4,11,5,8,9,10}.
 49. Green node hit-box priority over player pieces; clickable at low zoom. — 🔶 Phase 2
 
 ## 10. VISUAL FEEDBACK & LOG
-52. Expand Game Log (cover AI Build/Trade phases; longer history). — 🔶 Phase 2
+52. Expand Game Log (cover AI Build/Trade phases; longer history). — ✅ (the log
+    now shows the last 40 entries in a scrollable panel auto-pinned to the newest
+    line, instead of just the last 8. AI build/trade/move/establish turns were
+    already logged by the engine uniformly; upgrade entries now read "added a
+    freight pod" etc. Verified in preview: 40 lines, scrolls, pinned to bottom.)
 53. Resource gained/lost feedback w/ pulse; slow 7-robbery feedback. — 🔶 Phase 2
 54. Damaged-ship color must not collide with player colors. — ✅
 55. Clicking a damaged ship does nothing (no green nodes). — ✅

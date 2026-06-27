@@ -878,7 +878,8 @@ function doBuild(
   if (inPlay >= UPGRADE_SUPPLY[kind]) return `No ${kind}s left in the supply.`;
   pay(player.hand, state.supplyBank, cost);
   player.upgrades[kind]++;
-  log(state, `${player.name} built a ${kind}.`);
+  const upgLabel = kind === "freightPod" ? "freight pod" : kind;
+  log(state, `${player.name} added a ${upgLabel}.`);
   state.phaseState.lastUpgrade = {
     playerId: player.id,
     kind,

@@ -2062,7 +2062,9 @@ export class HUD {
     const logSec = el(`<div class="side-sec side-log"></div>`);
     logSec.appendChild(el(`<div class="side-title">Log</div>`));
     const logBody = el(`<div class="side-log-body"></div>`);
-    const lines = state.log.slice(-8);
+    // #52: keep a long, scrollable history (incl. AI build/trade/move turns, which
+    // the engine logs uniformly) rather than only the last handful of lines.
+    const lines = state.log.slice(-40);
     if (lines.length === 0) {
       logBody.appendChild(el(`<div class="log-line">No events yet.</div>`));
     } else {
@@ -2072,6 +2074,8 @@ export class HUD {
     }
     logSec.appendChild(logBody);
     side.appendChild(logSec);
+    // Pin the view to the newest line once it's in the DOM.
+    requestAnimationFrame(() => { logBody.scrollTop = logBody.scrollHeight; });
 
     return side;
   }
