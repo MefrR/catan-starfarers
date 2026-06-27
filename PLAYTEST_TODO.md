@@ -61,9 +61,8 @@ bottom {3,4,11,5,8,9,10}.
 9. Home planets: only dice numbers vary, not resources; no duplicate type in a
    sector. — 🔶 Phase 2
 10. Ice=2 (req 3 & 4 pods), Pirate=3 (req 4,5,6 weapons). — ✅
-11. Show planet under ice/pirate at ~20% token opacity. — 🔶 Phase 2 (renderer
-    opacity not yet changed — the planet/number is currently fully hidden behind
-    the token; needs a render tweak + the under-disc data, ties into #15.)
+11. Show planet under ice/pirate at ~20% token opacity. — ✅ (token ~20% + the
+    production number now shows under special planets)
 12. Alien Outpost docking points 6 → 5. — 🔶 Phase 2 (the engine models a SINGLE
     centre docking point per outpost while the renderer draws several — the count
     mismatch needs the docking model reconciled first.)
@@ -114,7 +113,7 @@ bottom {3,4,11,5,8,9,10}.
 44. Separate "End Trade/Build" from "Roll Dice"; roll appears center & dismisses. — 🔶 Phase 2 (not done)
 45. Remove the redundant second "End Turn" button. — 🔶 Phase 2 (needs visual
     confirm of which of the End-turn controls is the duplicate before removing.)
-46. Center the white shake effect (currently left). — 🔶 Phase 2 (not done)
+46. Center the white shake effect (currently left). — ✅
 47. Post-victory "New Game" → "Main Menu". — ✅
 48. Green Folk cards named "[Resource] Increase". — ✅
 49. Green node hit-box priority over player pieces; clickable at low zoom. — 🔶 Phase 2
@@ -128,9 +127,8 @@ bottom {3,4,11,5,8,9,10}.
 57. Low-score bonus entitlement not granting cards. — 🔶 Phase 2
 58. Low-score bonus visibly from Reserve pile. — 🔶 Phase 2
 59. Show Reserve pile size + warn near depletion (−10). — 🔶 Phase 2
-60. Don't flash producing planets on the first-player roll. — 🔶 Phase 2 (not done —
-    needs the setup-roll path to skip the production-pulse.)
-61. Hide blue colony-site circles on Home Planets after Setup. — 🔶 Phase 2 (not done)
+60. Don't flash producing planets on the first-player roll. — ✅ (pulse gated to production rolls)
+61. Hide blue colony-site circles on Home Planets after Setup. — ✅
 
 ## 11. VARIANTS & MODES
 62. Remove "Friendly Bandit". — ✅
