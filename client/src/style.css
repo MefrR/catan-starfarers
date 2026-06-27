@@ -349,6 +349,8 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   font-size: 11px; font-weight: 700; color: var(--muted);
 }
 .score-upg .su svg { width: 15px; height: 15px; opacity: 0.8; }
+/* #41: Scientist-friendship bonus shown in a distinct colour (e.g. "2+2"). */
+.score-upg .su-bonus { color: #7be0a0; font-weight: 800; margin-left: 1px; }
 .score-row .score-main { display: flex; align-items: center; gap: 9px; }
 .score-row.active { background: rgba(111,179,255,0.14); box-shadow: inset 0 0 0 1px var(--panel-border); }
 .score-meta { display: flex; gap: 10px; padding-left: 19px; }

@@ -16,6 +16,7 @@ import {
   tradeRatioFor,
   diplomatDiscardLimit,
   friendshipCardById,
+  scientistBonus,
   type AlienCiv,
   type GameState,
   type PlayerColor,
@@ -1039,10 +1040,15 @@ export class HUD {
       // Mothership upgrades, visible to everyone (expanded view only). Lets all
       // players gauge each fleet's speed/combat/cargo strength.
       const upg = p.upgrades;
+      // #41: surface Scientist-friendship bonuses right on the fleet stats — e.g.
+      // "2+2" with the bonus in a distinct colour — so the effective speed/combat
+      // is visible, not buried below.
+      const sb = scientistBonus(p);
+      const bon = (n: number): string => (n > 0 ? `<span class="su-bonus">+${n}</span>` : "");
       const upgRow = `
         <div class="score-upg">
-          <span class="su" title="${upg.booster} booster${upg.booster === 1 ? "" : "s"} (+flight speed)">${upgradeIco("booster")}${upg.booster}</span>
-          <span class="su" title="${upg.cannon} cannon${upg.cannon === 1 ? "" : "s"} (+combat strength)">${upgradeIco("cannon")}${upg.cannon}</span>
+          <span class="su" title="${upg.booster} booster${upg.booster === 1 ? "" : "s"}${sb.speed ? ` +${sb.speed} Scientist` : ""} (+flight speed)">${upgradeIco("booster")}${upg.booster}${bon(sb.speed)}</span>
+          <span class="su" title="${upg.cannon} cannon${upg.cannon === 1 ? "" : "s"}${sb.combat ? ` +${sb.combat} Scientist` : ""} (+combat strength)">${upgradeIco("cannon")}${upg.cannon}${bon(sb.combat)}</span>
           <span class="su" title="${upg.freightPod} freight pod${upg.freightPod === 1 ? "" : "s"} (cargo / trade stations)">${upgradeIco("freightPod")}${upg.freightPod}</span>
         </div>`;
       // Y7: a thin progress bar racing toward the target under every row.
