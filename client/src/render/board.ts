@@ -1179,7 +1179,8 @@ export class BoardRenderer {
         if (planet.explored && planet.number != null) {
           const hot = planet.number === 6 || planet.number === 8;
           const bx = px;
-          const by = py + rad * 0.86;
+          // Production number sits at the TOP of the planet (above centre).
+          const by = py - rad * 0.86;
           // 2 also produces on 11, and 3 also on 12 — show the pair on the token.
           const numText =
             planet.number === 2 ? "2/11" : planet.number === 3 ? "3/12" : String(planet.number);
