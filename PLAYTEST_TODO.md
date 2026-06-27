@@ -180,7 +180,11 @@ bottom {3,4,11,5,8,9,10}.
     `transform: translate(-50%, -135%)` with a downward pointer — so it floats off
     the map rather than overlaying the board as a fixed button.)
 43. Auto-zoom-out default OFF. — ✅
-44. Separate "End Trade/Build" from "Roll Dice"; roll appears center & dismisses. — 🔶 Phase 2 (not done)
+44. Separate "End Trade/Build" from "Roll Dice"; roll appears center & dismisses. — ✅
+    (resolved by AD6: rolling is its own primary button in the PRODUCTION phase
+    ("Roll the dice"); ending build is a separate primary button in TRADE & BUILD
+    ("End build → Shake") — different phases, different buttons. The dice roll plays
+    as a centered overlay that auto-dismisses.)
 45. Remove the redundant second "End Turn" button. — ✅ (in flight the floating
     primary-action button (AD6) already reads "End turn"; the duplicate secondary
     "End turn" inside the action box was removed. The floating one is always
