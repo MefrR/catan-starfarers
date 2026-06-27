@@ -91,7 +91,11 @@ bottom {3,4,11,5,8,9,10}.
 23. Finish one ship's movement before moving another; "Finish Move" popover. — 🔶 Phase 2 (client/turn-flow)
 24. Skip the Mothership shake when the player has no ships on board. — ✅ (flight
     primary action + spacebar become "End turn" when you own no ships)
-25. Stop at first contact with an Unknown Sector (red non-clickable nodes after). — 🔶 Phase 2 (client/turn-flow)
+25. Stop at first contact with an Unknown Sector (red non-clickable nodes after). — ✅
+    (the engine now truncates a ship's move the instant it reaches a node that makes
+    first contact with an undiscovered sector — the rest of the speed is forfeit. The
+    client move-highlight BFS mirrors this: a first-contact node is reachable as a
+    destination but nothing past it is offered. 3-AI sim still completes to 15 VP.)
 
 ## 6. ENCOUNTERS
 28. Fix reward order-of-operations (pay/donate BEFORE reward) for all cards. — ✅

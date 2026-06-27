@@ -4467,6 +4467,26 @@ function dieFace(n: number): string {
   return s;
 }
 
+/** #25: would arriving on this intersection make first contact with an unknown
+ *  sector? Mirrors the engine's wouldRevealSomething so the move highlights stop
+ *  exactly where the engine forces the ship to stop. */
+function revealsNew(state: GameState, id: string): boolean {
+  const inter = state.intersections[id];
+  if (!inter) return false;
+  const hit = new Set<string>();
+  for (const pid of inter.adjacentPlanets) {
+    for (const s of state.sectors) if (s.planets.some((pl) => pl.id === pid)) hit.add(s.id);
+  }
+  if (inter.dockingPointOf) hit.add(inter.dockingPointOf);
+  if (inter.revealsSectors) for (const sid of inter.revealsSectors) hit.add(sid);
+  for (const s of state.sectors) {
+    if (!hit.has(s.id)) continue;
+    if (!s.discovered) return true;
+    if (s.planets.some((pl) => !pl.explored)) return true;
+  }
+  return false;
+}
+
 /** BFS reachable destinations within `speed`; returns dest id -> path (steps). */
 function reachable(state: GameState, start: string, speed: number): Map<string, string[]> {
   const prev = new Map<string, string>();
@@ -4476,6 +4496,9 @@ function reachable(state: GameState, start: string, speed: number): Map<string, 
     const cur = queue.shift()!;
     const d = dist.get(cur)!;
     if (d >= speed) continue;
+    // #25: a node that makes first contact with an unknown sector is a forced
+    // STOP — reachable as a destination, but you can't fly on past it this step.
+    if (cur !== start && revealsNew(state, cur)) continue;
     for (const nb of state.intersections[cur]?.neighbors ?? []) {
       if (dist.has(nb)) continue;
       dist.set(nb, d + 1);

@@ -684,6 +684,35 @@ function doShake(state: GameState, rng: Rng): void {
  * of any adjacent planet — not just the single touched planet (fog-map rule N4) —
  * and "discover" any outpost the intersection docks to so its alliance art shows.
  */
+/** #25: would moving ONTO this intersection make first contact with an unknown
+ *  sector (an undiscovered sector / unexplored planet adjacent to it)? Used to
+ *  force a ship to stop the moment it reaches an unexplored system. Mirrors the
+ *  touched-sector logic in revealAround, but only reports whether anything new
+ *  would be revealed. */
+function wouldRevealSomething(state: GameState, intersectionId: string): boolean {
+  const inter = state.intersections[intersectionId];
+  if (!inter) return false;
+  const sectors = new Set<Sector>();
+  for (const pid of inter.adjacentPlanets) {
+    for (const sector of state.sectors) {
+      if (sector.planets.some((pl) => pl.id === pid)) sectors.add(sector);
+    }
+  }
+  if (inter.dockingPointOf) {
+    for (const sector of state.sectors) if (sector.id === inter.dockingPointOf) sectors.add(sector);
+  }
+  if (inter.revealsSectors) {
+    for (const sid of inter.revealsSectors) {
+      for (const sector of state.sectors) if (sector.id === sid) sectors.add(sector);
+    }
+  }
+  for (const sector of sectors) {
+    if (!sector.discovered) return true;
+    if (sector.planets.some((pl) => !pl.explored)) return true;
+  }
+  return false;
+}
+
 function revealAround(state: GameState, intersectionId: string, rng: Rng): void {
   const inter = state.intersections[intersectionId];
   if (!inter) return;
@@ -917,6 +946,10 @@ function doMoveShip(
     return `Path too long — only ${remaining} of ${budget} moves left for this ship.`;
 
   let from = ship.intersectionId;
+  // #25: a ship must STOP the instant it reaches an unexplored sector. We walk the
+  // requested path and cut it short at the first node that makes new contact, so a
+  // longer path simply ends there (the rest of the speed is forfeit this step).
+  const walked: string[] = [];
   for (const step of path) {
     const inter = state.intersections[from];
     if (!inter || !inter.neighbors.includes(step)) return "Illegal move: not a connected step.";
@@ -924,9 +957,12 @@ function doMoveShip(
     // (the corner shared by all 3 of its planets) — you fly around, not through.
     const si = state.intersections[step];
     if (si && si.adjacentPlanets.length >= 3) return "No path through the centre of a planet system.";
+    walked.push(step);
     from = step;
+    // First contact with an unknown sector ends the move on this node.
+    if (wouldRevealSomething(state, step)) break;
   }
-  const dest = path[path.length - 1]!;
+  const dest = walked[walked.length - 1]!;
   if (isOccupied(state, dest)) return "Destination is occupied.";
 
   // --- Stopping rules (playtest #20–#22) ---
@@ -952,7 +988,7 @@ function doMoveShip(
   }
 
   ship.intersectionId = dest;
-  ship.distanceMoved += path.length;
+  ship.distanceMoved += walked.length;
   ship.movedThisTurn = ship.distanceMoved >= budget;
   revealAround(state, dest, rng);
   resolveAdjacentSpecials(state, player, dest, rng);
