@@ -89,7 +89,8 @@ bottom {3,4,11,5,8,9,10}.
     rejects ending a move beside any other commander's spaceport; AI obeys it —
     headless 3-AI games still complete to 15 VP)
 23. Finish one ship's movement before moving another; "Finish Move" popover. — 🔶 Phase 2 (client/turn-flow)
-24. Skip the Mothership shake when the player has no ships on board. — 🔶 Phase 2 (client/turn-flow)
+24. Skip the Mothership shake when the player has no ships on board. — ✅ (flight
+    primary action + spacebar become "End turn" when you own no ships)
 25. Stop at first contact with an Unknown Sector (red non-clickable nodes after). — 🔶 Phase 2 (client/turn-flow)
 
 ## 6. ENCOUNTERS

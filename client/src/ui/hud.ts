@@ -550,10 +550,13 @@ export class HUD {
         e.preventDefault();
         this.endBuildAndShake();
         return;
-      case "flight":
-        if (!ps.shake) intent = { t: "shakeMothership" };
+      case "flight": {
+        // #24: no ships → skip the shake, just end the turn.
+        const myShipCount = state.ships.filter((s) => s.owner === this.game.humanId).length;
+        if (!ps.shake && myShipCount > 0) intent = { t: "shakeMothership" };
         else { this.resetSelection(); intent = { t: "endTurn" }; }
         break;
+      }
       default:
         break;
     }
@@ -2722,6 +2725,12 @@ export class HUD {
     }
     if (ps.phase === "flight") {
       if (!ps.shake) {
+        // #24: with no ships on the board there's nothing to fly — skip the shake
+        // entirely and let the player end their turn directly.
+        const myShips = state.ships.filter((s) => s.owner === this.game.humanId).length;
+        if (myShips === 0) {
+          return { label: "End turn", sub: "No ships to fly", run: () => { this.resetSelection(); this.act({ t: "endTurn" }); } };
+        }
         return { label: "Shake mothership", sub: "Flight", run: () => this.act({ t: "shakeMothership" }) };
       }
       return {
