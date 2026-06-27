@@ -151,7 +151,12 @@ bottom {3,4,11,5,8,9,10}.
 46. Center the white shake effect (currently left). — ✅
 47. Post-victory "New Game" → "Main Menu". — ✅
 48. Green Folk cards named "[Resource] Increase". — ✅
-49. Green node hit-box priority over player pieces; clickable at low zoom. — 🔶 Phase 2
+49. Green node hit-box priority over player pieces; clickable at low zoom. — ✅
+    (legal-target nodes now get an invisible hit-circle on a top-most interaction
+    layer drawn above ships/buildings, so Pixi's top-down hit test always lands the
+    click on the green node even when a piece sits on it; a constant +26px pad keeps
+    it tappable when zoomed out. Verified: tapping the top hit-circle fires the
+    intersection click for the highlighted id.)
 
 ## 10. VISUAL FEEDBACK & LOG
 52. Expand Game Log (cover AI Build/Trade phases; longer history). — ✅ (the log

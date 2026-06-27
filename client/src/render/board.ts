@@ -909,7 +909,12 @@ export class BoardRenderer {
     const nodeLayer = new Container();
     const buildLayer = new Container();
     const shipLayer = new Container();
-    this.root.addChild(linkLayer, hexLayer, planetLayer, highlightLayer, nodeLayer, buildLayer, shipLayer);
+    // #49: a top-most interaction layer for legal-target nodes. Pixi hit-tests
+    // top-down, so putting a generous invisible hit-circle for each highlighted
+    // intersection ABOVE the ships/buildings guarantees a green build/move node
+    // always wins the click — even when a ship or colony sits on top of it.
+    const targetHitLayer = new Container();
+    this.root.addChild(linkLayer, hexLayer, planetLayer, highlightLayer, nodeLayer, buildLayer, shipLayer, targetHitLayer);
 
     // Flat-top hex outline at a pixel centre.
     const hexRot = land ? Math.PI / 2 : 0; // rotate hexes with the board so they still tile
@@ -1393,6 +1398,23 @@ export class BoardRenderer {
       // a ship still drives ship selection (move / establish flows).
       hot.cursor = "pointer";
       hot.on("pointertap", () => this.onShipClick?.(id));
+    }
+
+    // #49: top-priority click targets for every highlighted legal node. Invisible
+    // but interactive, with a generous radius (constant pad so it stays tappable
+    // when zoomed out), drawn last so it out-ranks any ship/colony sitting on the
+    // same intersection.
+    for (const id of this.highlightIds) {
+      const inter = state.intersections[id];
+      if (!inter) continue;
+      const hx = tx(inter.x, inter.y);
+      const hy = ty(inter.x, inter.y);
+      const hit = new Graphics().circle(hx, hy, scale * 0.16 + 26).fill({ color: 0x000000, alpha: 0.001 });
+      hit.eventMode = "static";
+      hit.cursor = "pointer";
+      hit.hitArea = new Circle(hx, hy, scale * 0.16 + 26);
+      hit.on("pointertap", () => this.onIntersectionClick?.(id));
+      targetHitLayer.addChild(hit);
     }
 
     // Sync the view transform: zoom is now baked into the geometry above, so the
