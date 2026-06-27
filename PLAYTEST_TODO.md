@@ -40,7 +40,10 @@ bottom {3,4,11,5,8,9,10}.
 ---
 
 ## 1. TOP PRIORITY
-1. Landscape (horizontal) map + side-settings toggle. — 🟡 (toggle added)
+1. Landscape (horizontal) map + side-settings toggle. — 🔶 Phase 2 (not yet
+   implemented — board is a portrait PixiJS canvas; needs a layout rotation + a
+   settings toggle. High-impact but a sizeable render change; doing it blind
+   overnight risked breaking the board, so deferred for a verified pass.)
 
 ## 2. TUTORIAL
 2. Reposition tutorial boxes so they never cover the UI/board they describe
@@ -58,8 +61,12 @@ bottom {3,4,11,5,8,9,10}.
 9. Home planets: only dice numbers vary, not resources; no duplicate type in a
    sector. — 🔶 Phase 2
 10. Ice=2 (req 3 & 4 pods), Pirate=3 (req 4,5,6 weapons). — ✅
-11. Show planet under ice/pirate at ~20% token opacity. — ✅
-12. Alien Outpost docking points 6 → 5. — ✅ (constant already 5; render verified)
+11. Show planet under ice/pirate at ~20% token opacity. — 🔶 Phase 2 (renderer
+    opacity not yet changed — the planet/number is currently fully hidden behind
+    the token; needs a render tweak + the under-disc data, ties into #15.)
+12. Alien Outpost docking points 6 → 5. — 🔶 Phase 2 (the engine models a SINGLE
+    centre docking point per outpost while the renderer draws several — the count
+    mismatch needs the docking model reconciled first.)
 
 ## 4. NUMBER TOKENS & LAYOUT MODES
 15. Official Layout (ON by default) using the disc table above + "Unbalanced
@@ -73,7 +80,9 @@ bottom {3,4,11,5,8,9,10}.
     colony ship never on a dock. — 🔶 Phase 2
 22. Blockade rule (no stopping beside another's Starport), incl. AI. — 🔶 Phase 2
 23. Finish one ship's movement before moving another; "Finish Move" popover. — 🔶 Phase 2
-24. Skip the Mothership shake when the player has no ships on board. — ✅
+24. Skip the Mothership shake when the player has no ships on board. — 🔶 Phase 2
+    (touches flight-phase turn flow / engine; deferred to avoid a turn-flow
+    regression without tests.)
 25. Stop at first contact with an Unknown Sector (red non-clickable nodes after). — 🔶 Phase 2
 
 ## 6. ENCOUNTERS
@@ -93,7 +102,8 @@ bottom {3,4,11,5,8,9,10}.
 39. Consolidate redundant trade-window rows. — 🔶 Phase 2
 
 ## 8. MOTHERSHIP, SPEED & COMBAT
-38b. Booster speed glitch (stayed 3, should be ≥4). — 🟡 (investigate + fix)
+38b. Booster speed glitch (stayed 3, should be ≥4). — 🔶 Phase 2 (needs a repro
+     of the post-encounter speed calc; not yet fixed.)
 39b. Initial shake shows Speed only (no Combat); keep text on screen longer. — ✅
 40. Bead order low→high: Black, Red, Yellow, Yellow, Blue. — ✅
 41. Surface Scientist bonus boosters/weapons near stats ("2+2", +2 colored). — 🔶 Phase 2
@@ -101,9 +111,10 @@ bottom {3,4,11,5,8,9,10}.
 ## 9. UI / LAYOUT
 42. "Establish Colony" button must not block the map. — 🔶 Phase 2
 43. Auto-zoom-out default OFF. — ✅
-44. Separate "End Trade/Build" from "Roll Dice"; roll appears center & dismisses. — 🟡
-45. Remove the redundant second "End Turn" button. — ✅
-46. Center the white shake effect (currently left). — 🟡
+44. Separate "End Trade/Build" from "Roll Dice"; roll appears center & dismisses. — 🔶 Phase 2 (not done)
+45. Remove the redundant second "End Turn" button. — 🔶 Phase 2 (needs visual
+    confirm of which of the End-turn controls is the duplicate before removing.)
+46. Center the white shake effect (currently left). — 🔶 Phase 2 (not done)
 47. Post-victory "New Game" → "Main Menu". — ✅
 48. Green Folk cards named "[Resource] Increase". — ✅
 49. Green node hit-box priority over player pieces; clickable at low zoom. — 🔶 Phase 2
@@ -117,8 +128,9 @@ bottom {3,4,11,5,8,9,10}.
 57. Low-score bonus entitlement not granting cards. — 🔶 Phase 2
 58. Low-score bonus visibly from Reserve pile. — 🔶 Phase 2
 59. Show Reserve pile size + warn near depletion (−10). — 🔶 Phase 2
-60. Don't flash producing planets on the first-player roll. — ✅
-61. Hide blue colony-site circles on Home Planets after Setup. — ✅
+60. Don't flash producing planets on the first-player roll. — 🔶 Phase 2 (not done —
+    needs the setup-roll path to skip the production-pulse.)
+61. Hide blue colony-site circles on Home Planets after Setup. — 🔶 Phase 2 (not done)
 
 ## 11. VARIANTS & MODES
 62. Remove "Friendly Bandit". — ✅
