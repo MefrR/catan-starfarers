@@ -394,6 +394,8 @@ const TOPICS: Topic[] = [
         friendship cards (Diplomats' Reduced Tribute) raise this limit.</li>
         <li>You <b>steal 1 random card</b> from one opponent of your choice.</li>
         <li>Each opponent then draws <b>1 free card</b> from the reserve pile.</li>
+        <li>Finally, if you are entitled to them, you take <b>1–2 cards</b> from the
+        reserve pile (2 cards at 4–7 VP, 1 at 8–9 VP, none at 10+).</li>
       </ul>`,
   },
   {
@@ -417,9 +419,6 @@ const TOPICS: Topic[] = [
         <p class="q">Can I lose victory points?</p>
         <p class="a">Yes — a rival can take an outpost's friendship marker (−2 VP), and some
         encounters cost fame medal pieces. Pirate/ice medals can never be lost.</p>
-        <p class="q">When can I take my free reserve-pile cards?</p>
-        <p class="a">During production or your trade &amp; build phase — but once you shake your
-        mothership for flight, you forfeit them.</p>
       </div>`,
   },
 ];

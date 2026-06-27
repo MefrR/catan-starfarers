@@ -1761,7 +1761,7 @@ export class HUD {
     const amHost = state.players[0]?.id === this.game.humanId;
     let footer: string;
     if (!isMulti) {
-      footer = `<button class="go-newgame">New game</button>`;
+      footer = `<button class="go-newgame">Main Menu</button>`;
     } else {
       // Two distinct choices (same for host & guests):
       //  • Re-match — return to THIS room (same code) for another game together.
@@ -4065,7 +4065,9 @@ export class HUD {
     }).join("");
 
     const speed = ps.moveBudget ?? ps.shake.speed;
-    const combat = ps.shake.combat;
+    // #39: the initial flight shake only determines SPEED — the beads' combat
+    // value doesn't apply until a Mothership is re-shaken for an actual encounter
+    // (where weapons also factor in). So this center reveal shows Speed only.
     // R9: tint the shaker window in the active player's color so spectators can
     // tell at a glance whose mothership is shaking.
     const accent = COLOR_HEX[active.color] ?? "#ffd23f";
@@ -4075,7 +4077,7 @@ export class HUD {
          <div class="shake-stage" style="--accent:${accent}">
            <div class="cs-title" style="color:${accent}">${escapeHtml(active.name)} shakes the mothership</div>
            <div class="cs-balls">${ballHtml}</div>
-           <div class="cs-result" style="visibility:hidden">Speed <b>${speed}</b> · Combat <b>${combat}</b></div>
+           <div class="cs-result" style="visibility:hidden">Speed <b>${speed}</b></div>
          </div>
        </div>`,
     );
@@ -4107,8 +4109,10 @@ export class HUD {
       }
     };
     this.diceTimers.push(window.setTimeout(tick, 30));
-    this.diceTimers.push(window.setTimeout(() => stage.classList.remove("show"), 2200));
-    this.diceTimers.push(window.setTimeout(() => overlay.remove(), 2550));
+    // #39: hold the Speed result on screen noticeably longer (it flashed too
+    // briefly to read before).
+    this.diceTimers.push(window.setTimeout(() => stage.classList.remove("show"), 3600));
+    this.diceTimers.push(window.setTimeout(() => overlay.remove(), 3950));
   }
 
   /**

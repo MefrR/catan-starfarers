@@ -29,13 +29,15 @@ export const emptyBag = (): ResourceBag => ({
 // --- Mothership balls ---
 export type BallColor = "yellow" | "red" | "blue" | "black";
 
-/** The 5 balls inside every mothership. */
+/** The 5 balls inside every mothership, ordered low→high for display (playtest
+ *  #40): Black, Red, Yellow, Yellow, Blue. Order is display-only — draws shuffle
+ *  a copy of this bag, so it doesn't affect randomness. */
 export const MOTHERSHIP_BALLS: BallColor[] = [
-  "yellow",
-  "yellow",
-  "red",
-  "blue",
   "black",
+  "red",
+  "yellow",
+  "yellow",
+  "blue",
 ];
 
 /**

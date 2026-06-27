@@ -48,7 +48,8 @@ export const FRIENDSHIP_CARDS: FriendshipCardDef[] = [
   ...RESOURCES.map((r) => ({
     id: `greenFolk:${r}`,
     civ: "greenFolk" as AlienCiv,
-    name: "Production Increase",
+    // #48: name the specific resource rather than a generic "Production Increase".
+    name: `${r.charAt(0).toUpperCase()}${r.slice(1)} Increase`,
     text: `When your colonies produce ${r}, gain 1 extra ${r}.`,
   })),
   // Scientists — Improved Upgrades: the faithful 5-card deck. Three cards give

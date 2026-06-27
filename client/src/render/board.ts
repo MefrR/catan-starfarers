@@ -437,8 +437,9 @@ export class BoardRenderer {
   }
 
   /** User setting: when false, the idle auto-recenter is disabled (double-tap
-   *  recenter still works). Toggled from the HUD tools. */
-  autoRecenterEnabled = true;
+   *  recenter still works). Toggled from the HUD tools. Defaults OFF (playtest
+   *  #43) — the idle zoom-out was disorienting mid-turn. */
+  autoRecenterEnabled = false;
 
   /** (Re)start the 60s idle countdown that auto-recenters the map. No-op when the
    *  player has switched auto-recenter off. */

@@ -119,7 +119,7 @@ export class TutorialDriver {
       },
       {
         manual: true,
-        text: `The <b>build dock</b>: lit tiles are affordable right now; hover any tile to see its cost and what it does. <b>Colony ships</b> settle new worlds (1 VP). <b>Trade ships</b> dock at outposts. <b>Ports</b> double a colony's production (2 VP). <b>Boosters</b> add speed, <b>cannons</b> add combat, <b>pods</b> add cargo.`,
+        text: `The <b>build dock</b>: lit tiles are affordable right now; hover any tile to see its cost and what it does. <b>Colony ships</b> settle new worlds (1 VP). <b>Trade ships</b> dock at outposts. <b>Starports</b> upgrade a colony so you can build more ships (2 VP) — they do <i>not</i> double its production. <b>Boosters</b> add speed, <b>cannons</b> add combat, <b>pods</b> add cargo.`,
         anchor: () => document.querySelector(".build-dock"),
       },
       {

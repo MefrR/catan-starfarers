@@ -168,7 +168,9 @@ async function boot(): Promise<void> {
         isAI: true,
       },
     ];
-    const game = new LocalGame(seats, { aiDifficulty: "easy", fogMap: false });
+    // #4: the guided tutorial runs the AI at the slowest pace so a new player can
+    // follow every step.
+    const game = new LocalGame(seats, { aiDifficulty: "easy", fogMap: false, botSpeed: "relaxed" });
     mountGame(game, { tutorial: true });
   };
 
