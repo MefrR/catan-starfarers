@@ -166,6 +166,9 @@ bottom {3,4,11,5,8,9,10}.
 67. Turn-timer minimum ≥ 60s, step 15s. — ✅
 
 ## 13. RULES TEXT / HOW TO PLAY
-71. Flight Rules: add all Blockade rules. — 🔶 Phase 2 (depends on #22-23 final behavior)
+71. Flight Rules: add all Blockade rules. — ✅ (the How-to-Play Flight section now
+    spells out every movement restriction the engine enforces: spaceport blockade,
+    no passing through 3-planet system centres, colony-site stop/loiter rules, and
+    the freight-pod docking requirement. Matches engine behavior from #19-#22.)
 72. "Rolling a 7": add 4th bullet about Reserve-pile cards. — ✅
 73. Quick FAQ: remove the now-automated Reserve-pile question. — ✅

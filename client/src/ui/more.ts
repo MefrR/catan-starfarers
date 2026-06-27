@@ -308,8 +308,19 @@ const TOPICS: Topic[] = [
       applies to <b>every</b> one of your ships. Move each ship up to that many intersections.</p>
       <p><b>Flight rules:</b> you may move fewer spaces or not at all, and may return to spaces you
       previously occupied. You can pass <i>through</i> ships, colonies and spaceports (they still
-      count toward distance), but no two pieces may share an intersection, and you can't end on
-      another player's spaceport site (no blockades).</p>`,
+      count toward distance), but no two pieces may share an intersection.</p>
+      <ul class="htp-list">
+        <li><b>Blockade:</b> you can't <i>end</i> a move on an intersection next to another
+        player's spaceport — their starport blocks the surrounding space.</li>
+        <li><b>System centres:</b> you can't move through the middle intersection of a
+        three-planet system; route around it.</li>
+        <li><b>Colony sites:</b> only a <b>colony ship</b> may stop on an empty colony site, and it
+        must establish (or move on) by your next turn — it can't loiter there. Trade ships can't
+        park on a colony site at all.</li>
+        <li><b>Docking points:</b> a <b>trade ship</b> may stop on an alien outpost's docking point
+        only if it carries enough <b>freight pods</b> (one more than the trade stations already
+        there). Colony ships never dock.</li>
+      </ul>`,
   },
   {
     id: "explore",
