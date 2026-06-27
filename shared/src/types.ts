@@ -364,6 +364,9 @@ export interface EncounterState {
   pendingSteps?: Array<{ kind: "giveResources"; count: number } | { kind: "selectShip" }>;
   /** Number of resources owed for the active "giveResources" step. */
   lossCount?: number;
+  /** Reward deferred until AFTER the subject has paid/donated (playtest #28):
+   *  applied when the encounter's pending steps drain, not inline at resolve. */
+  pendingReward?: { take?: number; fame?: number; freeUpgrade?: boolean; rob?: boolean };
   committedChoice?: number | boolean;
   /** All-player cards (Wear & Tear): the card stays up until everyone confirms. */
   allPlayers?: boolean;

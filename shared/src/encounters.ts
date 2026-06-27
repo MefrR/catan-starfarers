@@ -138,6 +138,23 @@ function requestLoss(ctx: EncounterCtx, n: number): void {
   if (n > 0) enqueueStep(ctx.state, { kind: "giveResources", count: n });
 }
 
+/** #28: record a reward to grant AFTER the subject pays/donates (applied at
+ *  closeEncounter once the giveResources step resolves), instead of inline. */
+function deferReward(
+  ctx: EncounterCtx,
+  reward: { take?: number; fame?: number; freeUpgrade?: boolean; rob?: boolean },
+): void {
+  const enc = ctx.state.phaseState.encounter;
+  if (!enc) return;
+  const cur = enc.pendingReward ?? {};
+  enc.pendingReward = {
+    take: (cur.take ?? 0) + (reward.take ?? 0),
+    fame: (cur.fame ?? 0) + (reward.fame ?? 0),
+    freeUpgrade: cur.freeUpgrade || reward.freeUpgrade,
+    rob: cur.rob || reward.rob,
+  };
+}
+
 /**
  * Activate the next queued follow-up step, auto-resolving any that present no
  * real choice (no ships / only one ship; hand already at-or-below the amount
@@ -232,7 +249,26 @@ function applyShipFreeze(state: GameState, subjectId: PlayerId, choice: number |
 }
 
 /** Discard the active encounter and return to flight with the proper move budget. */
-function closeEncounter(state: GameState, cardId: number): void {
+/** #28: grant any reward that was deferred until after the subject paid/donated.
+ *  Runs at close, once all pending steps (the giveResources surrender) are done. */
+function applyPendingReward(state: GameState, rng: Rng): void {
+  const enc = state.phaseState.encounter;
+  const reward = enc?.pendingReward;
+  if (!enc || !reward) return;
+  const subject = state.players.find((p) => p.id === enc.subjectId);
+  if (subject) {
+    if (reward.take) takeChoice(state, subject, reward.take);
+    if (reward.fame) gainFame(subject, reward.fame);
+    if (reward.freeUpgrade) addFreeUpgrade(subject);
+    if (reward.rob) robEachOpponent(state, subject, rng, (l) => logTo(state, l));
+  }
+  enc.pendingReward = undefined;
+}
+
+function closeEncounter(state: GameState, cardId: number, rng: Rng): void {
+  // Pay-then-reward: the subject's surrender resolved through the pending steps
+  // before we reach here, so granting the reward now keeps the order correct.
+  applyPendingReward(state, rng);
   state.encounterDiscard.push(cardId);
   state.phaseState.encounter = undefined;
   state.phaseState.phase = "flight";
@@ -337,7 +373,7 @@ export function encounterShake(state: GameState, playerId: PlayerId, rng: Rng): 
     enc.awaiting = "resolve";
     card.resolveDuel?.({ state, subject, choice: won, rng, log: (l) => logTo(state, l) }, won);
     if (advanceEncounterSteps(state)) return true;
-    closeEncounter(state, enc.cardId);
+    closeEncounter(state, enc.cardId, rng);
   }
   return true;
 }
@@ -404,20 +440,19 @@ function merchantCard(id: number): EncounterCard {
         requestLoss(ctx, offer);
         log(`${subject.name} offers the merchant ${offer} resource(s) of their choice.`);
       }
+      // #28: the reward is DEFERRED — it's granted at closeEncounter, after the
+      // subject has actually handed over their offer (the giveResources step).
       if (offer <= 0) {
-        const g = takeSpecific(state, subject, "goods", 1);
+        const g = takeSpecific(state, subject, "goods", 1); // no payment → grant now
         if (g) log(`The merchant pities ${subject.name}: +1 goods.`);
       } else if (offer === 1) {
-        takeChoice(state, subject, 1);
-        gainFame(subject, 1);
+        deferReward(ctx, { take: 1, fame: 1 });
         log(`The merchant is flattered: ${subject.name} gains 1 resource + 1 fame.`);
       } else if (offer === 2) {
-        takeChoice(state, subject, 2);
-        gainFame(subject, 1);
+        deferReward(ctx, { take: 2, fame: 1 });
         log(`The merchant is pleased: ${subject.name} gains 2 resources + 1 fame.`);
       } else {
-        takeChoice(state, subject, 2);
-        gainFame(subject, 2);
+        deferReward(ctx, { take: 2, fame: 2 });
         log(`The merchant is delighted: ${subject.name} gains 2 resources + 2 fame.`);
       }
     },
@@ -475,19 +510,18 @@ function travelerCard(id: number): EncounterCard {
         requestLoss(ctx, offer);
         log(`${subject.name} donates ${offer} resource(s) of their choice to the travelers.`);
       }
+      // #28: rewards deferred until after the donation is actually handed over.
       if (offer <= 0) {
         log("The travelers shrug and drift away.");
       } else if (offer === 1) {
-        gainFame(subject, 1);
+        deferReward(ctx, { fame: 1 });
         log(`The travelers are grateful: ${subject.name} +1 fame.`);
       } else if (offer === 2) {
-        gainFame(subject, 1);
-        const up = addFreeUpgrade(subject);
-        log(`The travelers reward ${subject.name}: +1 fame${up ? `, free ${up}` : ""}.`);
+        deferReward(ctx, { fame: 1, freeUpgrade: true });
+        log(`The travelers reward ${subject.name}: +1 fame & a free upgrade.`);
       } else {
-        gainFame(subject, 2);
-        const up = addFreeUpgrade(subject);
-        log(`The travelers honor ${subject.name}: +2 fame${up ? `, free ${up}` : ""}.`);
+        deferReward(ctx, { fame: 2, freeUpgrade: true });
+        log(`The travelers honor ${subject.name}: +2 fame & a free upgrade.`);
       }
     },
   };
@@ -712,20 +746,23 @@ function pirateBribeCard(id: number, refuseFame: number): EncounterCard {
     yesHint: "Pay 1 resource — then a risky shake decides the haul",
     noHint: refuseFame ? "Refuse — +1 fame for your honesty" : "Refuse and fly on",
     resolve: (ctx) => {
-      const { state, subject, rng, log } = ctx;
+      const { subject, rng, log } = ctx;
       if (ctx.choice !== true) {
         if (refuseFame) gainFame(subject, refuseFame);
         log(`${subject.name} refuses the pirate's bargain.`);
         return;
       }
       requestLoss(ctx, 1);
+      // #28: the haul is DEFERRED — the rivals are robbed only after the subject
+      // has actually paid the pirate their 1 resource (the giveResources step).
       const roll = Math.floor(rng() * 5) + 1; // 1..5
       if (roll <= 2) {
-        robEachOpponent(state, subject, rng, log);
+        deferReward(ctx, { rob: true });
+        log(`The pirate takes the coin and raids your rivals…`);
       } else if (roll <= 4) {
-        robEachOpponent(state, subject, rng, log);
+        deferReward(ctx, { rob: true });
         loseFame(subject, 1);
-        log(`Word gets out: −1 fame.`);
+        log(`The pirate raids your rivals, but word gets out: −1 fame.`);
       } else {
         loseFame(subject, 1);
         log(`The pirate cheats ${subject.name} and vanishes: −1 fame.`);
@@ -1103,14 +1140,14 @@ export function resolveEncounter(
     applyChosenLoss(state, enc, resources);
     enc.pendingSteps?.shift();
     if (advanceEncounterSteps(state)) return;
-    closeEncounter(state, enc.cardId);
+    closeEncounter(state, enc.cardId, rng);
     return;
   }
   if (enc.awaiting === "selectShip") {
     applyShipFreeze(state, enc.subjectId, choice);
     enc.pendingSteps?.shift();
     if (advanceEncounterSteps(state)) return;
-    closeEncounter(state, enc.cardId);
+    closeEncounter(state, enc.cardId, rng);
     return;
   }
 
@@ -1130,5 +1167,5 @@ export function resolveEncounter(
   // After an encounter the base speed is 3, but boosters (and the Scientist
   // "Improved Boosters" friendship) STILL add to it — the shake already folded
   // those into shake.speed (POST_ENCOUNTER_BASE_SPEED + boosters + bonus).
-  closeEncounter(state, enc.cardId);
+  closeEncounter(state, enc.cardId, rng);
 }

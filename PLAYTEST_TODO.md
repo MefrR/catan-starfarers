@@ -94,7 +94,10 @@ bottom {3,4,11,5,8,9,10}.
 25. Stop at first contact with an Unknown Sector (red non-clickable nodes after). — 🔶 Phase 2 (client/turn-flow)
 
 ## 6. ENCOUNTERS
-28. Fix reward order-of-operations (pay/donate BEFORE reward) for all cards. — 🔶 Phase 2
+28. Fix reward order-of-operations (pay/donate BEFORE reward) for all cards. — ✅
+    (rewards are now DEFERRED to closeEncounter, applied after the giveResources
+    payment step: merchant, travelers, and the Pirate's Bargain rob. Verified
+    headlessly — reward only lands after payment.)
 29. Click to advance every encounter step incl. final; player-set AI step speed. — 🔶 Phase 2
 30. Encounter resource prompt must not cover the player's own resources. — 🔶 Phase 2
 31. AI never gives >1 resource in encounters — fix. — 🔶 Phase 2
