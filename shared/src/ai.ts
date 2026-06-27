@@ -500,12 +500,21 @@ function resolveMyOffer(me: PlayerState, offer: NonNullable<GameState["phaseStat
   const value = (bag: Partial<ResourceBag>) =>
     RESOURCES.reduce((s, r) => s + (bag[r] ?? 0) * RES_VALUE[r], 0);
 
+  // Honour an as-is acceptance first: we proposed those exact terms, so if anyone
+  // takes the deal as offered we close it with them (and never renege, even if our
+  // own value heuristic would now rate it flat). #38a/#34.
+  const accepted = offer.responses.find(
+    (r) => r.kind === "accept" && RESOURCES.every((res) => me.hand[res] >= (offer.give[res] ?? 0)),
+  );
+  if (accepted) return { t: "finalizeTrade", withId: accepted.playerId };
+
+  // Otherwise weigh any counter-offers by net value to us.
   let bestId: string | null = null;
   let bestNet = -Infinity;
   for (const resp of offer.responses) {
-    if (resp.kind === "decline") continue;
-    const give = resp.kind === "counter" ? resp.give ?? {} : offer.give;
-    const want = resp.kind === "counter" ? resp.want ?? {} : offer.want;
+    if (resp.kind !== "counter") continue;
+    const give = resp.give ?? {};
+    const want = resp.want ?? {};
     // I can only finalize a deal whose `give` side I can still cover.
     if (!RESOURCES.every((r) => me.hand[r] >= (give[r] ?? 0))) continue;
     const net = value(want) - value(give); // resources I gain minus resources I pay

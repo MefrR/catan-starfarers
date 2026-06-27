@@ -142,7 +142,11 @@ bottom {3,4,11,5,8,9,10}.
     live the bank give/want selection is cleared — closing the gap where the engine
     settled an as-is accept without the click path that normally resets it.)
 37. "Any" button on either side of a trade. — 🔶 Phase 2
-38a. Let player decline even when AI accepts. — 🔶 Phase 2
+38a. Let player decline even when AI accepts. — ✅ (a plain as-is accept is now
+     RECORDED, not auto-settled, so the proposer always finalizes — a human can
+     still cancel/decline their own offer after a bot says yes. The AI proposer
+     honours an as-is acceptance on its next tick (never reneges). Verified
+     headlessly + 3-AI sim still completes with no trade hangs.)
 39. Consolidate redundant trade-window rows. — 🔶 Phase 2
 
 ## 8. MOTHERSHIP, SPEED & COMBAT

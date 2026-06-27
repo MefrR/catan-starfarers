@@ -1516,14 +1516,13 @@ export function applyIntent(
         });
         log(state, `${me.name} counters the trade.`);
       } else {
-        // Plain accept of the offer AS-IS settles the trade immediately — the
-        // proposer already consented to these exact terms, so there's nothing
-        // left to confirm and the trade window closes by itself for everyone.
+        // #38a: a plain accept is RECORDED, not settled on the spot. The proposer
+        // always finalizes (clicks which acceptor to trade with, or cancels), so a
+        // human who proposes can still back out even after a bot says yes. The AI
+        // proposer honours an as-is acceptance on its next tick (resolveMyOffer).
         const proposer = state.players.find((p) => p.id === offer.fromId);
-        if (!proposer) return fail(input, "The proposer left the game.");
-        const err = settleTrade(state, proposer, me, offer.give, offer.want);
-        if (err) return fail(input, err);
-        return { state };
+        responses.push({ playerId, kind: "accept" });
+        log(state, `${me.name} accepts ${proposer?.name ?? "the"} offer.`);
       }
       offer.responses = responses;
       return { state };
