@@ -1212,6 +1212,24 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   transition: transform 0.3s cubic-bezier(0.2, 1.4, 0.4, 1), opacity 0.3s ease;
 }
 .discard-overlay.show .discard-card { transform: scale(1); opacity: 1; }
+/* Prominent 10s discard countdown bar at the top of the window. */
+.dc-countdown {
+  position: relative; height: 26px; border-radius: 8px; overflow: hidden;
+  margin: 0 0 12px; background: rgba(255,255,255,0.08);
+  border: 1px solid color-mix(in srgb, #ff6b6b 45%, transparent);
+}
+.dc-countdown .dcc-fill {
+  position: absolute; inset: 0 auto 0 0; width: 100%;
+  background: linear-gradient(90deg, #ffb13f, #ff8a3f); opacity: 0.55;
+  transition: width 0.2s linear;
+}
+.dc-countdown .dcc-label {
+  position: relative; display: block; line-height: 26px; text-align: center;
+  font-size: 12.5px; font-weight: 800; letter-spacing: 0.02em; color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+}
+.dc-countdown.low .dcc-fill { background: linear-gradient(90deg, #ff5d5d, #c0392b); opacity: 0.7; animation: dccPulse 0.6s ease-in-out infinite; }
+@keyframes dccPulse { 0%,100% { opacity: 0.55; } 50% { opacity: 0.85; } }
 .discard-card .enc-tag { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .discard-card .enc-title { font-size: 20px; font-weight: 800; color: #ff8a8a; margin: 6px 0; }
 .discard-card .enc-text { font-size: 13px; line-height: 1.5; color: var(--text); margin-bottom: 14px; }

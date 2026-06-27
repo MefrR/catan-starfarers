@@ -207,6 +207,10 @@ export class HUD {
   /** Signature of the center discard prompt currently shown, so it only rebuilds
    *  when the owed count or the current selection changes. */
   private shownDiscardSig = "";
+  /** 10s discard countdown: interval handle + absolute deadline. On expiry the
+   *  client auto-discards random cards so play can't stall waiting on a player. */
+  private discardTimerId: number | null = null;
+  private discardDeadline = 0;
   /** Signature of the current duel's rolls, so the overlay refreshes as shakes land. */
   private shownDuelSig = "";
   /** Signature of the live player-trade offer, so the trade window drops stale
@@ -1683,6 +1687,7 @@ export class HUD {
         document.querySelectorAll(".discard-overlay").forEach((n) => n.remove());
         this.shownDiscardSig = "";
       }
+      this.clearDiscardTimer();
       return;
     }
     // Rebuild the overlay only when the OWED amount changes (or it isn't up
@@ -1701,11 +1706,12 @@ export class HUD {
     card.appendChild(
       el(`<div class="enc-text">Your hold is over the limit — jettison cargo before play can continue.</div>`),
     );
-    // Timer chip (only when the host enabled a turn timer): on expiry the engine
-    // auto-discards random cards. The interval refreshes this text.
-    if ((state.config.turnSeconds ?? 0) > 0) {
-      card.appendChild(el(`<div class="dc-timer turn-timer"></div>`));
-    }
+    // A fixed 10s countdown, shown prominently at the TOP of the window — on
+    // expiry the client auto-discards random cards so play never stalls. Always on
+    // (independent of the host turn timer). Inserted as the first child so it sits
+    // right above the title.
+    const timerEl = el(`<div class="dc-countdown"><span class="dcc-fill"></span><span class="dcc-label"></span></div>`);
+    card.insertBefore(timerEl, card.firstChild);
     const picker = el(`<div class="enc-give"></div>`);
     const tally = el(`<div class="enc-give-tally"></div>`);
     const btn = el(`<button class="discard-confirm" disabled>Discard</button>`);
@@ -1751,6 +1757,52 @@ export class HUD {
     refresh();
     document.body.appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add("show"));
+
+    // Start (or restart) the 10s countdown. On expiry, fill the player's selection
+    // up to `owed` with RANDOM cards from their current hand and discard.
+    const DISCARD_SECONDS = 10;
+    this.clearDiscardTimer();
+    this.discardDeadline = Date.now() + DISCARD_SECONDS * 1000;
+    const fillEl = timerEl.querySelector(".dcc-fill") as HTMLElement;
+    const labelEl = timerEl.querySelector(".dcc-label") as HTMLElement;
+    const fire = (): void => {
+      this.clearDiscardTimer();
+      const st = this.game.getState();
+      const owedNow = st.phaseState.pendingDiscards?.[me.id] ?? 0;
+      const meNow = st.players.find((p) => p.id === me.id);
+      if (owedNow <= 0 || !meNow) return;
+      const sel: Partial<Record<Resource, number>> = { ...this.discardSel };
+      let picked = RESOURCES.reduce((s, r) => s + (sel[r] ?? 0), 0);
+      const pool: Resource[] = [];
+      for (const r of RESOURCES) {
+        for (let i = 0; i < meNow.hand[r] - (sel[r] ?? 0); i++) pool.push(r);
+      }
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+      }
+      while (picked < owedNow && pool.length) { const r = pool.pop()!; sel[r] = (sel[r] ?? 0) + 1; picked++; }
+      this.discardSel = {};
+      this.act({ t: "discard", resources: sel });
+    };
+    const tick = (): void => {
+      const remainMs = Math.max(0, this.discardDeadline - Date.now());
+      const remain = Math.ceil(remainMs / 1000);
+      if (labelEl) labelEl.textContent = `Auto-discard in ${remain}s`;
+      if (fillEl) fillEl.style.width = `${(remainMs / (DISCARD_SECONDS * 1000)) * 100}%`;
+      timerEl.classList.toggle("low", remain <= 3);
+      if (remainMs <= 0) fire();
+    };
+    tick();
+    this.discardTimerId = window.setInterval(tick, 200);
+  }
+
+  /** Stop the discard countdown (on resolve / overlay teardown). */
+  private clearDiscardTimer(): void {
+    if (this.discardTimerId !== null) {
+      clearInterval(this.discardTimerId);
+      this.discardTimerId = null;
+    }
   }
 
   /** Center-screen winner banner + final standings, shown the instant a player wins. */
