@@ -133,11 +133,10 @@ bottom {3,4,11,5,8,9,10}.
     AI captures the travelers' free upgrade & extra fame. Verified headlessly.)
 
 ## 7. TRADING
-32. Accept/decline prompt centered & visible to all. — 🟡 (the live offer + every
-    player's response already render in the bottom-bar trade tray, which spectators
-    see too, so it IS visible to all. Promoting it to a full center overlay like the
-    encounter card is a stylistic redesign with no functional gain — left as a
-    decision: say the word if you want the center-overlay treatment.)
+32. Accept/decline prompt centered & visible to all. — ✅ (the live offer + every
+    player's response now render in a center-screen window (`.trade-window`), not the
+    bottom tray — like the encounter card, visible to all. The compose tray (building
+    a fresh offer) still lives in the bottom bar. Verified in preview.)
 33. Initiator must pick who accepted (not auto-first). — ✅ (already the behavior:
     the proposer sees every responder and finalizes with a specific player via the
     per-row "Trade" / "Accept counter" button — `finalizeTrade({withId})`. It never
@@ -155,11 +154,13 @@ bottom {3,4,11,5,8,9,10}.
     a half-composed counter from a previous offer is dropped, and once no offer is
     live the bank give/want selection is cleared — closing the gap where the engine
     settled an as-is accept without the click path that normally resets it.)
-37. "Any" button on either side of a trade. — 🔶 NEEDS YOUR SPEC (ambiguous: a
-    wildcard isn't in physical Starfarers, so "Any" could mean (a) "give me any 1
-    resource — you pick" on the Want side, which needs engine wildcard support, or
-    (b) a quick-fill/clear helper. Tell me which and I'll add it; the click-a-card
-    flow already makes building a specific offer fast in the meantime.)
+37. "Any" button on either side of a trade. — ✅ (per your spec: select what you
+    give, press "Offer for ANY" → the offer goes to the table with an OPEN want;
+    every other player gets the center window to "name your price" (offer whatever
+    they like for it); you receive their offers in the center window and accept the
+    one you want. Engine: pendingTrade.wantAny + respondTrade records each bid as a
+    counter with the proposer's give fixed; AI bids a spare resource. Verified
+    end-to-end in preview: offer 1 ore → rivals offer 1 goods → accept → swapped.)
 38a. Let player decline even when AI accepts. — ✅ (a plain as-is accept is now
      RECORDED, not auto-settled, so the proposer always finalizes — a human can
      still cancel/decline their own offer after a bot says yes. The AI proposer

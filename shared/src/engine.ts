@@ -1472,9 +1472,13 @@ export function applyIntent(
       if (ps.pendingTrade) return fail(input, "Cancel your current offer before proposing another.");
       const giveTotal = RESOURCES.reduce((s, r) => s + (intent.give[r] ?? 0), 0);
       const wantTotal = RESOURCES.reduce((s, r) => s + (intent.want[r] ?? 0), 0);
-      // A player-to-player trade is an exchange: both sides must offer something.
-      // Giving resources for nothing (or asking for nothing) is not allowed.
-      if (giveTotal === 0 || wantTotal === 0)
+      // #37 "Any": the proposer puts up `give` with an OPEN want — opponents each
+      // offer whatever they like in return (a counter), and the proposer picks one.
+      const wantAny = !!intent.wantAny;
+      // A normal trade is an exchange: both sides must offer something. An "Any"
+      // offer only needs the give side (the want is intentionally open).
+      if (giveTotal === 0) return fail(input, "You must put something on the table to trade.");
+      if (!wantAny && wantTotal === 0)
         return fail(input, "A trade must give and want something — no one-sided gifts.");
       // You can only swap different resources — never the same one both ways.
       for (const r of RESOURCES) {
@@ -1487,11 +1491,16 @@ export function applyIntent(
       ps.pendingTrade = {
         fromId: me.id,
         give: { ...intent.give },
-        want: { ...intent.want },
+        want: wantAny ? {} : { ...intent.want },
         responses: [],
+        ...(wantAny ? { wantAny: true } : {}),
       };
       ps.tradeProposals = (ps.tradeProposals ?? 0) + 1;
-      log(state, `${me.name} offers a trade to the table.`);
+      const giveDesc = RESOURCES.filter((r) => (intent.give[r] ?? 0) > 0)
+        .map((r) => `${intent.give[r]} ${r}`).join(" + ");
+      log(state, wantAny
+        ? `${me.name} offers ${giveDesc} to the table for ANY offer.`
+        : `${me.name} offers a trade to the table.`);
       return { state };
     }
 
@@ -1504,6 +1513,22 @@ export function applyIntent(
         responses.push({ playerId, kind: "decline" });
         offer.responses = responses;
         log(state, `${me.name} declined the trade.`);
+        return { state };
+      }
+      // #37 "Any" offer: there's nothing concrete to accept — every responder must
+      // make a concrete offer of what THEY give for the proposer's stuff. The
+      // proposer's give stays fixed (what they put on the table); the responder's
+      // offered resources become the want.
+      if (offer.wantAny) {
+        const myOffer: Partial<Record<Resource, number>> = { ...(intent.counterWant ?? {}) };
+        const offered = RESOURCES.reduce((s, r) => s + (myOffer[r] ?? 0), 0);
+        if (offered === 0) return fail(input, "Offer something for it (you can't take it for nothing).");
+        for (const r of RESOURCES) {
+          if ((myOffer[r] ?? 0) > me.hand[r]) return fail(input, "You can't offer what you don't have.");
+        }
+        responses.push({ playerId, kind: "counter", give: { ...offer.give }, want: myOffer });
+        log(state, `${me.name} offers ${RESOURCES.filter((r) => (myOffer[r] ?? 0) > 0).map((r) => `${myOffer[r]} ${r}`).join(" + ")} for it.`);
+        offer.responses = responses;
         return { state };
       }
       const isCounter = intent.counterGive !== undefined || intent.counterWant !== undefined;

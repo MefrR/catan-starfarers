@@ -1084,6 +1084,29 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   font-weight: 800; font-size: 10px; color: #06121f;
   background: var(--accent); border-radius: 999px;
 }
+/* #32: the live offer is a center-screen window (visible to all), not a bottom
+   tray. The overlay lets clicks through except on the window itself. */
+.trade-window-overlay {
+  position: fixed; inset: 0; z-index: 62;
+  display: grid; place-items: center; pointer-events: none;
+}
+.trade-window {
+  pointer-events: auto;
+  width: min(460px, 94vw); max-height: 84vh; overflow-y: auto; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 9px;
+  padding: 16px 18px;
+  background: linear-gradient(160deg, #15203a, #0c1424);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 16px;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.7), 0 0 30px color-mix(in srgb, var(--accent) 18%, transparent);
+  animation: encPop 0.22s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.trade-window .tw-title {
+  font-size: 13px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--accent); text-align: center; margin-bottom: 2px;
+}
+@keyframes encPop { from { opacity: 0; transform: scale(0.88); } to { opacity: 1; transform: scale(1); } }
+
 .trade-tray {
   flex: 1 1 100%; width: 100%;
   display: flex; flex-direction: column; gap: 8px;

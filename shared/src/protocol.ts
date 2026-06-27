@@ -59,7 +59,7 @@ export type ClientIntent =
   | { t: "discard"; resources: Partial<Record<Resource, number>> }
   | { t: "stealTarget"; targetId: string }
   | { t: "tradeWithSupply"; give: Partial<Record<Resource, number>>; take: Partial<Record<Resource, number>> }
-  | { t: "proposeTrade"; give: Partial<Record<Resource, number>>; want: Partial<Record<Resource, number>> }
+  | { t: "proposeTrade"; give: Partial<Record<Resource, number>>; want: Partial<Record<Resource, number>>; wantAny?: boolean }
   | {
       t: "respondTrade";
       accept: boolean;

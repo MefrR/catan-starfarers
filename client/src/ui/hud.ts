@@ -1250,9 +1250,15 @@ export class HUD {
     // (tradeOpen / a Give selected) or whenever there is a live player offer.
     const giveSelected = RESOURCES.some((r) => (this.pGive[r] ?? 0) > 0);
     if (ps.pendingTrade) {
-      const tray = el(`<div class="trade-tray"></div>`);
-      this.fillPlayerTradeStatus(tray, state, me);
-      bar.appendChild(tray);
+      // #32: the live offer + every response is a center-screen window (visible to
+      // all), not a bottom-bar tray — like the encounter card. The compose tray
+      // (building a fresh offer) still lives in the bottom bar below.
+      const overlay = el(`<div class="trade-window-overlay"></div>`);
+      const win = el(`<div class="trade-window"></div>`);
+      win.appendChild(el(`<div class="tw-title">${ps.pendingTrade.wantAny ? "Open offer" : "Trade"}</div>`));
+      this.fillPlayerTradeStatus(win, state, me);
+      overlay.appendChild(win);
+      screen.appendChild(overlay);
     } else if (tradeMode && (this.tradeOpen || giveSelected)) {
       const tray = el(`<div class="trade-tray"></div>`);
       const head = el(`<div class="tray-head"><span class="tray-title">Trade</span></div>`);
@@ -3217,6 +3223,16 @@ export class HUD {
       });
       btns.appendChild(offer);
     }
+    // #37 "Any": put your Give on the table with an OPEN want — every other player
+    // gets a window to offer whatever they like for it, and you pick the best.
+    // Available whenever you've chosen something to give but no specific want.
+    if (giveN > 0 && wantN === 0) {
+      const any = el(`<button class="secondary" title="Offer this to everyone and let them name their price.">Offer for ANY</button>`);
+      any.addEventListener("click", () => {
+        this.act({ t: "proposeTrade", give: { ...this.pGive }, want: {}, wantAny: true });
+      });
+      btns.appendChild(any);
+    }
     wrap.appendChild(btns);
     actions.appendChild(wrap);
   }
@@ -3235,11 +3251,31 @@ export class HUD {
 
     if (!mine) {
       const from = state.players.find((p) => p.id === offer.fromId);
+      const myResp0 = offer.responses.find((rr) => rr.playerId === me.id);
+      // #37 "Any" offer: the proposer put up `give` with an open want — I name my
+      // price (offer whatever I like for it), or decline.
+      if (offer.wantAny) {
+        actions.appendChild(
+          el(`<div class="ptrade-summary">${escapeHtml(from?.name ?? "A player")} offers <b>${bagText(offer.give)}</b> to the table — <b>name your price</b>.</div>`),
+        );
+        if (myResp0) {
+          const tag = myResp0.kind === "decline" ? "You passed." : "Your offer is in — waiting on them.";
+          actions.appendChild(el(`<div class="ptrade-mine-resp">${tag}</div>`));
+          return;
+        }
+        this.fillAnyOfferEditor(actions, me);
+        const declineRow = el(`<div class="trade-actions"></div>`);
+        const decline = el(`<button class="secondary">Pass</button>`);
+        decline.addEventListener("click", () => { this.cGive = {}; this.act({ t: "respondTrade", accept: false }); });
+        declineRow.appendChild(decline);
+        actions.appendChild(declineRow);
+        return;
+      }
       actions.appendChild(
         el(`<div class="ptrade-summary">${escapeHtml(from?.name ?? "A player")} offers you <b>${bagText(offer.give)}</b> for <b>${bagText(offer.want)}</b>.</div>`),
       );
       // Have I already responded to this offer?
-      const myResp = offer.responses.find((rr) => rr.playerId === me.id);
+      const myResp = myResp0;
       if (myResp) {
         const tag =
           myResp.kind === "accept" ? "You accepted — waiting on them." :
@@ -3267,7 +3303,9 @@ export class HUD {
     }
 
     actions.appendChild(
-      el(`<div class="ptrade-summary">You offer <b>${bagText(offer.give)}</b> for <b>${bagText(offer.want)}</b>.</div>`),
+      el(offer.wantAny
+        ? `<div class="ptrade-summary">You put <b>${bagText(offer.give)}</b> on the table — pick an offer below.</div>`
+        : `<div class="ptrade-summary">You offer <b>${bagText(offer.give)}</b> for <b>${bagText(offer.want)}</b>.</div>`),
     );
     const list = el(`<div class="ptrade-responses"></div>`);
     for (const p of state.players) {
@@ -3305,6 +3343,48 @@ export class HUD {
    * "I give" can't exceed what's in hand; "I want" is capped at a small number and
    * forbidden on resources already being given (no same-for-same swaps).
    */
+  /** #37: responder's picker for an "Any" offer — choose what YOU give for the
+   *  thing on the table, then send it as your bid (counterWant from the engine's
+   *  perspective). Reuses cGive for the selection. */
+  private fillAnyOfferEditor(actions: HTMLElement, me: PlayerState): void {
+    const wrap = el(`<div class="ptrade-wrap counter-wrap"></div>`);
+    const row = el(`<div class="ptrade-row"><span class="trade-lbl">You give</span><div class="ptrade-cells"></div></div>`);
+    const cells = row.querySelector(".ptrade-cells")!;
+    for (const r of RESOURCES) {
+      const n = this.cGive[r] ?? 0;
+      const cap = Math.min(me.hand[r], 9);
+      const cell = el(
+        `<div class="ptrade-cell res-cube ${n > 0 ? "on" : ""}" title="${RESOURCE_LABEL[r]}" style="--res:${RES_COLOR[r]}">
+           <span class="pc-glyph res-glyph">${resourceGlyphSvg(r)}</span>
+           <span class="pc-name">${RESOURCE_LABEL[r]}</span>
+           ${n > 0 ? `<span class="pc-badge">${n}</span>` : ""}
+           <div class="pc-stepper">
+             <button class="step minus" ${n <= 0 ? "disabled" : ""}>−</button>
+             <span class="pc-n">${n}/${me.hand[r]}</span>
+             <button class="step plus" ${n >= cap ? "disabled" : ""}>+</button>
+           </div>
+         </div>`,
+      );
+      const [minus, plus] = cell.querySelectorAll("button");
+      if (n > 0) minus!.addEventListener("click", () => { this.cGive[r] = n - 1; this.rerender(); });
+      if (n < cap) plus!.addEventListener("click", () => { this.cGive[r] = n + 1; this.rerender(); });
+      cells.appendChild(cell);
+    }
+    wrap.appendChild(row);
+    const total = RESOURCES.reduce((s, r) => s + (this.cGive[r] ?? 0), 0);
+    const btns = el(`<div class="trade-actions"></div>`);
+    const send = el(`<button ${total > 0 ? "" : "disabled"} title="Send this offer to the proposer.">Send offer</button>`);
+    if (total > 0) {
+      send.addEventListener("click", () => {
+        this.act({ t: "respondTrade", accept: true, counterWant: { ...this.cGive } });
+        this.cGive = {};
+      });
+    }
+    btns.appendChild(send);
+    wrap.appendChild(btns);
+    actions.appendChild(wrap);
+  }
+
   private fillCounterEditor(actions: HTMLElement, me: PlayerState): void {
     const wrap = el(`<div class="ptrade-wrap counter-wrap"></div>`);
     const stepper = (

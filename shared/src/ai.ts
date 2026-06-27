@@ -154,6 +154,22 @@ export function aiObligation(state: GameState, seatId: string): ClientIntent | n
   if (ps.pendingTrade && ps.pendingTrade.fromId !== seatId) {
     const offer = ps.pendingTrade;
     if (!offer.responses.some((r) => r.playerId === seatId)) {
+      // #37 "Any" offer: the want side is open — make a concrete offer of our most
+      // abundant spare resource (kept to a small, fair amount) for what's on the
+      // table, as long as it's worth at least the value we'd receive.
+      if (offer.wantAny) {
+        const gain = RESOURCES.reduce((s, r) => s + (offer.give[r] ?? 0) * RES_VALUE[r], 0);
+        let spare: Resource | null = null;
+        for (const r of RESOURCES) {
+          if (me.hand[r] >= 3 && (!spare || me.hand[r] > me.hand[spare])) spare = r;
+        }
+        if (spare) {
+          // Offer enough of the spare to roughly match the value, capped at 2.
+          const qty = Math.max(1, Math.min(2, Math.ceil(gain / RES_VALUE[spare])));
+          if (me.hand[spare] >= qty) return { t: "respondTrade", accept: true, counterWant: { [spare]: qty } };
+        }
+        return { t: "respondTrade", accept: false };
+      }
       let myGain = 0; // value of cards I receive
       let myCost = 0; // value of cards I pay
       let canCover = true;

@@ -241,8 +241,12 @@ export interface TradeResponse {
 export interface PendingTrade {
   fromId: PlayerId;
   give: Partial<ResourceBag>; // resources the proposer gives
-  want: Partial<ResourceBag>; // resources the proposer wants
+  want: Partial<ResourceBag>; // resources the proposer wants (empty when wantAny)
   responses: TradeResponse[];
+  /** #37 "Any": the proposer gives `give` and leaves the want side OPEN — every
+   *  other player may offer whatever they like for it (a counter), and the
+   *  proposer accepts the one they want via a center prompt. */
+  wantAny?: boolean;
 }
 
 export interface GamePhaseState {
