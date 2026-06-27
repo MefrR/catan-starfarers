@@ -84,7 +84,16 @@ class Net {
       this.connectedOnce = true;
       this.setStatus("connected");
     });
-    this.socket.on("disconnect", () => this.setStatus("reconnecting"));
+    this.socket.on("disconnect", (reason: string) => {
+      this.setStatus("reconnecting");
+      // Socket.IO auto-reconnects on a transport drop, but NOT when the server
+      // itself closes the connection (reason "io server disconnect") — which is
+      // exactly what a free-tier box does when it restarts / OOMs. Kick off a
+      // manual reconnect so players never have to refresh the page after that.
+      if (reason === "io server disconnect") {
+        window.setTimeout(() => this.socket?.connect(), 500);
+      }
+    });
     this.socket.io.on("reconnect_attempt", () => this.setStatus("reconnecting"));
     this.socket.io.on("reconnect_failed", () => this.setStatus("offline"));
     // A tab that slept in the background may hold a stale state (broadcasts can
