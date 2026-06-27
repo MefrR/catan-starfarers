@@ -146,8 +146,11 @@ bottom {3,4,11,5,8,9,10}.
 39. Consolidate redundant trade-window rows. — 🔶 Phase 2
 
 ## 8. MOTHERSHIP, SPEED & COMBAT
-38b. Booster speed glitch (stayed 3, should be ≥4). — 🔶 Phase 2 (needs a repro
-     of the post-encounter speed calc; not yet fixed.)
+38b. Booster speed glitch (stayed 3, should be ≥4). — ✅ (root cause: the shake
+     folded boosters into speed BEFORE the encounter ran, so a free booster awarded
+     by the card was missing and post-encounter speed stayed 3. closeEncounter now
+     recomputes speed from the subject's CURRENT upgrades. Verified headlessly:
+     donate-to-travelers → free booster → post-encounter speed 3→4.)
 39b. Initial shake shows Speed only (no Combat); keep text on screen longer. — ✅
 40. Bead order low→high: Black, Red, Yellow, Yellow, Blue. — ✅
 41. Surface Scientist bonus boosters/weapons near stats ("2+2", +2 colored). — ✅

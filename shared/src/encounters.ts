@@ -268,12 +268,21 @@ function applyPendingReward(state: GameState, rng: Rng): void {
 function closeEncounter(state: GameState, cardId: number, rng: Rng): void {
   // Pay-then-reward: the subject's surrender resolved through the pending steps
   // before we reach here, so granting the reward now keeps the order correct.
+  const subjectId = state.phaseState.encounter?.subjectId;
   applyPendingReward(state, rng);
   state.encounterDiscard.push(cardId);
+  // #38b: recompute post-encounter speed/combat from the subject's CURRENT
+  // upgrades. The shake folded boosters in BEFORE the encounter ran, so a free
+  // booster/cannon awarded by the card (e.g. a traveler's gift) was missing —
+  // post-encounter speed wrongly stayed at the pre-reward value. Recompute now.
+  const subject = state.players.find((p) => p.id === subjectId);
+  if (subject && state.phaseState.shake) {
+    const bonus = scientistBonus(subject);
+    state.phaseState.shake.speed = POST_ENCOUNTER_BASE_SPEED + subject.upgrades.booster + bonus.speed;
+  }
   state.phaseState.encounter = undefined;
   state.phaseState.phase = "flight";
-  state.phaseState.moveBudget =
-    state.phaseState.moveBudget ?? state.phaseState.shake?.speed ?? POST_ENCOUNTER_BASE_SPEED;
+  state.phaseState.moveBudget = state.phaseState.shake?.speed ?? POST_ENCOUNTER_BASE_SPEED;
 }
 
 /** Shake combat strength for a player: 2 balls + cannons + scientist bonus. */
