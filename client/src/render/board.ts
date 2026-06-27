@@ -845,8 +845,12 @@ export class BoardRenderer {
       for (const id of this.highlightIds) {
         const inter = this.last.intersections[id];
         if (!inter) continue;
-        const cx = this.fit.ox + inter.x * s;
-        const cy = this.fit.oy + inter.y * s;
+        // Project through the orientation rotation (fit works in ORIENTED space) so
+        // the green rings land on the nodes in landscape, not at their unrotated
+        // positions. The fx container applies zoom/pan, so stop before those.
+        const o = this.ori(inter.x, inter.y);
+        const cx = this.fit.ox + o.x * s;
+        const cy = this.fit.oy + o.y * s;
         // A compact marker that gently breathes (kept small so it doesn't smother
         // the planet underneath).
         const base = s * 0.085;
