@@ -76,16 +76,21 @@ bottom {3,4,11,5,8,9,10}.
 16. "Balanced Layout" mode (same tokens, randomized, no illegal duplicates). — 🔶 Phase 2
 
 ## 5. MOVEMENT, PARKING & BLOCKADES
-19. No travel through the middle of a planet trio. — 🔶 Phase 2 (engine, no tests)
-20. Colony-site parking: trade ships can't park; colony ship can't stay 2nd turn. — 🔶 Phase 2
+19. No travel through the middle of a planet trio. — ✅ (engine blocks any step onto
+    a 3-planet system centre; headlessly verified the board stays fully connected)
+20. Colony-site parking: trade ships can't park; colony ship can't stay 2nd turn.
+    — 🟡 (trade ships can no longer stop on a colony site ✅; the "colony ship must
+    vacate/convert by its 2nd turn" rule is turn-flow, still to do)
 21. Docking-point rules: pods required to stop; convert-by-EOT; Yes/No confirm;
-    colony ship never on a dock. — 🔶 Phase 2
-22. Blockade rule (no stopping beside another's Starport), incl. AI. — 🔶 Phase 2
-23. Finish one ship's movement before moving another; "Finish Move" popover. — 🔶 Phase 2
-24. Skip the Mothership shake when the player has no ships on board. — 🔶 Phase 2
-    (touches flight-phase turn flow / engine; deferred to avoid a turn-flow
-    regression without tests.)
-25. Stop at first contact with an Unknown Sector (red non-clickable nodes after). — 🔶 Phase 2
+    colony ship never on a dock. — 🟡 (engine now blocks colony ships from docks &
+    trade ships without enough pods ✅; the Yes/No confirm + convert-by-EOT are
+    client/turn-flow, still to do)
+22. Blockade rule (no stopping beside another's Starport), incl. AI. — ✅ (engine
+    rejects ending a move beside any other commander's spaceport; AI obeys it —
+    headless 3-AI games still complete to 15 VP)
+23. Finish one ship's movement before moving another; "Finish Move" popover. — 🔶 Phase 2 (client/turn-flow)
+24. Skip the Mothership shake when the player has no ships on board. — 🔶 Phase 2 (client/turn-flow)
+25. Stop at first contact with an Unknown Sector (red non-clickable nodes after). — 🔶 Phase 2 (client/turn-flow)
 
 ## 6. ENCOUNTERS
 28. Fix reward order-of-operations (pay/donate BEFORE reward) for all cards. — 🔶 Phase 2

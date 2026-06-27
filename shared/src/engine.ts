@@ -919,10 +919,36 @@ function doMoveShip(
   for (const step of path) {
     const inter = state.intersections[from];
     if (!inter || !inter.neighbors.includes(step)) return "Illegal move: not a connected step.";
+    // #19: the printed board has no path through the centre of a planetary system
+    // (the corner shared by all 3 of its planets) — you fly around, not through.
+    const si = state.intersections[step];
+    if (si && si.adjacentPlanets.length >= 3) return "No path through the centre of a planet system.";
     from = step;
   }
   const dest = path[path.length - 1]!;
   if (isOccupied(state, dest)) return "Destination is occupied.";
+
+  // --- Stopping rules (playtest #20–#22) ---
+  const destInter = state.intersections[dest]!;
+  if (destInter.dockingPointOf) {
+    // #21: an outpost docking point — a colony ship may never stop there, and a
+    // trade ship may only stop if it has enough freight pods to establish a
+    // station (more than the stations already docked at that outpost).
+    if (ship.kind !== "tradeShip") return "Only a trade ship can stop at an outpost docking point.";
+    const docked = state.tradeStations.filter((t) => t.outpostId === destInter.dockingPointOf).length;
+    if (player.upgrades.freightPod <= docked)
+      return `Need more than ${docked} freight pod${docked === 1 ? "" : "s"} to dock here (you have ${player.upgrades.freightPod}).`;
+  } else if (ship.kind === "tradeShip" && destInter.adjacentPlanets.length === 2) {
+    // #20: a colony site (an edge between exactly 2 planets) is for colony ships
+    // only — a trade ship can pass by but can't park there.
+    return "Trade ships can't stop on a colony site.";
+  }
+  // #22: blockade — you can't end a move on a space beside another commander's
+  // spaceport (it would wall in their launch sites).
+  for (const nb of destInter.neighbors) {
+    if (state.buildings.some((b) => b.intersectionId === nb && b.kind === "spaceport" && b.owner !== player.id))
+      return "Blockaded — you can't stop right beside another commander's spaceport.";
+  }
 
   ship.intersectionId = dest;
   ship.distanceMoved += path.length;
