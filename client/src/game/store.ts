@@ -63,6 +63,9 @@ export interface GameDriver {
 /** Encounters resolve far slower so the human can actually read the card and
  *  what the AI chose before it flashes past (5s minimum per AI encounter act). */
 const ENCOUNTER_AI_DELAY = 5000;
+/** #34: grace window for the human to answer a bot's live trade offer before the
+ *  bot resolves/withdraws it — so bots don't trade away the chance to respond. */
+const TRADE_HUMAN_GRACE_MS = 6000;
 
 /** localStorage key for the single-player autosave (one slot). */
 const SAVE_KEY = "sf_save1";
@@ -290,6 +293,18 @@ export class LocalGame {
    *  delay follows the host-chosen bot speed (Relaxed / Normal / Fast). */
   private aiStepDelay(): number {
     if (this.state.phaseState.phase === "encounter") return ENCOUNTER_AI_DELAY;
+    // #34: when a bot has a live offer the human hasn't answered yet, give the
+    // human a real window to accept / counter / decline before the bot resolves
+    // (and would otherwise withdraw it almost instantly). Once the human responds,
+    // pumpObligations records it and the next tick finalises at normal speed.
+    const offer = this.state.phaseState.pendingTrade;
+    if (
+      offer &&
+      this.aiIds.has(offer.fromId) &&
+      !offer.responses.some((r) => r.playerId === this.humanId)
+    ) {
+      return TRADE_HUMAN_GRACE_MS;
+    }
     return BOT_SPEED_MS[this.state.config.botSpeed ?? "normal"];
   }
 

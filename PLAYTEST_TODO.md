@@ -131,8 +131,11 @@ bottom {3,4,11,5,8,9,10}.
     the proposer sees every responder and finalizes with a specific player via the
     per-row "Trade" / "Accept counter" button — `finalizeTrade({withId})`. It never
     auto-picks the first acceptor.)
-34. AI withdraws trade after ~1s; bots trade too fast; guarantee human a turn. — 🔶
-    Phase 2 (LEFT FOR YOUR ADVICE: trade pacing/tuning is a feel decision.)
+34. AI withdraws trade after ~1s; bots trade too fast; guarantee human a turn. — ✅
+    (when a bot has a live offer the human hasn't answered, the bot now waits a 6s
+    grace window before resolving/withdrawing — guaranteeing the human time to
+    accept/counter/decline. Once the human responds it finalises at normal speed;
+    no hang (after the window the bot resolves anyway). Tune the 6s to taste.)
 35. Illegal AI counter-offers ("1 Food for nothing"). — ✅ (the AI no longer
     produces a counter that asks for nothing back — it declines instead. Verified
     headlessly with the reported 1-food-for-1-goods case.)
