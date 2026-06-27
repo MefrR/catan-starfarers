@@ -96,13 +96,11 @@ function nextDice(state: GameState, rng: Rng): [number, number] {
   return [Math.floor(code / 6) + 1, (code % 6) + 1];
 }
 
-/** Friendly Bandit: with the variant on, a 7 can't target a player who has earned
- *  fewer than FRIENDLY_ROBBER_VP points beyond the starting total. Since everyone
- *  starts at VP.startingTotal (4), the threshold is measured from the start so the
- *  protection actually shields newcomers instead of never triggering. */
-function canStealFrom(state: GameState, p: PlayerState): boolean {
-  if (!state.config.friendlyRobber) return true;
-  return p.victoryPoints - VP.startingTotal >= FRIENDLY_ROBBER_VP;
+/** Friendly Bandit was removed as a variant (playtest #62): a 7 may now steal
+ *  from any player who holds cards, regardless of VP. Kept as a function so all
+ *  call sites stay unchanged; the deprecated config flag is ignored. */
+function canStealFrom(_state: GameState, _p: PlayerState): boolean {
+  return true;
 }
 
 /** Move `n` of resource `r` from bank into a hand, clamped to what the bank has. */

@@ -532,10 +532,16 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
   // Place a few pirate bases / ice planets on non-home planetary systems — at
   // random systems each game (P3). Thresholds must be reachable: pirate bases need
   // cannons (max 6), ice planets need freight pods (max 5), so keep these modest.
+  // Rulebook quantities (playtest #10): 3 Pirate Bases needing 4/5/6 weapons,
+  // and 2 Ice Planets needing 3/4 freight pods. Reachable: cannon max 6, freight
+  // pod max 5. (The under-disc production numbers from the reserve set are part of
+  // the Official Layout rewrite — tracked as Phase 2 in PLAYTEST_TODO.md.)
   const tokenPlan: { special: "pirateBase" | "icePlanet"; value: number }[] = [
-    { special: "pirateBase", value: 3 },
-    { special: "icePlanet", value: 2 },
     { special: "pirateBase", value: 4 },
+    { special: "pirateBase", value: 5 },
+    { special: "pirateBase", value: 6 },
+    { special: "icePlanet", value: 3 },
+    { special: "icePlanet", value: 4 },
   ];
   const shuffledNonHome = shuffle(otherSystems, rand);
   tokenPlan.forEach((tok, i) => {

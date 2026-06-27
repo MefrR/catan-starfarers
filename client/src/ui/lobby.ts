@@ -76,7 +76,6 @@ export class LobbyUI {
   private turnSeconds = 0; // host-chosen per-turn timer (0 = off)
   private targetVP = DEFAULT_TARGET_VP;
   private botSpeed: "relaxed" | "normal" | "fast" = "normal";
-  private friendlyRobber = false;
   private hideBank = false;
   private balancedLayout = true;
   private deck36Dice = false;
@@ -363,7 +362,6 @@ export class LobbyUI {
     const pill = (label: string, val: string): string =>
       `<div class="setup-row"><div class="setup-label">${label}</div><div class="setup-ctrl"><span class="ro-pill">${escapeHtml(val)}</span></div></div>`;
     const variants: [string, boolean][] = [
-      ["Friendly Bandit", !!c.friendlyRobber],
       ["Hide Bank", !!c.hideBank],
       ["Balanced Layout", c.balancedLayout !== false],
       ["Deck36 Dice", !!c.deck36Dice],
@@ -425,7 +423,7 @@ export class LobbyUI {
     const c = lobby.config;
     const configSig = isHost
       ? ""
-      : `|${c.fogMap}|${c.turnSeconds}|${c.targetVictoryPoints}|${c.botSpeed}|${c.friendlyRobber}|${c.hideBank}|${c.balancedLayout}|${c.deck36Dice}|${lobby.isPublic}`;
+      : `|${c.fogMap}|${c.turnSeconds}|${c.targetVictoryPoints}|${c.botSpeed}|${c.hideBank}|${c.balancedLayout}|${c.deck36Dice}|${lobby.isPublic}`;
     const sig = `${lobby.roomCode}|${isHost}|${lobby.started}|${onlineInvite}${configSig}`;
     if (this.lobbySig === sig && !lobby.started && this.root.querySelector(".roomcode-title")) {
       const crewCtrl = this.root.querySelector("#crewctrl");
@@ -541,9 +539,9 @@ export class LobbyUI {
       const paintTimer = (): void =>
         seg(timerRow, [
           { label: "Off", selected: this.turnSeconds === 0, pick: () => setTimer(0) },
-          { label: "−5s", disabled: this.turnSeconds <= 15, pick: () => setTimer(Math.max(15, this.turnSeconds - 5)) },
+          { label: "−15s", disabled: this.turnSeconds <= 60, pick: () => setTimer(Math.max(60, this.turnSeconds - 15)) },
           { label: this.turnSeconds === 0 ? "No limit" : `${this.turnSeconds}s / turn` },
-          { label: "+5s", disabled: this.turnSeconds >= 180, pick: () => setTimer(this.turnSeconds === 0 ? 15 : Math.min(180, this.turnSeconds + 5)) },
+          { label: "+15s", disabled: this.turnSeconds >= 300, pick: () => setTimer(this.turnSeconds === 0 ? 60 : Math.min(300, this.turnSeconds + 15)) },
         ]);
       paintTimer();
 
@@ -588,8 +586,6 @@ export class LobbyUI {
           b.addEventListener("click", () => { send(!on); paintVariants(); });
           varRow.appendChild(b);
         };
-        chip("Friendly Bandit", "A 7 can't steal from players under 3 VP", this.friendlyRobber,
-          (v) => { this.friendlyRobber = v; net.send({ t: "setRoomConfig", friendlyRobber: v }); });
         chip("Hide Bank", "Hide the resource-bank counts", this.hideBank,
           (v) => { this.hideBank = v; net.send({ t: "setRoomConfig", hideBank: v }); });
         chip("Balanced Layout", "Fair number placement (no adjacent 6 & 8)", this.balancedLayout,
@@ -606,7 +602,6 @@ export class LobbyUI {
         turnSeconds: this.turnSeconds,
         targetVictoryPoints: this.targetVP,
         botSpeed: this.botSpeed,
-        friendlyRobber: this.friendlyRobber,
         hideBank: this.hideBank,
         balancedLayout: this.balancedLayout,
         deck36Dice: this.deck36Dice,
@@ -625,7 +620,6 @@ export class LobbyUI {
             turnSeconds: this.turnSeconds,
             targetVictoryPoints: this.targetVP,
             botSpeed: this.botSpeed,
-            friendlyRobber: this.friendlyRobber,
             hideBank: this.hideBank,
             balancedLayout: this.balancedLayout,
             deck36Dice: this.deck36Dice,

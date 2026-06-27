@@ -52,13 +52,12 @@ export class NewGameMenu {
   /** Resume the autosaved single-player game (offered only when one exists). */
   private onResume: (() => void) | undefined;
   private color: PlayerColor = "yellow";
-  private opponents = 2; // 0 = play solo (no AI rivals)
+  private opponents = 2; // AI rivals; minimum 1 (solo play disabled — needs 2 players)
   private fogMap = false;
   private aiDifficulty: AiDifficulty = "normal";
   private turnSeconds = 0; // 0 = no turn timer
   private botSpeed: "relaxed" | "normal" | "fast" = "normal";
   private targetVP = DEFAULT_TARGET_VP;
-  private friendlyRobber = false;
   private hideBank = false;
   private balancedLayout = true;
   private deck36Dice = false;
@@ -209,8 +208,8 @@ export class NewGameMenu {
     const paintOpps = (): void =>
       seg(
         oppRow,
-        [0, 1, 2, 3].map((n) => ({
-          label: n === 0 ? "Solo" : `${n} AI`,
+        [1, 2, 3].map((n) => ({
+          label: `${n} AI`,
           selected: n === this.opponents,
           pick: () => {
             this.opponents = n;
@@ -265,17 +264,18 @@ export class NewGameMenu {
       ]);
     paintMap();
 
-    // Turn timer: Off, or 15–180s in 5s steps (− / value / +). Off ↔ 15s.
+    // Turn timer: Off, or 60–300s in 15s steps (− / value / +). Off ↔ 60s.
+    // (A Starfarers turn is long — 15s was far too short, so the minimum is 1 min.)
     const timerRow = screen.querySelector("#turntimer")!;
     const paintTimer = (): void => {
       timerRow.replaceChildren();
       const off = el(`<button class="seg-opt ${this.turnSeconds === 0 ? "on" : ""}">Off</button>`);
       off.addEventListener("click", () => { this.turnSeconds = 0; paintTimer(); });
-      const minus = el(`<button class="seg-opt" ${this.turnSeconds <= 15 ? "disabled" : ""}>−5s</button>`);
-      minus.addEventListener("click", () => { this.turnSeconds = Math.max(15, this.turnSeconds - 5); paintTimer(); });
+      const minus = el(`<button class="seg-opt" ${this.turnSeconds <= 60 ? "disabled" : ""}>−15s</button>`);
+      minus.addEventListener("click", () => { this.turnSeconds = Math.max(60, this.turnSeconds - 15); paintTimer(); });
       const val = el(`<button class="seg-opt seg-val" disabled>${this.turnSeconds === 0 ? "No limit" : this.turnSeconds + "s / turn"}</button>`);
-      const plus = el(`<button class="seg-opt" ${this.turnSeconds >= 180 ? "disabled" : ""}>+5s</button>`);
-      plus.addEventListener("click", () => { this.turnSeconds = this.turnSeconds === 0 ? 15 : Math.min(180, this.turnSeconds + 5); paintTimer(); });
+      const plus = el(`<button class="seg-opt" ${this.turnSeconds >= 300 ? "disabled" : ""}>+15s</button>`);
+      plus.addEventListener("click", () => { this.turnSeconds = this.turnSeconds === 0 ? 60 : Math.min(300, this.turnSeconds + 15); paintTimer(); });
       timerRow.append(off, minus, val, plus);
     };
     paintTimer();
@@ -322,7 +322,6 @@ export class NewGameMenu {
         b.addEventListener("click", () => { toggle(); paintVariants(); });
         varRow.appendChild(b);
       };
-      chip("Friendly Bandit", "A 7 can't steal from players under 3 VP", this.friendlyRobber, () => (this.friendlyRobber = !this.friendlyRobber));
       chip("Hide Bank", "Hide the resource-bank counts", this.hideBank, () => (this.hideBank = !this.hideBank));
       chip("Balanced Layout", "Fair number placement (no adjacent 6 & 8)", this.balancedLayout, () => (this.balancedLayout = !this.balancedLayout));
       chip("Deck36 Dice", "Even dice distribution (deck of 36)", this.deck36Dice, () => (this.deck36Dice = !this.deck36Dice));
@@ -340,7 +339,6 @@ export class NewGameMenu {
           turnSeconds: this.turnSeconds,
           targetVictoryPoints: this.targetVP,
           botSpeed: this.botSpeed,
-          friendlyRobber: this.friendlyRobber,
           hideBank: this.hideBank,
           balancedLayout: this.balancedLayout,
           deck36Dice: this.deck36Dice,
