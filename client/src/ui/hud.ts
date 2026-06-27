@@ -3109,7 +3109,8 @@ export class HUD {
             el(`<div class="waiting">${ship ? "Click a green node to move" : "Click a ship to move"}</div>`),
           );
         }
-        actions.appendChild(btn("End turn", () => { this.resetSelection(); this.act({ t: "endTurn" }); }, { secondary: true }));
+        // #45: no second "End turn" here — the floating primary-action button
+        // (AD6) already shows "End turn" during flight, so this was a duplicate.
         break;
       }
 

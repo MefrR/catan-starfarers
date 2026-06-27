@@ -144,8 +144,10 @@ bottom {3,4,11,5,8,9,10}.
     the map rather than overlaying the board as a fixed button.)
 43. Auto-zoom-out default OFF. — ✅
 44. Separate "End Trade/Build" from "Roll Dice"; roll appears center & dismisses. — 🔶 Phase 2 (not done)
-45. Remove the redundant second "End Turn" button. — 🔶 Phase 2 (needs visual
-    confirm of which of the End-turn controls is the duplicate before removing.)
+45. Remove the redundant second "End Turn" button. — ✅ (in flight the floating
+    primary-action button (AD6) already reads "End turn"; the duplicate secondary
+    "End turn" inside the action box was removed. The floating one is always
+    present in flight unless a decision is owed, so nothing is lost.)
 46. Center the white shake effect (currently left). — ✅
 47. Post-victory "New Game" → "Main Menu". — ✅
 48. Green Folk cards named "[Resource] Increase". — ✅
