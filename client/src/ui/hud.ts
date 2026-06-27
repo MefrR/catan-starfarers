@@ -850,8 +850,12 @@ export class HUD {
       this.playDiceRoll(ps.lastRoll[0], ps.lastRoll[1]);
       // AA1: once the dice have landed, pulse every planet number that pays
       // on this roll so players can see at a glance where production came from.
-      const rolled = ps.lastRoll[0] + ps.lastRoll[1];
-      this.diceTimers.push(window.setTimeout(() => this.board.pulseRolledNumber(rolled), 850));
+      // #60: only for PRODUCTION rolls — not the setup roll that just decides the
+      // starting player (no production happens then).
+      if (ps.phase === "production") {
+        const rolled = ps.lastRoll[0] + ps.lastRoll[1];
+        this.diceTimers.push(window.setTimeout(() => this.board.pulseRolledNumber(rolled), 850));
+      }
     }
     const me0 = state.players.find((p) => p.id === this.game.humanId)!;
     if (rc > this.lastAnimatedGains) {

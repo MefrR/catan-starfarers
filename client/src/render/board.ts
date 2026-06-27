@@ -1101,9 +1101,11 @@ export class BoardRenderer {
         // under the fog until the planet is charted (P3).
         if (planet.explored && planet.special !== "none") {
           const isPirate = planet.special === "pirateBase";
+          // #11: keep the token translucent (~20%) so the resource planet hidden
+          // beneath it stays visible until the token is cleared, as on the board.
           const token = new Graphics()
             .circle(px, py, rad * 0.92)
-            .fill({ color: isPirate ? 0x2a0a0a : 0x0a2a33, alpha: 0.86 })
+            .fill({ color: isPirate ? 0x2a0a0a : 0x0a2a33, alpha: 0.2 })
             .stroke({ color: isPirate ? 0xff5a4d : 0x7fe0ff, width: 2 });
           planetLayer.addChild(token);
           // Z4: the threat token smolders — a slow menacing alpha pulse.
@@ -1118,8 +1120,10 @@ export class BoardRenderer {
           }
         }
 
-        // Number badge: dark chip pinned to the planet's lower edge.
-        if (planet.explored && planet.special === "none" && planet.number != null) {
+        // Number badge: dark chip pinned to the planet's lower edge. Shown for
+        // special (pirate/ice) planets too (#11) so the production number under
+        // the translucent token is visible before it's cleared.
+        if (planet.explored && planet.number != null) {
           const hot = planet.number === 6 || planet.number === 8;
           const bx = px;
           const by = py + rad * 0.86;
@@ -1146,8 +1150,16 @@ export class BoardRenderer {
     // underlying sector is charted — otherwise it draws as a plain travel node so
     // uncharted systems, outposts and empty space look identical (no hint leak).
     const exploredPlanets = new Set<string>();
-    for (const s of state.sectors) for (const p of s.planets) if (p.explored) exploredPlanets.add(p.id);
+    const homePlanets = new Set<string>();
+    for (const s of state.sectors) for (const p of s.planets) {
+      if (p.explored) exploredPlanets.add(p.id);
+      if (s.home) homePlanets.add(p.id);
+    }
     const sectorById = new Map(state.sectors.map((s) => [s.id, s]));
+    // #61: the blue colony-site rings on the Home Planets are only useful during
+    // the set-up placement; once set-up is over they just clutter the home row,
+    // so they revert to plain travel nodes there (kept everywhere else).
+    const afterSetup = state.phaseState.phase !== "setup";
     for (const inter of Object.values(state.intersections)) {
       const ix = tx(inter.x);
       const iy = ty(inter.y);
@@ -1155,8 +1167,12 @@ export class BoardRenderer {
       // Charted once either adjacent planet is revealed (colony) / the outpost
       // sector is discovered (dock). In non-fog games everything is charted, so
       // behaviour is unchanged.
+      const onHomeOnly =
+        inter.adjacentPlanets.length > 0 && inter.adjacentPlanets.every((id) => homePlanets.has(id));
       const isColonySite =
-        inter.adjacentPlanets.length === 2 && inter.adjacentPlanets.some((id) => exploredPlanets.has(id));
+        inter.adjacentPlanets.length === 2 &&
+        inter.adjacentPlanets.some((id) => exploredPlanets.has(id)) &&
+        !(onHomeOnly && afterSetup);
       const isDock = !!dockSector && dockSector.discovered;
 
       // Legal-target rings (move destinations / colony picks) are drawn as a
