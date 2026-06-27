@@ -1132,7 +1132,9 @@ export class BoardRenderer {
 
         // Resource glyph (PDF-style): ore=hexagon, carbon=subdivided triangle, etc.
         if (planet.explored) {
-          this.drawResourceGlyph(planetLayer, PLANET_RESOURCE[planet.color], px, py, rad * 0.62);
+          // Resource glyph on the LEFT half of the planet; the production number
+          // sits on the RIGHT half (below) so both are fully visible side by side.
+          this.drawResourceGlyph(planetLayer, PLANET_RESOURCE[planet.color], px - rad * 0.38, py, rad * 0.5);
           // Z4: a tiny mote orbiting the planet on a tilted ellipse — dims on
           // the far half. Skipped on pirate/ice tokens to keep them readable.
           if (planet.special === "none") {
@@ -1178,14 +1180,14 @@ export class BoardRenderer {
         // the translucent token is visible before it's cleared.
         if (planet.explored && planet.number != null) {
           const hot = planet.number === 6 || planet.number === 8;
-          const bx = px;
-          // Production number sits at the TOP of the planet (above centre).
-          const by = py - rad * 0.86;
-          // 2 also produces on 11, and 3 also on 12 — show the pair on the token.
+          // Number badge on the RIGHT half, vertically centred — beside the
+          // resource glyph (left half) so the two never overlap.
           const numText =
             planet.number === 2 ? "2/11" : planet.number === 3 ? "3/12" : String(planet.number);
           const wide = numText.length > 2;
-          const br = rad * (wide ? 0.66 : 0.52);
+          const br = rad * (wide ? 0.54 : 0.46);
+          const bx = px + rad * 0.40;
+          const by = py;
           planetLayer.addChild(
             new Graphics()
               .circle(bx, by, br)
