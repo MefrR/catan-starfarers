@@ -1001,6 +1001,23 @@ export class HUD {
     const vpTitle = el(`<div class="vp-title toggle" title="Tap to ${this.scoreCompact ? "expand" : "compress"}">${titleText}<span class="tg-caret">${this.scoreCompact ? "▸" : "▾"}</span></div>`);
     vpTitle.addEventListener("click", () => { this.scoreCompact = !this.scoreCompact; this.rerender(); });
     scoreboard.appendChild(vpTitle);
+    // Reserve-pile meter: total cards left in the catch-up reserve, with a low /
+    // empty warning once it nears depletion (≤10). Players draw from this pile on
+    // every roll while behind, so it can run dry — surface that instead of letting
+    // the bonus silently stop granting cards.
+    const reserveLeft = RESOURCES.reduce((s, r) => s + state.reservePile[r], 0);
+    const reserveCls = reserveLeft <= 0 ? "empty" : reserveLeft <= 10 ? "low" : "";
+    const reserveTitle =
+      reserveLeft <= 0
+        ? "Reserve pile empty — no more catch-up cards"
+        : reserveLeft <= 10
+          ? `Reserve pile running low: ${reserveLeft} card${reserveLeft === 1 ? "" : "s"} left`
+          : `${reserveLeft} cards left in the reserve pile (catch-up bonus)`;
+    scoreboard.appendChild(
+      el(
+        `<div class="reserve-meter ${reserveCls}" title="${reserveTitle}">${cardGlyphSvg()}<span class="rm-n">${reserveLeft}</span><span class="rm-label">reserve</span></div>`,
+      ),
+    );
     // Rows live in their own flex container so compact mode can lay the players
     // out as side-by-side columns (narrow) instead of stacked full-width rows.
     const scoreRows = el(`<div class="score-rows"></div>`);

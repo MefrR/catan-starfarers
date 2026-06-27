@@ -399,6 +399,21 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 }
 .vp-bonus.empty { background: none; border: none; padding: 0; }
 
+/* Reserve-pile meter under the victory tracker title (#59). */
+.reserve-meter {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 700; color: var(--muted);
+  margin: 2px 0 6px; padding: 1px 0;
+}
+.reserve-meter svg { width: 13px; height: 13px; opacity: 0.75; }
+.reserve-meter .rm-n { color: var(--text); font-variant-numeric: tabular-nums; }
+.reserve-meter .rm-label { color: var(--muted); font-weight: 600; letter-spacing: 0.02em; }
+.reserve-meter.low { color: var(--yellow); }
+.reserve-meter.low .rm-n { color: var(--yellow); }
+.reserve-meter.empty { color: var(--danger); }
+.reserve-meter.empty .rm-n { color: var(--danger); }
+.scoreboard.compact .reserve-meter .rm-label { display: none; }
+
 .log-line { font-size: 12px; color: var(--muted); line-height: 1.5; }
 .log-line:last-child { color: var(--text); }
 /* M2: log lives inside the Fleet sidebar; scroll if the section gets tall. */

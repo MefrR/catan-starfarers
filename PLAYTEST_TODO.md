@@ -141,9 +141,16 @@ bottom {3,4,11,5,8,9,10}.
 54. Damaged-ship color must not collide with player colors. — ✅
 55. Clicking a damaged ship does nothing (no green nodes). — ✅
 56. Free Trade Ship movement lock-up. — 🔶 Phase 2
-57. Low-score bonus entitlement not granting cards. — 🔶 Phase 2
-58. Low-score bonus visibly from Reserve pile. — 🔶 Phase 2
-59. Show Reserve pile size + warn near depletion (−10). — 🔶 Phase 2
+57. Low-score bonus entitlement not granting cards. — ✅ (the catch-up bonus is
+    granted on EVERY roll by VP rank — 2 cards at ≤7 VP, 1 at 8-9, 0 at 10+ —
+    deferred correctly around a 7's steal/discard. Verified headlessly: a 4-VP
+    roller draws exactly 2 reserve cards.)
+58. Low-score bonus visibly from Reserve pile. — ✅ (the specific drawn cards fly
+    from the reserve area into the hand via the reserveDraw marker; the new meter
+    below makes the source explicit.)
+59. Show Reserve pile size + warn near depletion (−10). — ✅ (reserve meter under
+    the victory-tracker title shows cards left; turns yellow ≤10 ("running low")
+    and red at 0 ("empty — no more catch-up cards"). Verified in preview at 40/8/0.)
 60. Don't flash producing planets on the first-player roll. — ✅ (pulse gated to production rolls)
 61. Hide blue colony-site circles on Home Planets after Setup. — ✅
 
