@@ -190,7 +190,11 @@ bottom {3,4,11,5,8,9,10}.
     by the loss-pulse on the lost resource. Verified in preview: ore 3→1 pulses.)
 54. Damaged-ship color must not collide with player colors. — ✅
 55. Clicking a damaged ship does nothing (no green nodes). — ✅
-56. Free Trade Ship movement lock-up. — 🔶 Phase 2
+56. Free Trade Ship movement lock-up. — ✅ (root cause: a free trade ship launched
+    mid-flight was tagged movedThisTurn=true, so it couldn't act the turn it
+    appeared — the AI skipped it outright and a human got a ship that wouldn't move.
+    It now launches fully usable (movedThisTurn=false, full movement budget), so it
+    can fly and establish the same turn. 3-AI sim still completes.)
 57. Low-score bonus entitlement not granting cards. — ✅ (the catch-up bonus is
     granted on EVERY roll by VP rank — 2 cards at ≤7 VP, 1 at 8-9, 0 at 10+ —
     deferred correctly around a 7's steal/discard. Verified headlessly: a 4-VP

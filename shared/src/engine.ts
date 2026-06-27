@@ -869,15 +869,16 @@ function doBuild(
     else pay(player.hand, state.supplyBank, cost);
     player.supply.transportShips--;
     const kind: ShipKind = what;
-    // A ship launched DURING flight (a free encounter ship) shouldn't also get a
-    // move this turn — mark it already-moved. Build-phase launches move normally.
-    const launchedInFlight = state.phaseState.phase === "flight";
+    // #56: a free trade ship launched mid-flight is immediately usable — it may
+    // fly and establish on the same turn. (It used to be marked already-moved,
+    // which left it locked for the turn: the AI skipped it and a human saw a ship
+    // that couldn't act.) distanceMoved 0 gives it a full, fresh movement budget.
     const ship: Ship = {
       id: `ship-${player.id}-${state.ships.length}-${Math.floor(Math.random() * 1e6)}`,
       kind,
       owner: player.id,
       intersectionId: launch,
-      movedThisTurn: launchedInFlight,
+      movedThisTurn: false,
       distanceMoved: 0,
     };
     state.ships.push(ship);
