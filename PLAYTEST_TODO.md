@@ -66,9 +66,10 @@ bottom {3,4,11,5,8,9,10}.
 10. Ice=2 (req 3 & 4 pods), Pirate=3 (req 4,5,6 weapons). — ✅
 11. Show planet under ice/pirate at ~20% token opacity. — ✅ (token ~20% + the
     production number now shows under special planets)
-12. Alien Outpost docking points 6 → 5. — 🔶 Phase 2 (the engine models a SINGLE
-    centre docking point per outpost while the renderer draws several — the count
-    mismatch needs the docking model reconciled first.)
+12. Alien Outpost docking points 6 → 5. — ✅ SUPERSEDED by #63/F: each outpost now
+    has a SINGLE central docking point (one intersection carries dockingPointOf),
+    with up to 5 trade-station slots (OUTPOST_DOCKS) sharing it. The "6 vs 5
+    perimeter docks" mismatch no longer exists — there's one dock point, not a ring.
 
 ## 4. NUMBER TOKENS & LAYOUT MODES
 15. Official Layout (ON by default) using the disc table above + "Unbalanced
