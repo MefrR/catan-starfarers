@@ -1,0 +1,36 @@
+# Fly.io config for Catan: Starfarers.
+# Rename `app` to whatever you create with `fly launch --no-deploy` (must be
+# globally unique). Pick a region near your players: fra=Frankfurt, cdg=Paris,
+# bom=Mumbai (closest to the UAE), iad=US-East. Change primary_region below.
+app = "starfarers"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  # ALWAYS-ON: never sleep / scale to zero — this is the whole point of moving off
+  # the free tier. One machine stays running so WebSockets never drop from idle.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  # WebSocket connections are long-lived; let them stay open.
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 400
+    soft_limit = 300
+
+# A small shared VM is plenty for a turn-based 4-player game.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+# Lets Fly verify the process is healthy (the server exposes GET /health).
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "20s"
+  method = "GET"
+  path = "/health"
