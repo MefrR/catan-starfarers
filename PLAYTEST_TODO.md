@@ -105,13 +105,23 @@ bottom {3,4,11,5,8,9,10}.
     AI captures the travelers' free upgrade & extra fame. Verified headlessly.)
 
 ## 7. TRADING
-32. Accept/decline prompt centered & visible to all. — 🔶 Phase 2
-33. Initiator must pick who accepted (not auto-first). — 🔶 Phase 2
-34. AI withdraws trade after ~1s; bots trade too fast; guarantee human a turn. — 🔶 Phase 2
+32. Accept/decline prompt centered & visible to all. — 🔶 Phase 2 (needs your
+    advice: would move the trade prompt into a center overlay like encounters; a
+    sizeable UI redesign vs. the current bottom-bar tray.)
+33. Initiator must pick who accepted (not auto-first). — ✅ (already the behavior:
+    the proposer sees every responder and finalizes with a specific player via the
+    per-row "Trade" / "Accept counter" button — `finalizeTrade({withId})`. It never
+    auto-picks the first acceptor.)
+34. AI withdraws trade after ~1s; bots trade too fast; guarantee human a turn. — 🔶
+    Phase 2 (LEFT FOR YOUR ADVICE: trade pacing/tuning is a feel decision.)
 35. Illegal AI counter-offers ("1 Food for nothing"). — ✅ (the AI no longer
     produces a counter that asks for nothing back — it declines instead. Verified
     headlessly with the reported 1-food-for-1-goods case.)
-36. Trade window not refreshing after accept/decline; stale bank selection. — 🔶 Phase 2
+36. Trade window not refreshing after accept/decline; stale bank selection. — ✅
+    (the trade window now reconciles against the live offer's signature each render:
+    a half-composed counter from a previous offer is dropped, and once no offer is
+    live the bank give/want selection is cleared — closing the gap where the engine
+    settled an as-is accept without the click path that normally resets it.)
 37. "Any" button on either side of a trade. — 🔶 Phase 2
 38a. Let player decline even when AI accepts. — 🔶 Phase 2
 39. Consolidate redundant trade-window rows. — 🔶 Phase 2

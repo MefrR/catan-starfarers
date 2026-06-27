@@ -205,6 +205,9 @@ export class HUD {
   private shownDiscardSig = "";
   /** Signature of the current duel's rolls, so the overlay refreshes as shakes land. */
   private shownDuelSig = "";
+  /** Signature of the live player-trade offer, so the trade window drops stale
+   *  compose state (#36) whenever the offer changes or clears. */
+  private lastTradeSig = "none";
   /** Log length when the current encounter opened, so on resolution we can show
    *  the exact narration lines the card produced (its descriptive outcome). */
   private encLogMark = 0;
@@ -828,6 +831,23 @@ export class HUD {
   private render(state: GameState): void {
     const ps = state.phaseState;
     const active = state.players[ps.activePlayerIndex]!;
+
+    // #36: keep the trade window in step with the live offer. Each proposal bumps
+    // phaseState.tradeProposals, so a change in this signature means the offer was
+    // replaced, settled or withdrawn. Drop any half-composed counter that belonged
+    // to the previous offer; once no offer is live, also clear the bank give/want
+    // selection (the engine can settle an as-is accept without the click path that
+    // normally calls resetSelection, which would otherwise leave it stale).
+    const tradeSig = ps.pendingTrade
+      ? `${ps.pendingTrade.fromId}#${ps.tradeProposals ?? 0}`
+      : "none";
+    if (tradeSig !== this.lastTradeSig) {
+      this.counterOpen = false;
+      this.cGive = {};
+      this.cWant = {};
+      if (!ps.pendingTrade) { this.pGive = {}; this.pWant = {}; this.tradeOpen = false; }
+      this.lastTradeSig = tradeSig;
+    }
     // While picking a ship to fly / jump, suppress map tooltips — info popups
     // distract from choosing where to travel. The hover-info toggle (HUD tools)
     // also suppresses them globally when the player turns hover info off.
