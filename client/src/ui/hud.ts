@@ -2166,6 +2166,18 @@ export class HUD {
     });
     extra(recBtn);
 
+    // #1: rotate the map between landscape (wide) and portrait. Persisted by the
+    // renderer; default landscape.
+    const land = this.board.orientation === "landscape";
+    const orientBtn = el(
+      `<button class="tool-btn ${land ? "active" : ""}" title="Map orientation: ${land ? "landscape" : "portrait"} (tap to rotate)">${land ? "▭" : "▯"}</button>`,
+    );
+    orientBtn.addEventListener("click", () => {
+      this.board.toggleOrientation();
+      this.rerender();
+    });
+    extra(orientBtn);
+
     const sndBtn = el(
       `<button class="tool-btn ${sfx.muted ? "" : "active"}" title="Sound effects: ${sfx.muted ? "off (tap to enable)" : "on (tap to mute)"}">♪</button>`,
     );

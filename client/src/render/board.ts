@@ -117,8 +117,25 @@ export class BoardRenderer {
   // can be scrolled well up/down. (96 CSS px/in ÷ 2.54 cm/in × cm.)
   private static readonly PAN_MARGIN = Math.round((96 / 2.54) * 15);
   private static readonly PAN_MARGIN_Y = Math.round((96 / 2.54) * 20);
-  // Board content bounds in board-space (set each render) — drives pan clamping.
+  // Board content bounds in ORIENTED board-space (set each render) — drives pan clamping.
   private contentBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+
+  /** #1: board presentation orientation. "landscape" rotates board-space 90° so
+   *  the tall map runs horizontally (most monitors); "portrait" is the original.
+   *  Toggle from the side tools; persisted. Default landscape. Only positions are
+   *  rotated — labels/numbers stay upright. */
+  orientation: "landscape" | "portrait" =
+    (typeof localStorage !== "undefined" && localStorage.getItem("sf_orient") === "portrait")
+      ? "portrait" : "landscape";
+  private get land(): boolean { return this.orientation === "landscape"; }
+  /** Raw board-space → oriented board-space (90° rotation when landscape). */
+  private ori(x: number, y: number): { x: number; y: number } {
+    return this.land ? { x: -y, y: x } : { x, y };
+  }
+  /** Inverse of ori(): oriented board-space → raw board-space. */
+  private oriInv(x: number, y: number): { x: number; y: number } {
+    return this.land ? { x: y, y: -x } : { x, y };
+  }
   // Auto-recenter: a double-tap, or 10s of no interaction, glides back to the
   // fitted middle so a lost/zoomed-in view always returns to the whole map.
   private idleTimer = 0;
@@ -258,12 +275,25 @@ export class BoardRenderer {
   private last: GameState | null = null;
   private fit = { scale: 1, ox: 0, oy: 0 };
 
-  /** Board-space (x,y) → on-screen pixel coords, honoring fit + zoom/pan. */
+  /** Board-space (x,y) → on-screen pixel coords, honoring orientation + fit + zoom/pan. */
   worldToScreen(x: number, y: number): { x: number; y: number } {
-    const wx = this.fit.ox + x * this.fit.scale;
-    const wy = this.fit.oy + y * this.fit.scale;
+    const o = this.ori(x, y);
+    const wx = this.fit.ox + o.x * this.fit.scale;
+    const wy = this.fit.oy + o.y * this.fit.scale;
     return { x: wx * this.zoom + this.panX, y: wy * this.zoom + this.panY };
   }
+
+  /** Switch the board between landscape/portrait, persist it, reset the view and
+   *  re-render in place. Wired to a side-tools button. */
+  setOrientation(o: "landscape" | "portrait"): void {
+    if (o === this.orientation) return;
+    this.orientation = o;
+    try { localStorage.setItem("sf_orient", o); } catch { /* ignore */ }
+    this.zoom = 1; this.panX = 0; this.panY = 0;
+    if (this.last) this.render(this.last);
+    this.onViewChange?.();
+  }
+  toggleOrientation(): void { this.setOrientation(this.land ? "portrait" : "landscape"); }
 
   /** On-screen pixel position of an intersection (or null if unknown). */
   screenPosOf(intersectionId: string): { x: number; y: number } | null {
@@ -390,10 +420,11 @@ export class BoardRenderer {
     this.cancelZoomGlide();
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const p of points) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
+      const o = this.ori(p.x, p.y); // points are raw board-space; fit works in oriented space
+      if (o.x < minX) minX = o.x;
+      if (o.x > maxX) maxX = o.x;
+      if (o.y < minY) minY = o.y;
+      if (o.y > maxY) maxY = o.y;
     }
     // Breathing room around the region (board units).
     const pad = 0.55;
@@ -421,17 +452,22 @@ export class BoardRenderer {
       x: ((sx - this.panX) / this.zoom - this.fit.ox) / this.fit.scale,
       y: ((sy - this.panY) / this.zoom - this.fit.oy) / this.fit.scale,
     });
-    const a = inv(0, 0);
-    const b = inv(window.innerWidth, window.innerHeight);
-    return { x0: a.x, y0: a.y, x1: b.x, y1: b.y };
+    const a0 = inv(0, 0);
+    const b0 = inv(window.innerWidth, window.innerHeight);
+    // inv() yields ORIENTED board-space; convert back to raw board-space and
+    // normalise (the rotation can flip which corner is min/max).
+    const a = this.oriInv(a0.x, a0.y);
+    const b = this.oriInv(b0.x, b0.y);
+    return { x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y), x1: Math.max(a.x, b.x), y1: Math.max(a.y, b.y) };
   }
 
   /** Glide the camera so a BOARD point lands at the screen centre (minimap
    *  click-to-jump). Zooms in a little if currently at the fitted view. */
   centerOnBoardPoint(bx: number, by: number): void {
     const z = Math.max(this.zoom, 1.5);
-    const cx = this.fit.ox + bx * this.fit.scale;
-    const cy = this.fit.oy + by * this.fit.scale;
+    const o = this.ori(bx, by);
+    const cx = this.fit.ox + o.x * this.fit.scale;
+    const cy = this.fit.oy + o.y * this.fit.scale;
     this.animateViewTo(z, window.innerWidth / 2 - cx * z, window.innerHeight / 2 - cy * z, 420);
     this.resetIdleTimer();
   }
@@ -858,8 +894,13 @@ export class BoardRenderer {
     const scale = fit.scale * this.zoom;
     const ox = fit.ox * this.zoom;
     const oy = fit.oy * this.zoom;
-    const tx = (x: number): number => ox + x * scale;
-    const ty = (y: number): number => oy + y * scale;
+    // Orientation-aware projection: rotate raw board-space (bx,by) 90° when in
+    // landscape, then apply the fit. Both axes are needed because a rotation
+    // couples x and y. Labels are drawn upright at these positions (the rotation
+    // moves positions only, never the text).
+    const land = this.land;
+    const tx = (bx: number, by: number): number => ox + (land ? -by : bx) * scale;
+    const ty = (bx: number, by: number): number => oy + (land ? bx : by) * scale;
 
     const hexLayer = new Container();
     const linkLayer = new Container();
@@ -871,10 +912,11 @@ export class BoardRenderer {
     this.root.addChild(linkLayer, hexLayer, planetLayer, highlightLayer, nodeLayer, buildLayer, shipLayer);
 
     // Flat-top hex outline at a pixel centre.
+    const hexRot = land ? Math.PI / 2 : 0; // rotate hexes with the board so they still tile
     const drawHex = (cxp: number, cyp: number, fillColor: number, fillAlpha: number): void => {
       const pts: number[] = [];
       for (let i = 0; i < 6; i++) {
-        const a = (Math.PI / 180) * 60 * i;
+        const a = (Math.PI / 180) * 60 * i + hexRot;
         pts.push(cxp + scale * Math.cos(a), cyp + scale * Math.sin(a));
       }
       const hex = new Graphics()
@@ -890,19 +932,21 @@ export class BoardRenderer {
     for (const sector of state.sectors) {
       if (sector.kind === "planetarySystem") {
         for (const planet of sector.planets) {
-          drawHex(tx(planet.x), ty(planet.y), 0x101a30, 0.4);
+          drawHex(tx(planet.x, planet.y), ty(planet.x, planet.y), 0x101a30, 0.4);
         }
         continue;
       }
-      const cx = tx(1.5 * sector.q);
-      const cy = ty(Math.sqrt(3) * (sector.r + sector.q / 2));
+      const sqx = 1.5 * sector.q;
+      const sqy = Math.sqrt(3) * (sector.r + sector.q / 2);
+      const cx = tx(sqx, sqy);
+      const cy = ty(sqx, sqy);
       if (sector.kind === "outpost") {
         // Outposts span the full 3-hex slot triangle: (q,r),(q+1,r),(q,r+1).
         const q = sector.q;
         const r = sector.r;
         const tri: [number, number][] = [[q, r], [q + 1, r], [q, r + 1]];
         for (const [hq, hr] of tri) {
-          drawHex(tx(1.5 * hq), ty(Math.sqrt(3) * (hr + hq / 2)), 0x101a30, 0.4);
+          drawHex(tx(1.5 * hq, Math.sqrt(3) * (hr + hq / 2)), ty(1.5 * hq, Math.sqrt(3) * (hr + hq / 2)), 0x101a30, 0.4);
         }
         const charted = sector.discovered;
         if (!charted) {
@@ -911,8 +955,8 @@ export class BoardRenderer {
           // until a ship reaches the triangle and charts it.
           const fogRad = scale * 0.6;
           for (const [hq, hr] of tri) {
-            const dx = tx(1.5 * hq);
-            const dy = ty(Math.sqrt(3) * (hr + hq / 2));
+            const dx = tx(1.5 * hq, Math.sqrt(3) * (hr + hq / 2));
+            const dy = ty(1.5 * hq, Math.sqrt(3) * (hr + hq / 2));
             const disc = new Graphics()
               .circle(dx, dy, fogRad)
               .fill({ color: 0x141d33 })
@@ -928,16 +972,16 @@ export class BoardRenderer {
           continue;
         }
         // Station sits at the triangle's shared centre corner.
-        const ocx = tx(1.5 * q + 0.5);
-        const ocy = ty(Math.sqrt(3) * (r + q / 2 + 0.5));
+        const ocx = tx(1.5 * q + 0.5, Math.sqrt(3) * (r + q / 2 + 0.5));
+        const ocy = ty(1.5 * q + 0.5, Math.sqrt(3) * (r + q / 2 + 0.5));
         const civ = sector.outpostCiv ?? "";
         const style = CIV_STYLE[civ];
         const color = style?.color ?? 0xe8c24a;
         // AA6: the station now spans the whole 3-hex triangle — pass the three
         // hex centres so the lobes land exactly over their hexes.
         const lobePts = tri.map(([hq, hr]) => ({
-          x: tx(1.5 * hq),
-          y: ty(Math.sqrt(3) * (hr + hq / 2)),
+          x: tx(1.5 * hq, Math.sqrt(3) * (hr + hq / 2)),
+          y: ty(1.5 * hq, Math.sqrt(3) * (hr + hq / 2)),
         }));
         this.drawOutpost(planetLayer, ocx, ocy, lobePts, scale, color);
         this.drawCivIcon(planetLayer, ocx, ocy, scale * 1.5, civ, color);
@@ -972,11 +1016,11 @@ export class BoardRenderer {
           // tint would give an empty cluster away before it's charted.
           const fogRad = scale * 0.6;
           for (const [hq, hr] of tri) {
-            drawHex(tx(1.5 * hq), ty(Math.sqrt(3) * (hr + hq / 2)), 0x101a30, 0.4);
+            drawHex(tx(1.5 * hq, Math.sqrt(3) * (hr + hq / 2)), ty(1.5 * hq, Math.sqrt(3) * (hr + hq / 2)), 0x101a30, 0.4);
           }
           for (const [hq, hr] of tri) {
-            const dx = tx(1.5 * hq);
-            const dy = ty(Math.sqrt(3) * (hr + hq / 2));
+            const dx = tx(1.5 * hq, Math.sqrt(3) * (hr + hq / 2));
+            const dy = ty(1.5 * hq, Math.sqrt(3) * (hr + hq / 2));
             const disc = new Graphics()
               .circle(dx, dy, fogRad)
               .fill({ color: 0x141d33 })
@@ -994,8 +1038,8 @@ export class BoardRenderer {
         // Charted (or normal mode): visibly-empty cluster — three faint hexes with
         // an "empty space" tint so the player can read it as a discoverable void.
         for (const [hq, hr] of tri) {
-          const dx = tx(1.5 * hq);
-          const dy = ty(Math.sqrt(3) * (hr + hq / 2));
+          const dx = tx(1.5 * hq, Math.sqrt(3) * (hr + hq / 2));
+          const dy = ty(1.5 * hq, Math.sqrt(3) * (hr + hq / 2));
           drawHex(dx, dy, 0x0a1326, 0.3);
           const dot = new Graphics().circle(dx, dy, scale * 0.12).fill({ color: 0x2a3c5e, alpha: 0.6 });
           planetLayer.addChild(dot);
@@ -1016,7 +1060,7 @@ export class BoardRenderer {
         drawn.add(key);
         const n = state.intersections[nId];
         if (!n) continue;
-        link.moveTo(tx(inter.x), ty(inter.y)).lineTo(tx(n.x), ty(n.y));
+        link.moveTo(tx(inter.x, inter.y), ty(inter.x, inter.y)).lineTo(tx(n.x, n.y), ty(n.x, n.y));
       }
     }
     link.stroke({ color: 0x39507a, width: 1, alpha: 0.5 });
@@ -1025,8 +1069,8 @@ export class BoardRenderer {
     // Planets: coloured discs carrying the resource glyph + a number badge.
     for (const sector of state.sectors) {
       for (const planet of sector.planets) {
-        const px = tx(planet.x);
-        const py = ty(planet.y);
+        const px = tx(planet.x, planet.y);
+        const py = ty(planet.x, planet.y);
         const rad = scale * 0.6;
         // Fog map: an unexplored planet hides its resource colour entirely — it
         // reads as a blank "uncharted" disc with just an outline until a ship
@@ -1161,8 +1205,8 @@ export class BoardRenderer {
     // so they revert to plain travel nodes there (kept everywhere else).
     const afterSetup = state.phaseState.phase !== "setup";
     for (const inter of Object.values(state.intersections)) {
-      const ix = tx(inter.x);
-      const iy = ty(inter.y);
+      const ix = tx(inter.x, inter.y);
+      const iy = ty(inter.x, inter.y);
       const dockSector = inter.dockingPointOf ? sectorById.get(inter.dockingPointOf) : undefined;
       // Charted once either adjacent planet is revealed (colony) / the outpost
       // sector is discovered (dock). In non-fog games everything is charted, so
@@ -1214,8 +1258,8 @@ export class BoardRenderer {
     for (const b of state.buildings) {
       const inter = state.intersections[b.intersectionId];
       if (!inter) continue;
-      const bx = tx(inter.x);
-      const by = ty(inter.y);
+      const bx = tx(inter.x, inter.y);
+      const by = ty(inter.x, inter.y);
       const pc = ownerColor.get(b.owner) ?? "yellow";
       const color = OWNER_FILL[pc];
       // Q1: colony & spaceport icons enlarged ~200% so they read clearly.
@@ -1246,8 +1290,8 @@ export class BoardRenderer {
     // Trade stations: owner-coloured pips arranged around each outpost centre.
     for (const sector of state.sectors) {
       if (sector.kind !== "outpost") continue;
-      const ocx = tx(1.5 * sector.q + 0.5);
-      const ocy = ty(Math.sqrt(3) * (sector.r + sector.q / 2 + 0.5));
+      const ocx = tx(1.5 * sector.q + 0.5, Math.sqrt(3) * (sector.r + sector.q / 2 + 0.5));
+      const ocy = ty(1.5 * sector.q + 0.5, Math.sqrt(3) * (sector.r + sector.q / 2 + 0.5));
       const dockPos = this.dockNodePositions(ocx, ocy, scale);
       for (const ts of state.tradeStations.filter((t) => t.outpostId === sector.id)) {
         const pos = dockPos[ts.dock % dockPos.length]!;
@@ -1277,8 +1321,8 @@ export class BoardRenderer {
     for (const ship of state.ships) {
       const inter = state.intersections[ship.intersectionId];
       if (!inter) continue;
-      let sx = tx(inter.x);
-      let sy = ty(inter.y);
+      let sx = tx(inter.x, inter.y);
+      let sy = ty(inter.x, inter.y);
       // P8-7 fix: a ship parked on an outpost docking point sits on a docking
       // *node*, not the hub centre — it takes the next free dock (one past the
       // stations already established there), matching the painted nodes.
@@ -2021,8 +2065,9 @@ export class BoardRenderer {
     const xs: number[] = [];
     const ys: number[] = [];
     for (const inter of Object.values(state.intersections)) {
-      xs.push(inter.x);
-      ys.push(inter.y);
+      const o = this.ori(inter.x, inter.y);
+      xs.push(o.x);
+      ys.push(o.y);
     }
     const minX = Math.min(...xs);
     const maxX = Math.max(...xs);

@@ -40,10 +40,10 @@ bottom {3,4,11,5,8,9,10}.
 ---
 
 ## 1. TOP PRIORITY
-1. Landscape (horizontal) map + side-settings toggle. — 🔶 Phase 2 (not yet
-   implemented — board is a portrait PixiJS canvas; needs a layout rotation + a
-   settings toggle. High-impact but a sizeable render change; doing it blind
-   overnight risked breaking the board, so deferred for a verified pass.)
+1. Landscape (horizontal) map + side-settings toggle. — ✅ (board-space rotation:
+   default landscape, side-tools ▭/▯ button swaps to portrait, persisted; labels
+   stay upright, hexes re-tile, clicks/fit/minimap all orientation-aware. Verified
+   in preview both ways.)
 
 ## 2. TUTORIAL
 2. Reposition tutorial boxes so they never cover the UI/board they describe
