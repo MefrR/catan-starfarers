@@ -632,6 +632,14 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   100% { transform: scale(1); }
 }
 .res-card.bloom-hit { animation: bloomHit 0.5s ease; }
+/* #53: red flash when a resource card's count drops (discard / trade / steal /
+   encounter payment) — the loss counterpart to the green production bloom. */
+@keyframes lossPulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 rgba(255,90,90,0); filter: none; }
+  30% { transform: scale(0.9); box-shadow: 0 0 20px rgba(255,90,90,0.75); filter: brightness(1.25) saturate(1.3); }
+  100% { transform: scale(1); box-shadow: 0 0 0 rgba(255,90,90,0); }
+}
+.res-card.loss-pulse { animation: lossPulse 0.55s ease; }
 
 /* #8: flying "+2 VP" badge celebrating a newly-won outpost friendship marker. */
 .marker-fly {

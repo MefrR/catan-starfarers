@@ -159,7 +159,11 @@ bottom {3,4,11,5,8,9,10}.
     line, instead of just the last 8. AI build/trade/move/establish turns were
     already logged by the engine uniformly; upgrade entries now read "added a
     freight pod" etc. Verified in preview: 40 lines, scrolls, pinned to bottom.)
-53. Resource gained/lost feedback w/ pulse; slow 7-robbery feedback. — 🔶 Phase 2
+53. Resource gained/lost feedback w/ pulse; slow 7-robbery feedback. — ✅ (gains
+    already bloom green via the production fly animation; added a red loss-pulse
+    that flashes any hand card whose count drops — discard, trade, steal, encounter
+    payment. The 7-steal still flies a card from the victim's hand, now reinforced
+    by the loss-pulse on the lost resource. Verified in preview: ore 3→1 pulses.)
 54. Damaged-ship color must not collide with player colors. — ✅
 55. Clicking a damaged ship does nothing (no green nodes). — ✅
 56. Free Trade Ship movement lock-up. — 🔶 Phase 2

@@ -133,6 +133,10 @@ export class HUD {
   private cWant: Partial<Record<Resource, number>> = {};
   /** Whether the bottom-bar trade tray is expanded (opened by clicking a card). */
   private tradeOpen = false;
+  /** #53: last seen counts of my hand, so a card whose count DROPS (discard, trade,
+   *  steal, encounter payment) flashes a red loss-pulse. Gains already bloom green
+   *  via the production fly animation. */
+  private lastHandSnapshot: Partial<Record<Resource, number>> | null = null;
   /** Whether the Costs & VP reference popover (the "i" tool) is open. */
   private showRef = false;
   /** Last `${activePlayer}:${phase}` rendered — drives the action-bar swap-in
@@ -1174,6 +1178,10 @@ export class HUD {
       const sel = this.discardSel[r] ?? 0;
       const give = this.pGive[r] ?? 0;
       const n = me.hand[r];
+      // #53: flash the card red when its count drops (discard, trade, steal,
+      // encounter payment). Gains already bloom via the production fly animation.
+      const prevN = this.lastHandSnapshot?.[r] ?? n;
+      const lost = prevN > n;
       // Show the hand like a fanned deck of physical cards: each resource is a
       // stack whose visible left edges count out how many you hold. The front
       // card carries the glyph/label; the badge still shows the exact number
@@ -1186,7 +1194,7 @@ export class HUD {
         (_v, i) => `<span class="res-edge" style="left:-${(edges - i) * 4}px"></span>`,
       ).join("");
       const card = el(`
-        <div class="res-card ${n === 0 ? "empty" : ""} ${discardMode ? "selectable" : ""} ${tradeMode ? "selectable trade" : ""} ${sel > 0 ? "discard-sel" : ""} ${tradeMode && give > 0 ? "trade-sel" : ""}" data-res="${r}" title="${RESOURCE_LABEL[r]} ×${n}" style="--res:${RES_COLOR[r]};margin-left:${gutter}px">
+        <div class="res-card ${n === 0 ? "empty" : ""} ${lost ? "loss-pulse" : ""} ${discardMode ? "selectable" : ""} ${tradeMode ? "selectable trade" : ""} ${sel > 0 ? "discard-sel" : ""} ${tradeMode && give > 0 ? "trade-sel" : ""}" data-res="${r}" title="${RESOURCE_LABEL[r]} ×${n}" style="--res:${RES_COLOR[r]};margin-left:${gutter}px">
           ${edgeHtml}
           <span class="res-glyph">${resourceGlyphSvg(r)}</span>
           <span class="res-name">${RESOURCE_LABEL[r]}</span>
@@ -1215,6 +1223,8 @@ export class HUD {
       }
       hand.appendChild(card);
     }
+    // #53: remember this hand so the next render can detect drops for the loss-pulse.
+    this.lastHandSnapshot = { ...me.hand };
     // Discoverability: a small labeled Trade button next to the cards — not
     // everyone knows that tapping a resource card starts a trade. Active only
     // when trading is actually possible (your build phase); dim otherwise.
