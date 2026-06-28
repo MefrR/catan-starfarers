@@ -55,11 +55,18 @@ export function createGameState(
     ...config,
   };
 
+  // #15/#16 Map layout mode. "official" = the recommended FIXED board (a constant
+  // seed, so the same arrangement every game) with the balance repair on;
+  // "balanced" = randomized each game with the repair; "unbalanced" = randomized,
+  // raw. Falls back to the old balancedLayout boolean for back-compat.
+  const layout =
+    cfg.layout ?? (cfg.balancedLayout === false ? "unbalanced" : "balanced");
+  const OFFICIAL_SEED = 0x57a4; // fixed → the recommended layout reproduces exactly
   const { sectors, intersections } = generateBoard({
     setup: "beginner",
-    seed: Date.now() & 0xffff,
+    seed: layout === "official" ? OFFICIAL_SEED : Date.now() & 0xffff,
     randomizeLayout: cfg.fogMap,
-    balancedLayout: cfg.balancedLayout,
+    balancedLayout: layout !== "unbalanced",
   });
   void homeColonySites; // retained helper (used by tests / future variants)
 

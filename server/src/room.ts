@@ -422,6 +422,7 @@ export class Room {
         if (intent.friendlyRobber !== undefined) this.config = { ...this.config, friendlyRobber: intent.friendlyRobber };
         if (intent.hideBank !== undefined) this.config = { ...this.config, hideBank: intent.hideBank };
         if (intent.balancedLayout !== undefined) this.config = { ...this.config, balancedLayout: intent.balancedLayout };
+        if (intent.layout !== undefined) this.config = { ...this.config, layout: intent.layout };
         if (intent.deck36Dice !== undefined) this.config = { ...this.config, deck36Dice: intent.deck36Dice };
         // Visibility is now toggled inside the lobby (host-only). Re-broadcast of
         // the room list is handled by the index layer for setRoomConfig.

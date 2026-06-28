@@ -59,7 +59,9 @@ export class NewGameMenu {
   private botSpeed: "relaxed" | "normal" | "fast" = "normal";
   private targetVP = DEFAULT_TARGET_VP;
   private hideBank = false;
-  private balancedLayout = true;
+  /** #15/#16 map layout: official (fixed recommended board) / balanced (random,
+   *  fair) / unbalanced (random, raw). Default official. */
+  private layout: "official" | "balanced" | "unbalanced" = "official";
   private deck36Dice = false;
 
   /** When signed in, default the commander name to the profile's display name. */
@@ -323,7 +325,12 @@ export class NewGameMenu {
         varRow.appendChild(b);
       };
       chip("Hide Bank", "Hide the resource-bank counts", this.hideBank, () => (this.hideBank = !this.hideBank));
-      chip("Balanced Layout", "Fair number placement (no adjacent 6 & 8)", this.balancedLayout, () => (this.balancedLayout = !this.balancedLayout));
+      // #15/#16 — pick one map layout (radio group).
+      const layoutChip = (label: string, hint: string, mode: "official" | "balanced" | "unbalanced"): void =>
+        chip(label, hint, this.layout === mode, () => (this.layout = mode));
+      layoutChip("Official Map", "The recommended fixed layout — same board every game", "official");
+      layoutChip("Balanced Map", "Randomized each game, fair (no adjacent 6 & 8)", "balanced");
+      layoutChip("Unbalanced Map", "Randomized each game, raw (adjacent 6 & 8 possible)", "unbalanced");
       chip("Deck36 Dice", "Even dice distribution (deck of 36)", this.deck36Dice, () => (this.deck36Dice = !this.deck36Dice));
     };
     paintVariants();
@@ -340,7 +347,8 @@ export class NewGameMenu {
           targetVictoryPoints: this.targetVP,
           botSpeed: this.botSpeed,
           hideBank: this.hideBank,
-          balancedLayout: this.balancedLayout,
+          layout: this.layout,
+          balancedLayout: this.layout !== "unbalanced",
           deck36Dice: this.deck36Dice,
         },
       };

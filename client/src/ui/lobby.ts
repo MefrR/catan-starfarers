@@ -77,7 +77,8 @@ export class LobbyUI {
   private targetVP = DEFAULT_TARGET_VP;
   private botSpeed: "relaxed" | "normal" | "fast" = "normal";
   private hideBank = false;
-  private balancedLayout = true;
+  /** #15/#16 map layout: official / balanced / unbalanced. Default official. */
+  private layout: "official" | "balanced" | "unbalanced" = "official";
   private deck36Dice = false;
   private onStart: StartHandler | undefined;
   private onBack: (() => void) | undefined;
@@ -363,15 +364,16 @@ export class LobbyUI {
       `<div class="setup-row"><div class="setup-label">${label}</div><div class="setup-ctrl"><span class="ro-pill">${escapeHtml(val)}</span></div></div>`;
     const variants: [string, boolean][] = [
       ["Hide Bank", !!c.hideBank],
-      ["Balanced Layout", c.balancedLayout !== false],
       ["Deck36 Dice", !!c.deck36Dice],
     ];
+    const layoutMode = c.layout ?? (c.balancedLayout === false ? "unbalanced" : "balanced");
     const chips = variants
       .map(([n, on]) => `<span class="variant-chip ro ${on ? "on" : ""}">${n}</span>`)
       .join("");
     return `
       ${pill("Visibility", lobby.isPublic ? "Public" : "Private")}
       ${pill("Galaxy", c.fogMap ? "Uncharted" : "Charted")}
+      ${pill("Map layout", `${cap(layoutMode)}${layoutMode === "official" ? " (fixed)" : ""}`)}
       ${pill("Bot speed", cap(c.botSpeed ?? "normal"))}
       ${pill("Victory target", `${c.targetVictoryPoints ?? 15} VP`)}
       <div class="setup-row"><div class="setup-label">Variants</div><div class="setup-ctrl"><div class="variant-chips ro">${chips}</div></div></div>
@@ -423,7 +425,7 @@ export class LobbyUI {
     const c = lobby.config;
     const configSig = isHost
       ? ""
-      : `|${c.fogMap}|${c.turnSeconds}|${c.targetVictoryPoints}|${c.botSpeed}|${c.hideBank}|${c.balancedLayout}|${c.deck36Dice}|${lobby.isPublic}`;
+      : `|${c.fogMap}|${c.turnSeconds}|${c.targetVictoryPoints}|${c.botSpeed}|${c.hideBank}|${c.layout ?? c.balancedLayout}|${c.deck36Dice}|${lobby.isPublic}`;
     const sig = `${lobby.roomCode}|${isHost}|${lobby.started}|${onlineInvite}${configSig}`;
     if (this.lobbySig === sig && !lobby.started && this.root.querySelector(".roomcode-title")) {
       const crewCtrl = this.root.querySelector("#crewctrl");
@@ -588,8 +590,20 @@ export class LobbyUI {
         };
         chip("Hide Bank", "Hide the resource-bank counts", this.hideBank,
           (v) => { this.hideBank = v; net.send({ t: "setRoomConfig", hideBank: v }); });
-        chip("Balanced Layout", "Fair number placement (no adjacent 6 & 8)", this.balancedLayout,
-          (v) => { this.balancedLayout = v; net.send({ t: "setRoomConfig", balancedLayout: v }); });
+        // #15/#16 — map layout radio group (official / balanced / unbalanced).
+        const layoutChip = (label: string, hint: string, mode: "official" | "balanced" | "unbalanced"): void => {
+          const on = this.layout === mode;
+          const b = el(`<button class="variant-chip ${on ? "on" : ""}" title="${hint}">${label}</button>`);
+          b.addEventListener("click", () => {
+            this.layout = mode;
+            net.send({ t: "setRoomConfig", layout: mode, balancedLayout: mode !== "unbalanced" });
+            paintVariants();
+          });
+          varRow.appendChild(b);
+        };
+        layoutChip("Official Map", "The recommended fixed layout — same board every game", "official");
+        layoutChip("Balanced Map", "Randomized each game, fair (no adjacent 6 & 8)", "balanced");
+        layoutChip("Unbalanced Map", "Randomized each game, raw (adjacent 6 & 8 possible)", "unbalanced");
         chip("Deck36 Dice", "Even dice distribution (deck of 36)", this.deck36Dice,
           (v) => { this.deck36Dice = v; net.send({ t: "setRoomConfig", deck36Dice: v }); });
       };
@@ -603,7 +617,8 @@ export class LobbyUI {
         targetVictoryPoints: this.targetVP,
         botSpeed: this.botSpeed,
         hideBank: this.hideBank,
-        balancedLayout: this.balancedLayout,
+        layout: this.layout,
+        balancedLayout: this.layout !== "unbalanced",
         deck36Dice: this.deck36Dice,
         isPublic: this.hostPublic,
       });
@@ -621,7 +636,8 @@ export class LobbyUI {
             targetVictoryPoints: this.targetVP,
             botSpeed: this.botSpeed,
             hideBank: this.hideBank,
-            balancedLayout: this.balancedLayout,
+            layout: this.layout,
+            balancedLayout: this.layout !== "unbalanced",
             deck36Dice: this.deck36Dice,
           },
         }),

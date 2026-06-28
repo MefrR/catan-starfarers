@@ -444,8 +444,16 @@ export interface GameConfig {
   friendlyRobber?: boolean;
   /** Hide the resource-bank counts from the in-game panel. Default false (shown). */
   hideBank?: boolean;
-  /** Balanced number placement (no adjacent 6/8) vs fully random. Default true. */
+  /** Balanced number placement (no adjacent 6/8) vs fully random. Default true.
+   *  Kept for back-compat; `layout` (below) is the preferred control. */
   balancedLayout?: boolean;
+  /** Map layout mode (#15/#16):
+   *  - "official"   : the recommended fixed board — same arrangement every game
+   *                   (deterministic seed) with the official disc distribution.
+   *  - "balanced"   : randomized every game, no illegal adjacencies (no 6/8 touching).
+   *  - "unbalanced" : randomized every game, raw (adjacent 6/8 possible).
+   *  Default "official". */
+  layout?: "official" | "balanced" | "unbalanced";
   /** Deck-of-36 dice (every combination once per cycle = even distribution) vs
    *  independent 2d6. Default false. */
   deck36Dice?: boolean;

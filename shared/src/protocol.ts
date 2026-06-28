@@ -38,6 +38,7 @@ export type ClientIntent =
       friendlyRobber?: boolean;
       hideBank?: boolean;
       balancedLayout?: boolean;
+      layout?: "official" | "balanced" | "unbalanced";
       deck36Dice?: boolean;
       isPublic?: boolean; // room visibility, now toggled inside the lobby
     }
