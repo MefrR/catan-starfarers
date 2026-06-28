@@ -5,21 +5,23 @@
 FROM node:20-slim
 
 WORKDIR /app
-ENV NODE_ENV=production
 
-# Install ALL workspace deps first (incl. dev) so the build can run. Copying the
-# manifests + lockfile before the source keeps this layer cached across code-only
-# changes.
+# Install ALL workspace deps first (incl. dev — tsc/vite/esbuild) so the build can
+# run. NOTE: do NOT set NODE_ENV=production yet — npm would skip devDependencies
+# and the build tools would be missing (exit 127). Copying the manifests + lockfile
+# before the source keeps this layer cached across code-only changes.
 COPY package.json package-lock.json ./
 COPY shared/package.json shared/
 COPY server/package.json server/
 COPY client/package.json client/
 RUN npm ci
 
-# Bring in the source and build everything.
+# Bring in the source and build everything, then drop dev deps to slim the image.
 COPY . .
 RUN npm run build && npm prune --omit=dev
 
-# The server reads PORT from the environment (Fly injects it) and binds 0.0.0.0.
+# Runtime only: NODE_ENV=production now (after the build). The server reads PORT
+# from the environment (Fly injects it) and binds 0.0.0.0.
+ENV NODE_ENV=production
 EXPOSE 3000
 CMD ["node", "server/dist/index.mjs"]
