@@ -2310,6 +2310,16 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   background: linear-gradient(160deg, #39d8c8, #52e8a0); border-color: transparent;
 }
 .variant-chip.on:hover { color: #06231d; filter: brightness(1.05); }
+/* Two-line layout chips: a bold title with a small description underneath so
+   players can tell Official / Balanced / Unbalanced apart at a glance. */
+.layout-chips { align-items: stretch; }
+.layout-chip {
+  display: flex; flex-direction: column; gap: 2px; text-align: left;
+  padding: 8px 14px; border-radius: 14px; max-width: 230px;
+}
+.layout-chip .vc-title { font-size: 13px; font-weight: 700; line-height: 1.15; }
+.layout-chip .vc-sub { font-size: 11px; font-weight: 500; line-height: 1.25; opacity: 0.78; }
+.layout-chip.on .vc-sub { opacity: 0.85; }
 /* Read-only match settings shown to guests (look, don't touch). */
 .variant-chips.ro .variant-chip { cursor: default; pointer-events: none; opacity: 0.9; }
 .ro-pill {

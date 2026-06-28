@@ -483,6 +483,10 @@ export class LobbyUI {
             <div class="setup-ctrl"><div class="seg" id="vptarget"></div></div>
           </div>
           <div class="setup-row">
+            <div class="setup-label">Map layout</div>
+            <div class="setup-ctrl"><div class="variant-chips layout-chips" id="maplayout"></div></div>
+          </div>
+          <div class="setup-row">
             <div class="setup-label">Variants</div>
             <div class="setup-ctrl"><div class="variant-chips" id="variants"></div></div>
           </div>
@@ -590,24 +594,34 @@ export class LobbyUI {
         };
         chip("Hide Bank", "Hide the resource-bank counts", this.hideBank,
           (v) => { this.hideBank = v; net.send({ t: "setRoomConfig", hideBank: v }); });
-        // #15/#16 — map layout radio group (official / balanced / unbalanced).
-        const layoutChip = (label: string, hint: string, mode: "official" | "balanced" | "unbalanced"): void => {
-          const on = this.layout === mode;
-          const b = el(`<button class="variant-chip ${on ? "on" : ""}" title="${hint}">${label}</button>`);
-          b.addEventListener("click", () => {
-            this.layout = mode;
-            net.send({ t: "setRoomConfig", layout: mode, balancedLayout: mode !== "unbalanced" });
-            paintVariants();
-          });
-          varRow.appendChild(b);
-        };
-        layoutChip("Official Map", "The recommended fixed layout — same board every game", "official");
-        layoutChip("Balanced Map", "Randomized each game, fair (no adjacent 6 & 8)", "balanced");
-        layoutChip("Unbalanced Map", "Randomized each game, raw (adjacent 6 & 8 possible)", "unbalanced");
         chip("Deck36 Dice", "Even dice distribution (deck of 36)", this.deck36Dice,
           (v) => { this.deck36Dice = v; net.send({ t: "setRoomConfig", deck36Dice: v }); });
       };
+
+      // #15/#16 — map layout radio group (official / balanced / unbalanced),
+      // each with a small description so players understand the difference.
+      const layoutRow = screen.querySelector("#maplayout")!;
+      const paintLayout = (): void => {
+        layoutRow.replaceChildren();
+        const layoutChip = (title: string, sub: string, mode: "official" | "balanced" | "unbalanced"): void => {
+          const on = this.layout === mode;
+          const b = el(
+            `<button class="variant-chip layout-chip ${on ? "on" : ""}">` +
+              `<span class="vc-title">${title}</span><span class="vc-sub">${sub}</span></button>`,
+          );
+          b.addEventListener("click", () => {
+            this.layout = mode;
+            net.send({ t: "setRoomConfig", layout: mode, balancedLayout: mode !== "unbalanced" });
+            paintLayout();
+          });
+          layoutRow.appendChild(b);
+        };
+        layoutChip("Official", "The recommended board — same setup every game", "official");
+        layoutChip("Balanced", "Random each game, fair (no 6 next to 8)", "balanced");
+        layoutChip("Unbalanced", "Random each game, raw (6 can touch 8)", "unbalanced");
+      };
       paintVariants();
+      paintLayout();
 
       // Push the initial defaults so a brand-new room shows its settings.
       net.send({

@@ -148,6 +148,13 @@ export class NewGameMenu {
           </div>
 
           <div class="setup-row">
+            <div class="setup-label">Map layout</div>
+            <div class="setup-ctrl">
+              <div class="variant-chips layout-chips" id="maplayout"></div>
+            </div>
+          </div>
+
+          <div class="setup-row">
             <div class="setup-label">Variants</div>
             <div class="setup-ctrl">
               <div class="variant-chips" id="variants"></div>
@@ -325,15 +332,29 @@ export class NewGameMenu {
         varRow.appendChild(b);
       };
       chip("Hide Bank", "Hide the resource-bank counts", this.hideBank, () => (this.hideBank = !this.hideBank));
-      // #15/#16 — pick one map layout (radio group).
-      const layoutChip = (label: string, hint: string, mode: "official" | "balanced" | "unbalanced"): void =>
-        chip(label, hint, this.layout === mode, () => (this.layout = mode));
-      layoutChip("Official Map", "The recommended fixed layout — same board every game", "official");
-      layoutChip("Balanced Map", "Randomized each game, fair (no adjacent 6 & 8)", "balanced");
-      layoutChip("Unbalanced Map", "Randomized each game, raw (adjacent 6 & 8 possible)", "unbalanced");
       chip("Deck36 Dice", "Even dice distribution (deck of 36)", this.deck36Dice, () => (this.deck36Dice = !this.deck36Dice));
     };
     paintVariants();
+
+    // #15/#16 — pick one map layout (radio group), each with a small
+    // description underneath so players understand the difference at a glance.
+    const layoutRow = screen.querySelector("#maplayout")!;
+    const paintLayout = (): void => {
+      layoutRow.replaceChildren();
+      const layoutChip = (title: string, sub: string, mode: "official" | "balanced" | "unbalanced"): void => {
+        const on = this.layout === mode;
+        const b = el(
+          `<button class="variant-chip layout-chip ${on ? "on" : ""}">` +
+            `<span class="vc-title">${title}</span><span class="vc-sub">${sub}</span></button>`,
+        );
+        b.addEventListener("click", () => { this.layout = mode; paintLayout(); });
+        layoutRow.appendChild(b);
+      };
+      layoutChip("Official", "The recommended board — same setup every game", "official");
+      layoutChip("Balanced", "Random each game, fair (no 6 next to 8)", "balanced");
+      layoutChip("Unbalanced", "Random each game, raw (6 can touch 8)", "unbalanced");
+    };
+    paintLayout();
 
     const launchBtn = screen.querySelector("#launch") as HTMLElement;
     launchBtn.addEventListener("click", () => {
