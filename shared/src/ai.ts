@@ -571,10 +571,11 @@ function flightAction(state: GameState, me: PlayerState): ClientIntent {
   if (pf && pf.playerId === me.id && pf.options.length > 0) {
     return { t: "chooseFriendship", cardId: pf.options[0]! };
   }
+  // #24: no ships on the board → nothing to fly, so don't shake at all; end turn.
+  const myShips = state.ships.filter((s) => s.owner === me.id);
+  if (myShips.length === 0) return { t: "endTurn" };
   if (!state.phaseState.shake) return { t: "shakeMothership" };
   const speed = state.phaseState.moveBudget ?? state.phaseState.shake.speed;
-
-  const myShips = state.ships.filter((s) => s.owner === me.id);
   for (const ship of myShips) {
     // Already on a target → establish. Colony ships settle open sites (including
     // ice/pirate planets they can now clear for a +1 VP medal); trade ships dock

@@ -345,6 +345,7 @@ export class HUD {
     }
     this.launchPicker?.remove();
     this.clearEstablishPopover();
+    this.clearColonyNotice();
     this.clearBoardConfirm();
     this.dismissMapConfirm();
     this.board.onViewChange = null;
@@ -366,7 +367,7 @@ export class HUD {
     this.root.replaceChildren();
     document
       .querySelectorAll(
-        ".gameover-overlay, .encounter-overlay, .enc-result, .discard-overlay, .shake-overlay, .dice-overlay, .result-toast, .fly-token, .marker-fly, .exit-confirm, .turn-splash",
+        ".gameover-overlay, .encounter-overlay, .enc-result, .discard-overlay, .shake-overlay, .dice-overlay, .result-toast, .fly-token, .marker-fly, .exit-confirm, .turn-splash, .colony-notice",
       )
       .forEach((n) => n.remove());
   }
@@ -596,7 +597,11 @@ export class HUD {
     // can shake now. In multiplayer it's a server round-trip, so the state is
     // still tradeBuild here — arm an auto-shake that fires once flight arrives
     // (handled in render) so it stays a single tap.
+    // #24: with no ships there's nothing to fly — never shake; the player just
+    // ends the turn (the primary button shows "End turn" in this case).
+    const hasShips = this.game.getState().ships.some((s) => s.owner === meId);
     const after = this.game.getState().phaseState;
+    if (!hasShips) return;
     if (after.phase === "flight" && !after.shake && !after.encounter) {
       this.act({ t: "shakeMothership" });
     } else {
@@ -1412,6 +1417,7 @@ export class HUD {
 
     this.syncEncounterOverlay(state, me);
     this.syncDiscardOverlay(state, me);
+    this.syncColonyNotice(state); // #20: "becomes a colony next turn" bubble
     this.syncEstablishPopover(state, me); // AD5: establish bubble above a tapped ship
     this.syncTurnTimer(state);
     this.syncGameOverOverlay(state);
@@ -1544,7 +1550,12 @@ export class HUD {
     if (ps.pendingFriendship) return null; // a friendship choice isn't auto-timed
     if (ps.phase === "production") return { key: `roll|${i}`, seconds: Math.min(3, chosen || 3), kind: "roll", mine };
     if (ps.phase === "tradeBuild") return { key: `build|${i}`, seconds: chosen, kind: "build", mine };
-    if (ps.phase === "flight") return { key: `${ps.shake ? "move" : "shake"}|${i}`, seconds: chosen, kind: ps.shake ? "move" : "shake", mine };
+    if (ps.phase === "flight") {
+      // #24: no ships → the timed step is just "end turn" (never an auto-shake).
+      if (!ps.shake && !state.ships.some((s) => s.owner === active.id))
+        return { key: `endflight|${i}`, seconds: chosen, kind: "move", mine };
+      return { key: `${ps.shake ? "move" : "shake"}|${i}`, seconds: chosen, kind: ps.shake ? "move" : "shake", mine };
+    }
     return null;
   }
 
@@ -2910,6 +2921,40 @@ export class HUD {
   private estabPop: HTMLElement | null = null;
   private estabRaf = 0;
   private estabKey = "";
+  // #20: the "becomes a colony next turn" bubble (shown once per warning, 5s).
+  private shownColonyNoticeSeq = 0;
+  private colonyNoticeEl: HTMLElement | null = null;
+  private colonyNoticeRaf = 0;
+  private colonyNoticeTimer = 0;
+
+  private clearColonyNotice(): void {
+    if (this.colonyNoticeRaf) { cancelAnimationFrame(this.colonyNoticeRaf); this.colonyNoticeRaf = 0; }
+    if (this.colonyNoticeTimer) { window.clearTimeout(this.colonyNoticeTimer); this.colonyNoticeTimer = 0; }
+    this.colonyNoticeEl?.remove();
+    this.colonyNoticeEl = null;
+  }
+
+  /** #20: when a colony ship is flagged to auto-convert next turn, float a small
+   *  bubble above that colony site for 5 seconds (re-pinned each frame so it
+   *  tracks panning/zoom). Shown once per warning via the rising `seq`. */
+  private syncColonyNotice(state: GameState): void {
+    const notice = state.colonyNotice;
+    if (!notice || notice.seq <= this.shownColonyNoticeSeq) return;
+    this.shownColonyNoticeSeq = notice.seq;
+    if (!state.intersections[notice.intersectionId]) return;
+    this.clearColonyNotice();
+    const pop = el(`<div class="colony-notice">⏳ Becomes a colony next turn</div>`);
+    document.body.appendChild(pop);
+    this.colonyNoticeEl = pop;
+    const place = (): void => {
+      if (!this.colonyNoticeEl) return;
+      const pos = this.board.screenPosOf(notice.intersectionId);
+      if (pos) { this.colonyNoticeEl.style.left = `${pos.x}px`; this.colonyNoticeEl.style.top = `${pos.y}px`; }
+      this.colonyNoticeRaf = requestAnimationFrame(place);
+    };
+    place();
+    this.colonyNoticeTimer = window.setTimeout(() => this.clearColonyNotice(), 5000);
+  }
 
   private confirmPop: HTMLElement | null = null;
   private confirmRaf = 0;
@@ -3098,7 +3143,9 @@ export class HUD {
       case "flight": {
         // Shaking the mothership is the floating primary-action button now (AD6).
         if (!ps.shake) {
-          actions.appendChild(el(`<div class="waiting">Shake the mothership to fly.</div>`));
+          // #24: no ships → no shake at all; just end the turn.
+          const haveShips = state.ships.some((s) => s.owner === me.id);
+          actions.appendChild(el(`<div class="waiting">${haveShips ? "Shake the mothership to fly." : "No ships to fly — end your turn."}</div>`));
           break;
         }
         const speed = ps.moveBudget ?? ps.shake.speed;

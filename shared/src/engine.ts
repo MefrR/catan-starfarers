@@ -992,6 +992,7 @@ function doMoveShip(
   ship.intersectionId = dest;
   ship.distanceMoved += walked.length;
   ship.movedThisTurn = ship.distanceMoved >= budget;
+  ship.parkedTurns = 0; // #20: a ship that moves restarts its colony-site grace
   revealAround(state, dest, rng);
   resolveAdjacentSpecials(state, player, dest, rng);
   // A trade ship that lands ON an outpost docking point establishes a trade
@@ -1606,6 +1607,10 @@ export function applyIntent(
       if (!isActive) return fail(input, "Not your turn.");
       if (ps.phase !== "flight") return fail(input, "Can only shake during flight.");
       if (ps.shake) return fail(input, "Already shook this flight phase.");
+      // #24: with no ships on the board there's nothing to fly — the mothership
+      // doesn't shake at all; the player just ends their turn.
+      if (!state.ships.some((s) => s.owner === me.id))
+        return fail(input, "No ships to fly — end your turn.");
       doShake(state, rng);
       return { state };
     }
@@ -1719,14 +1724,24 @@ export function applyIntent(
       if (anyDiscardsPending()) return fail(input, "Resolve discards first.");
       if (stealPending()) return fail(input, "Steal a card first.");
       if (ps.pendingFriendship) return fail(input, "Choose your friendship ability first.");
-      // #20: a colony ship may not loiter on a colony site — if one ends the turn
-      // parked on an establishable site, settle it now so it can't sit there a
-      // second turn blocking the spot. (Colony only: a trade station grants a
-      // player-chosen friendship card, so those stay a manual bubble action — #21.)
+      // #20: a colony ship may stop on a colony site, but may NOT stay there
+      // indefinitely. It's allowed to sit through ONE turn-end (we flag a warning
+      // bubble); if it's still parked at the end of the player's NEXT turn, it
+      // auto-converts to a colony so it can't loiter and block the spot. (Colony
+      // only: a trade station grants a player-chosen friendship card, so those
+      // stay a manual bubble action — #21.)
       for (const s of state.ships.filter((sh) => sh.owner === me.id && sh.kind === "colonyShip")) {
         const it = state.intersections[s.intersectionId];
-        if (it && it.adjacentPlanets.length === 2 && !state.buildings.some((b) => b.intersectionId === it.id)) {
-          doEstablishColony(state, me, s.id, rng); // ignores the error if it can't settle here
+        const onSite =
+          !!it && it.adjacentPlanets.length === 2 && !state.buildings.some((b) => b.intersectionId === it.id);
+        if (!onSite) { s.parkedTurns = 0; continue; }
+        s.parkedTurns = (s.parkedTurns ?? 0) + 1;
+        if (s.parkedTurns >= 2) {
+          doEstablishColony(state, me, s.id, rng); // second turn parked → settle now
+        } else {
+          // First turn parked: allow it, but warn it converts next turn.
+          state.colonyNotice = { intersectionId: it!.id, seq: (state.colonyNotice?.seq ?? 0) + 1 };
+          log(state, `${me.name}'s colony ship will become a colony next turn unless it moves.`);
         }
       }
       endTurn(state);

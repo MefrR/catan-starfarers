@@ -146,6 +146,10 @@ export interface Ship {
   /** Spaces already travelled this flight phase. A ship may move repeatedly
    *  (e.g. 3 then 5 then 2) as long as the running total stays within its speed. */
   distanceMoved: number;
+  /** #20: how many of the owner's turn-ends this colony ship has sat on a colony
+   *  site. It may loiter one turn; on the second it auto-converts to a colony.
+   *  Reset to 0 whenever the ship moves. */
+  parkedTurns?: number;
 }
 
 export interface TradeStation {
@@ -423,6 +427,10 @@ export interface GameState {
   config: GameConfig;
   log: string[];
   stats?: GameStats;
+  /** #20: transient signal that a colony ship parked on a colony site will auto-
+   *  convert to a colony next turn. The client shows a 5s bubble above that site;
+   *  `seq` rises each time so it's only shown once per warning. */
+  colonyNotice?: { intersectionId: string; seq: number };
 }
 
 export interface GameConfig {

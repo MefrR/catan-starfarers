@@ -2073,6 +2073,21 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   position: fixed; z-index: 90; transform: translate(-50%, -135%);
   pointer-events: auto; animation: estabPop 0.18s cubic-bezier(0.2, 1.4, 0.4, 1) both;
 }
+/* #20: the "becomes a colony next turn" warning bubble, floating above the site. */
+.colony-notice {
+  position: fixed; z-index: 89; transform: translate(-50%, -150%);
+  pointer-events: none; white-space: nowrap;
+  padding: 7px 13px; border-radius: 11px;
+  font-size: 12.5px; font-weight: 800; color: #04231d;
+  background: linear-gradient(165deg, #ffd86b, #f5a623);
+  border: 1px solid rgba(255, 220, 130, 0.85);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 18px rgba(245, 166, 35, 0.4);
+  animation: estabPop 0.2s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.colony-notice::after {
+  content: ""; position: absolute; left: 50%; top: 100%; transform: translateX(-50%);
+  border: 7px solid transparent; border-top-color: #f5a623;
+}
 .estab-pop-btn::before, .estab-pop-btn::after { content: none; }
 .estab-pop-btn {
   padding: 9px 16px; border-radius: 11px; cursor: pointer; font-weight: 800; font-size: 13.5px;
