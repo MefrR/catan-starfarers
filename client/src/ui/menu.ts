@@ -386,8 +386,16 @@ export class NewGameMenu {
       shatter(resumeBtn, "#ffd23f", () => this.onResume?.());
     });
 
-    // AB4: prefill the commander name from the signed-in profile.
-    (screen.querySelector("#name") as HTMLInputElement).value = this.defaultName;
+    // AB4: prefill the commander name from the signed-in profile. When signed in
+    // the name is LOCKED to the profile display name — it can only be changed from
+    // the profile page, never per-game.
+    const nameInput = screen.querySelector("#name") as HTMLInputElement;
+    nameInput.value = this.defaultName;
+    if (auth.currentProfile()) {
+      nameInput.readOnly = true;
+      nameInput.classList.add("locked");
+      nameInput.title = "Your name comes from your account — change it on your profile.";
+    }
 
     this.root.replaceChildren(screen);
   }

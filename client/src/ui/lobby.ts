@@ -249,9 +249,17 @@ export class LobbyUI {
       </div>
     `);
     const name = () => (screen.querySelector("#name") as HTMLInputElement).value.trim();
-    // AB4: prefill the commander name from the signed-in profile.
+    // AB4: prefill the commander name from the signed-in profile. When signed in
+    // the name is LOCKED — it's your account name and can only be changed from the
+    // profile page, not when hosting/joining.
     const profile = auth.currentProfile();
-    if (profile) (screen.querySelector("#name") as HTMLInputElement).value = profile.displayName;
+    if (profile) {
+      const nameInput = screen.querySelector("#name") as HTMLInputElement;
+      nameInput.value = profile.displayName;
+      nameInput.readOnly = true;
+      nameInput.classList.add("locked");
+      nameInput.title = "Your name comes from your account — change it on your profile.";
+    }
     screen.querySelector("#back")?.addEventListener("click", () => { net.send({ t: "leaveBrowsing" }); this.onBack?.(); });
     const hostBtn = screen.querySelector("#host") as HTMLElement;
     hostBtn.addEventListener("click", () => {

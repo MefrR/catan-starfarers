@@ -2881,6 +2881,12 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   transition: border-color 0.2s ease;
 }
 .setup input.setup-name:focus { border-color: #39d8c8; }
+/* Locked to the signed-in account name (change it on the profile page). */
+.setup input.setup-name.locked {
+  cursor: not-allowed; color: rgba(222, 232, 252, 0.72);
+  border-bottom-color: rgba(120, 160, 255, 0.16);
+}
+.setup input.setup-name.locked:focus { border-color: rgba(120, 160, 255, 0.16); }
 
 /* Round color swatches: glowing orbs, the picked one ringed + lifted. */
 .swatches { display: flex; gap: 12px; }
