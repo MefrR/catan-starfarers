@@ -1043,17 +1043,20 @@ export class HUD {
     // empty warning once it nears depletion (≤10). Players draw from this pile on
     // every roll while behind, so it can run dry — surface that instead of letting
     // the bonus silently stop granting cards.
+    // Reserve-pile limitation off → unlimited; show ∞ instead of a count.
+    const unlimited = state.config.reservePileLimit === false;
     const reserveLeft = RESOURCES.reduce((s, r) => s + state.reservePile[r], 0);
-    const reserveCls = reserveLeft <= 0 ? "empty" : reserveLeft <= 10 ? "low" : "";
-    const reserveTitle =
-      reserveLeft <= 0
+    const reserveCls = unlimited ? "" : reserveLeft <= 0 ? "empty" : reserveLeft <= 10 ? "low" : "";
+    const reserveTitle = unlimited
+      ? "Unlimited reserve pile — catch-up cards never run out"
+      : reserveLeft <= 0
         ? "Reserve pile empty — no more catch-up cards"
         : reserveLeft <= 10
           ? `Reserve pile running low: ${reserveLeft} card${reserveLeft === 1 ? "" : "s"} left`
           : `${reserveLeft} cards left in the reserve pile (catch-up bonus)`;
     scoreboard.appendChild(
       el(
-        `<div class="reserve-meter ${reserveCls}" title="${reserveTitle}">${cardGlyphSvg()}<span class="rm-n">${reserveLeft}</span><span class="rm-label">reserve</span></div>`,
+        `<div class="reserve-meter ${reserveCls}" title="${reserveTitle}">${cardGlyphSvg()}<span class="rm-n">${unlimited ? "∞" : reserveLeft}</span><span class="rm-label">reserve</span></div>`,
       ),
     );
     // Rows live in their own flex container so compact mode can lay the players
@@ -1142,10 +1145,13 @@ export class HUD {
       const bank = el(`<div class="bank-panel open"></div>`);
       bank.appendChild(el(`<div class="bank-title">Bank</div>`));
       const grid = el(`<div class="bank-grid"></div>`);
+      // Reserve-pile limitation off → the bank is unlimited; show ∞ per resource.
+      const bankUnlimited = state.config.reservePileLimit === false;
       for (const r of RESOURCES) {
+        const shown = bankUnlimited ? "∞" : String(state.supplyBank[r]);
         grid.appendChild(
-          el(`<span class="bank-res" title="${RESOURCE_LABEL[r]}: ${state.supplyBank[r]} in the bank" style="--res:${RES_COLOR[r]}">
-                <span class="bank-ico">${resourceGlyphSvg(r)}</span><span class="bank-n">${state.supplyBank[r]}</span>
+          el(`<span class="bank-res" title="${RESOURCE_LABEL[r]}: ${bankUnlimited ? "unlimited" : state.supplyBank[r] + " in the bank"}" style="--res:${RES_COLOR[r]}">
+                <span class="bank-ico">${resourceGlyphSvg(r)}</span><span class="bank-n">${shown}</span>
               </span>`),
         );
       }

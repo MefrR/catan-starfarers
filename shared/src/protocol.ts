@@ -40,7 +40,7 @@ export type ClientIntent =
       balancedLayout?: boolean;
       layout?: "official" | "balanced" | "unbalanced";
       deck36Dice?: boolean;
-      reservePile?: boolean;
+      reservePileLimit?: boolean;
       isPublic?: boolean; // room visibility, now toggled inside the lobby
     }
   | { t: "rejoin"; roomCode: string; playerId: string }

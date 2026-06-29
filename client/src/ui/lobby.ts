@@ -81,7 +81,7 @@ export class LobbyUI {
   private layout: "official" | "balanced" | "unbalanced" = "official";
   private deck36Dice = false;
   /** Reserve-pile catch-up draw. Default on (faithful). */
-  private reservePile = true;
+  private reservePileLimit = true;
   private onStart: StartHandler | undefined;
   private onBack: (() => void) | undefined;
   private onReset: (() => void) | undefined;
@@ -367,7 +367,7 @@ export class LobbyUI {
     const variants: [string, boolean][] = [
       ["Hide Bank", !!c.hideBank],
       ["Deck36 Dice", !!c.deck36Dice],
-      ["Reserve Pile", c.reservePile !== false],
+      ["Reserve Limit", c.reservePileLimit !== false],
     ];
     const layoutMode = c.layout ?? (c.balancedLayout === false ? "unbalanced" : "balanced");
     const chips = variants
@@ -432,7 +432,7 @@ export class LobbyUI {
     const c = lobby.config;
     const configSig = isHost
       ? ""
-      : `|${c.fogMap}|${c.turnSeconds}|${c.targetVictoryPoints}|${c.botSpeed}|${c.hideBank}|${c.layout ?? c.balancedLayout}|${c.deck36Dice}|${c.reservePile}|${lobby.isPublic}`;
+      : `|${c.fogMap}|${c.turnSeconds}|${c.targetVictoryPoints}|${c.botSpeed}|${c.hideBank}|${c.layout ?? c.balancedLayout}|${c.deck36Dice}|${c.reservePileLimit}|${lobby.isPublic}`;
     const sig = `${lobby.roomCode}|${isHost}|${lobby.started}|${onlineInvite}${configSig}`;
     if (this.lobbySig === sig && !lobby.started && this.root.querySelector(".roomcode-title")) {
       const crewCtrl = this.root.querySelector("#crewctrl");
@@ -603,8 +603,8 @@ export class LobbyUI {
           (v) => { this.hideBank = v; net.send({ t: "setRoomConfig", hideBank: v }); });
         chip("Deck36 Dice", "Even dice distribution (deck of 36)", this.deck36Dice,
           (v) => { this.deck36Dice = v; net.send({ t: "setRoomConfig", deck36Dice: v }); });
-        chip("Reserve Pile", "Free catch-up cards each roll, scaled down by VP (off = none for anyone)", this.reservePile,
-          (v) => { this.reservePile = v; net.send({ t: "setRoomConfig", reservePile: v }); });
+        chip("Reserve Limit", "Reserve pile & bank are finite and can run dry (off = UNLIMITED resources)", this.reservePileLimit,
+          (v) => { this.reservePileLimit = v; net.send({ t: "setRoomConfig", reservePileLimit: v }); });
       };
 
       // #15/#16 — map layout radio group (official / balanced / unbalanced),
@@ -643,7 +643,7 @@ export class LobbyUI {
         layout: this.layout,
         balancedLayout: this.layout !== "unbalanced",
         deck36Dice: this.deck36Dice,
-        reservePile: this.reservePile,
+        reservePileLimit: this.reservePileLimit,
         isPublic: this.hostPublic,
       });
     }
@@ -663,7 +663,7 @@ export class LobbyUI {
             layout: this.layout,
             balancedLayout: this.layout !== "unbalanced",
             deck36Dice: this.deck36Dice,
-            reservePile: this.reservePile,
+            reservePileLimit: this.reservePileLimit,
           },
         }),
       );

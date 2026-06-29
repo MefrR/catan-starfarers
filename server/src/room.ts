@@ -424,7 +424,7 @@ export class Room {
         if (intent.balancedLayout !== undefined) this.config = { ...this.config, balancedLayout: intent.balancedLayout };
         if (intent.layout !== undefined) this.config = { ...this.config, layout: intent.layout };
         if (intent.deck36Dice !== undefined) this.config = { ...this.config, deck36Dice: intent.deck36Dice };
-        if (intent.reservePile !== undefined) this.config = { ...this.config, reservePile: intent.reservePile };
+        if (intent.reservePileLimit !== undefined) this.config = { ...this.config, reservePileLimit: intent.reservePileLimit };
         // Visibility is now toggled inside the lobby (host-only). Re-broadcast of
         // the room list is handled by the index layer for setRoomConfig.
         if (intent.isPublic !== undefined) this.isPublic = intent.isPublic;

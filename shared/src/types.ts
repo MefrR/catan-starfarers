@@ -465,10 +465,11 @@ export interface GameConfig {
   /** Deck-of-36 dice (every combination once per cycle = even distribution) vs
    *  independent 2d6. Default false. */
   deck36Dice?: boolean;
-  /** Reserve-pile catch-up draw: the active roller takes free reserve cards each
-   *  roll, scaled DOWN by VP (2 → 1 → 0 at 10+ VP) — the "limitation". Default
-   *  true (faithful). When false, NO free reserve cards are ever drawn. */
-  reservePile?: boolean;
+  /** Reserve-pile (and supply-bank) limitation. Default true = the faithful finite
+   *  pools (reserve pile starts at 40 cards, bank at 100); they can run dry. When
+   *  false the limitation is OFF — resources are effectively UNLIMITED and never
+   *  run out (the meters show ∞). */
+  reservePileLimit?: boolean;
 }
 
 /** Time (seconds) added to the active player's turn timer after a successful

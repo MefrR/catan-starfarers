@@ -67,6 +67,10 @@ export const RESOURCE_CARDS_PER_TYPE = 20;
 /** Cards taken from each stack to form the reserve pile at setup. */
 export const RESERVE_PER_TYPE = 8;
 
+/** Pool size used when the reserve-pile limitation is OFF — large enough to never
+ *  deplete in a real game. Counts at/above this are shown as ∞ in the UI. */
+export const UNLIMITED_POOL = 9_000_000;
+
 /** Free reserve-pile cards the active roller draws, by current VP. */
 export function reserveDrawForVP(vp: number): number {
   if (vp <= 7) return 2; // 4-7 VP
