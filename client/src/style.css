@@ -2086,6 +2086,10 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .roll-center-btn:active { transform: translate(-50%, -50%) scale(0.98); }
 .roll-center-btn .rc-dice { font-size: 40px; line-height: 1; animation: rollWobble 2.2s ease-in-out infinite; }
 .roll-center-btn .rc-label { font-size: 18px; font-weight: 900; letter-spacing: 0.04em; }
+.roll-center-btn .rc-count {
+  margin-top: 2px; font-size: 13px; font-weight: 800; opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
 @keyframes rollBreathe {
   0%, 100% { box-shadow: 0 16px 48px rgba(91, 75, 214, 0.5), 0 0 0 5px rgba(139, 107, 255, 0.14); }
   50% { box-shadow: 0 18px 56px rgba(91, 75, 214, 0.66), 0 0 0 9px rgba(139, 107, 255, 0.22); }
@@ -3166,6 +3170,8 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   background: rgba(6, 9, 18, 0.92);
 }
+/* Landscape board → wide minimap (matches the on-screen rotation). */
+.minimap.landscape { width: 230px; height: 180px; }
 .minimap:hover { border-color: rgba(140, 190, 255, 0.55); }
 .minimap.hidden { display: none; }
 @media (max-width: 999px) {

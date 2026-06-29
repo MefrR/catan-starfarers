@@ -313,7 +313,10 @@ export class HUD {
       const r = this.mini!.getBoundingClientRect();
       const px = ((e.clientX - r.left) / r.width) * this.mini!.width;
       const py = ((e.clientY - r.top) / r.height) * this.mini!.height;
-      this.board.centerOnBoardPoint((px - m.ox) / m.s, (py - m.oy) / m.s);
+      // miniMapping is in ORIENTED board-space; un-orient before centring (which
+      // takes raw board coords).
+      const raw = this.board.orientPointInv((px - m.ox) / m.s, (py - m.oy) / m.s);
+      this.board.centerOnBoardPoint(raw.x, raw.y);
     });
   }
 
@@ -2472,15 +2475,27 @@ export class HUD {
     if (!cv || this.miniHidden) return; // skip painting while hidden
     const ctx = cv.getContext("2d");
     if (!ctx) return;
+    // Match the board's on-screen rotation: in landscape the minimap canvas is
+    // wide (230×180), in portrait it's tall (180×230), and every plotted point is
+    // run through the same orientation transform the board uses (board.orientPoint)
+    // so the minimap layout mirrors what the player actually sees.
+    const land = this.board.isLandscape;
+    const wantW = land ? 230 : 180;
+    const wantH = land ? 180 : 230;
+    if (cv.width !== wantW || cv.height !== wantH) { cv.width = wantW; cv.height = wantH; }
+    cv.classList.toggle("landscape", land);
     const W = cv.width;
     const H = cv.height;
-    // Board extents from the intersections (the authoritative geometry).
+    const orient = (x: number, y: number): { x: number; y: number } => this.board.orientPoint(x, y);
+    // Board extents from the intersections (the authoritative geometry), in the
+    // SAME oriented space we'll plot in.
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const it of Object.values(state.intersections)) {
-      if (it.x < minX) minX = it.x;
-      if (it.x > maxX) maxX = it.x;
-      if (it.y < minY) minY = it.y;
-      if (it.y > maxY) maxY = it.y;
+      const o = orient(it.x, it.y);
+      if (o.x < minX) minX = o.x;
+      if (o.x > maxX) maxX = o.x;
+      if (o.y < minY) minY = o.y;
+      if (o.y > maxY) maxY = o.y;
     }
     if (!isFinite(minX)) return;
     const pad = 10;
@@ -2488,8 +2503,9 @@ export class HUD {
     const ox = pad - minX * s + (W - pad * 2 - (maxX - minX) * s) / 2;
     const oy = pad - minY * s + (H - pad * 2 - (maxY - minY) * s) / 2;
     this.miniMapping = { s, ox, oy };
-    const px = (x: number): number => x * s + ox;
-    const py = (y: number): number => y * s + oy;
+    // Plot helpers take RAW board coords and orient them on the way to the canvas.
+    const px = (x: number, y: number): number => orient(x, y).x * s + ox;
+    const py = (x: number, y: number): number => orient(x, y).y * s + oy;
 
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = "rgba(6, 9, 18, 0.92)";
@@ -2504,11 +2520,12 @@ export class HUD {
       const sy = Math.sqrt(3) * (sec.r + sec.q / 2);
       if (sec.kind === "outpost") {
         ctx.fillStyle = sec.discovered ? "#9fd0ff" : "#3a4866";
+        const ocx = px(sx, sy), ocy = py(sx, sy);
         ctx.beginPath();
-        ctx.moveTo(px(sx), py(sy) - 3.4);
-        ctx.lineTo(px(sx) + 3, py(sy));
-        ctx.lineTo(px(sx), py(sy) + 3.4);
-        ctx.lineTo(px(sx) - 3, py(sy));
+        ctx.moveTo(ocx, ocy - 3.4);
+        ctx.lineTo(ocx + 3, ocy);
+        ctx.lineTo(ocx, ocy + 3.4);
+        ctx.lineTo(ocx - 3, ocy);
         ctx.fill();
         continue;
       }
@@ -2526,7 +2543,7 @@ export class HUD {
               ? "#bdefff"
               : (PLANET_HEX[pl.color as string] ?? "#8aa0c8");
         ctx.beginPath();
-        ctx.arc(px(sx + off.x), py(sy + off.y), 2.1, 0, Math.PI * 2);
+        ctx.arc(px(sx + off.x, sy + off.y), py(sx + off.x, sy + off.y), 2.1, 0, Math.PI * 2);
         ctx.fill();
       });
     }
@@ -2538,14 +2555,14 @@ export class HUD {
       if (!it) continue;
       ctx.fillStyle = ownerHex.get(b.owner) ?? "#fff";
       const r = b.kind === "spaceport" ? 2.6 : 2;
-      ctx.fillRect(px(it.x) - r, py(it.y) - r, r * 2, r * 2);
+      ctx.fillRect(px(it.x, it.y) - r, py(it.x, it.y) - r, r * 2, r * 2);
     }
     for (const sh of state.ships) {
       const it = state.intersections[sh.intersectionId];
       if (!it) continue;
       ctx.fillStyle = ownerHex.get(sh.owner) ?? "#fff";
       ctx.beginPath();
-      ctx.arc(px(it.x), py(it.y), 1.8, 0, Math.PI * 2);
+      ctx.arc(px(it.x, it.y), py(it.x, it.y), 1.8, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -2553,7 +2570,12 @@ export class HUD {
     // clamped to the minimap so it's always visible (when zoomed in it shrinks
     // to clearly show which slice of the galaxy you're looking at).
     const vr = this.board.visibleBoardRect();
-    let rx0 = px(vr.x0), ry0 = py(vr.y0), rx1 = px(vr.x1), ry1 = py(vr.y1);
+    // vr is RAW board-space; orient both corners (a 90° rotation can swap which is
+    // min/max) then normalise into a canvas rect.
+    const va = { x: px(vr.x0, vr.y0), y: py(vr.x0, vr.y0) };
+    const vb = { x: px(vr.x1, vr.y1), y: py(vr.x1, vr.y1) };
+    let rx0 = Math.min(va.x, vb.x), rx1 = Math.max(va.x, vb.x);
+    let ry0 = Math.min(va.y, vb.y), ry1 = Math.max(va.y, vb.y);
     rx0 = Math.max(0, Math.min(rx0, W)); rx1 = Math.max(0, Math.min(rx1, W));
     ry0 = Math.max(0, Math.min(ry0, H)); ry1 = Math.max(0, Math.min(ry1, H));
     const rw = Math.max(4, rx1 - rx0), rh = Math.max(4, ry1 - ry0);
@@ -2939,23 +2961,65 @@ export class HUD {
   private colonyNoticeRaf = 0;
   private colonyNoticeTimer = 0;
 
-  // #44: the standalone center-screen Roll Dice button (distinct from the yellow
-  // primary button so the two are never in the same place).
+  // #44: the standalone center-screen Roll button (distinct from the yellow
+  // primary button so the two are never in the same place). Used for the
+  // production roll AND the set-up "roll for starting position" (the latter with
+  // its own 10s countdown that auto-rolls).
   private rollCenterEl: HTMLElement | null = null;
-  private clearRollCenter(): void { this.rollCenterEl?.remove(); this.rollCenterEl = null; }
+  private rollCenterKind: "production" | "setup" | null = null;
+  private rollCenterTimer = 0;
+  private clearRollCenter(): void {
+    if (this.rollCenterTimer) { window.clearInterval(this.rollCenterTimer); this.rollCenterTimer = 0; }
+    this.rollCenterEl?.remove();
+    this.rollCenterEl = null;
+    this.rollCenterKind = null;
+  }
   private syncRollCenter(state: GameState): void {
     const ps = state.phaseState;
-    const show = ps.phase === "production" && !ps.lastRoll && this.game.isHumanTurn();
-    if (!show) { this.clearRollCenter(); return; } // disappears after the roll / timeout
-    if (this.rollCenterEl) return; // already shown
-    const b = el(`<button class="roll-center-btn"><span class="rc-dice">🎲</span><span class="rc-label">Roll the Dice</span></button>`);
-    b.addEventListener("click", () => {
-      if (this.game.getState().phaseState.lastRoll) return;
-      this.act({ t: "rollDice" });
+    const su = ps.setup;
+    const myIdx = state.players.findIndex((p) => p.id === this.game.humanId);
+    const productionRoll = ps.phase === "production" && !ps.lastRoll && this.game.isHumanTurn();
+    // Set-up start roll: my turn in the rollStart step and I haven't rolled yet.
+    const setupRoll =
+      ps.phase === "setup" && !!su && su.step === "rollStart" &&
+      this.game.isHumanTurn() && myIdx >= 0 && su.startRolls[myIdx] === undefined;
+    const kind: "production" | "setup" | null = productionRoll ? "production" : setupRoll ? "setup" : null;
+    if (!kind) { this.clearRollCenter(); return; } // disappears after the roll / timeout
+    if (this.rollCenterEl && this.rollCenterKind === kind) return; // already shown
+    this.clearRollCenter();
+    this.rollCenterKind = kind;
+
+    const setup = kind === "setup";
+    const label = setup ? "Roll for Starting Position" : "Roll the Dice";
+    const fire = (): void => {
+      const cur = this.game.getState().phaseState;
+      if (setup) {
+        const i = this.game.getState().players.findIndex((p) => p.id === this.game.humanId);
+        if (cur.setup?.step !== "rollStart" || (i >= 0 && cur.setup?.startRolls[i] !== undefined)) return;
+        this.act({ t: "setupRoll" });
+      } else {
+        if (cur.lastRoll) return;
+        this.act({ t: "rollDice" });
+      }
       this.clearRollCenter();
-    });
+    };
+    // The set-up roll carries a visible 10s countdown that auto-rolls on expiry so
+    // the game can't stall on a player who steps away; the production roll relies
+    // on the (optional) host turn-timer instead.
+    const countHtml = setup ? `<span class="rc-count">10</span>` : "";
+    const b = el(`<button class="roll-center-btn"><span class="rc-dice">🎲</span><span class="rc-label">${label}</span>${countHtml}</button>`);
+    b.addEventListener("click", fire);
     document.body.appendChild(b);
     this.rollCenterEl = b;
+    if (setup) {
+      let remaining = 10;
+      const countEl = b.querySelector(".rc-count");
+      this.rollCenterTimer = window.setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) { fire(); return; }
+        if (countEl) countEl.textContent = String(remaining);
+      }, 1000);
+    }
   }
 
   private clearColonyNotice(): void {
@@ -3122,13 +3186,15 @@ export class HUD {
         if (!su) break;
         if (su.step === "rollStart") {
           const rolled = su.startRolls[state.players.indexOf(me)] !== undefined;
-          if (rolled) {
-            actions.appendChild(el(`<div class="waiting">You rolled. Waiting for the others…</div>`));
-          } else {
-            actions.appendChild(
-              btn("🎲 Roll for starting position", () => this.act({ t: "setupRoll" })),
-            );
-          }
+          // #44: the roll itself is the center-screen button (syncRollCenter) with
+          // a 10s auto-roll; here we only show status text.
+          actions.appendChild(
+            el(`<div class="waiting">${rolled
+              ? "You rolled. Waiting for the others…"
+              : this.game.isHumanTurn()
+                ? "Roll for your starting position (center button)."
+                : "Waiting for the other commanders to roll…"}</div>`),
+          );
           break;
         }
         // Placement rounds 1–3: pick a glowing Catanian colony site.

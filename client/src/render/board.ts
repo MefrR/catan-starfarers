@@ -136,6 +136,10 @@ export class BoardRenderer {
   private oriInv(x: number, y: number): { x: number; y: number } {
     return this.land ? { x: y, y: -x } : { x, y };
   }
+  /** Public orientation helpers so the minimap can match the on-screen rotation. */
+  get isLandscape(): boolean { return this.land; }
+  orientPoint(x: number, y: number): { x: number; y: number } { return this.ori(x, y); }
+  orientPointInv(x: number, y: number): { x: number; y: number } { return this.oriInv(x, y); }
   // Auto-recenter: a double-tap, or 10s of no interaction, glides back to the
   // fitted middle so a lost/zoomed-in view always returns to the whole map.
   private idleTimer = 0;
