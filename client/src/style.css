@@ -3211,6 +3211,23 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .er-chip.fame svg { width: 24px; height: 24px; }
 .er-chip.fame.gain { color: #ffd23f; border-color: rgba(255, 210, 63, 0.6); }
 .er-chip.fame.loss { color: #ff6b6b; border-color: rgba(255, 107, 107, 0.6); }
+/* OK button — every encounter result waits for it (auto-pressed after 10s) so
+   players have time to read what they gained or lost. The result panel itself is
+   pointer-events:none, so the button must re-enable clicks. */
+.er-ok {
+  pointer-events: auto; cursor: pointer; margin-top: 4px;
+  padding: 9px 26px; border-radius: 999px;
+  font-size: 15px; font-weight: 800; letter-spacing: 0.04em;
+  color: #051018;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tone) 92%, #fff 8%), var(--tone));
+  border: none; box-shadow: 0 0 22px color-mix(in srgb, var(--tone) 55%, transparent);
+  animation: erRise 0.4s ease-out 0.4s both;
+}
+.er-ok:hover { filter: brightness(1.08); }
+.er-ok .er-ok-count {
+  display: inline-block; min-width: 1.2em; margin-left: 4px;
+  font-variant-numeric: tabular-nums; opacity: 0.7;
+}
 /* Duel result: winner glows, loser dims — instantly clear who won. */
 .encounter-card .enc-rost.duel-win {
   opacity: 1; background: rgba(87, 227, 137, 0.14); border: 1px solid rgba(87, 227, 137, 0.5);

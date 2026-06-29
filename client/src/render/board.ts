@@ -1175,15 +1175,18 @@ export class BoardRenderer {
           }
         }
 
-        // Number badge: dark chip pinned to the planet's lower edge. Shown for
-        // special (pirate/ice) planets too (#11) so the production number under
-        // the translucent token is visible before it's cleared.
+        // Number badge: dark chip pinned to the planet's lower edge.
+        // A pirate base / ice planet has NO production number until a player
+        // breaks it — until then the badge shows a "?" (the real number only
+        // appears once the token is cleared and special === "none").
         if (planet.explored && planet.number != null) {
-          const hot = planet.number === 6 || planet.number === 8;
+          const locked = planet.special !== "none";
+          const hot = !locked && (planet.number === 6 || planet.number === 8);
           // Number badge on the RIGHT half, vertically centred — beside the
           // resource glyph (left half) so the two never overlap.
-          const numText =
-            planet.number === 2 ? "2/11" : planet.number === 3 ? "3/12" : String(planet.number);
+          const numText = locked
+            ? "?"
+            : planet.number === 2 ? "2/11" : planet.number === 3 ? "3/12" : String(planet.number);
           const wide = numText.length > 2;
           const br = rad * (wide ? 0.54 : 0.46);
           const bx = px + rad * 0.40;
@@ -1195,7 +1198,7 @@ export class BoardRenderer {
               .stroke({ color: hot ? 0xff5a4d : 0x8aa0c8, width: 1.5, alpha: 0.9 }),
           );
           planetLayer.addChild(
-            this.label(numText, bx, by, br * (wide ? 0.82 : 1.05), hot ? 0xff7a6d : 0xeaf0ff, true),
+            this.label(numText, bx, by, br * (wide ? 0.82 : 1.05), hot ? 0xff7a6d : locked ? 0xaecaff : 0xeaf0ff, true),
           );
         }
       }

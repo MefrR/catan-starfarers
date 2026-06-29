@@ -187,6 +187,8 @@ export class HUD {
   /** True until the first render, so initial markers don't trigger the +2 VP fly. */
   private markersInitialized = false;
   private diceTimers: number[] = [];
+  /** Countdown interval for the encounter-result OK button (auto-confirm at 0). */
+  private encOkTimer = 0;
   /** Turn-timer state (host-configured limit, applied PER step). `turnDeadline` is
    *  an epoch ms; `turnTimerStep` identifies the step the deadline belongs to so a
    *  new step (roll → build → shake → move) re-arms with a fresh allotment. */
@@ -334,6 +336,7 @@ export class HUD {
     if (this.keyHandler) window.removeEventListener("keydown", this.keyHandler);
     this.diceTimers.forEach((t) => window.clearTimeout(t));
     this.diceTimers = [];
+    if (this.encOkTimer) { window.clearInterval(this.encOkTimer); this.encOkTimer = 0; }
     if (this.turnTimerInterval) { window.clearInterval(this.turnTimerInterval); this.turnTimerInterval = 0; }
     this.costPop?.remove();
     if (this.pickerOutside) {
@@ -363,7 +366,7 @@ export class HUD {
     this.root.replaceChildren();
     document
       .querySelectorAll(
-        ".gameover-overlay, .encounter-overlay, .discard-overlay, .shake-overlay, .dice-overlay, .result-toast, .fly-token, .marker-fly, .exit-confirm, .turn-splash",
+        ".gameover-overlay, .encounter-overlay, .enc-result, .discard-overlay, .shake-overlay, .dice-overlay, .result-toast, .fly-token, .marker-fly, .exit-confirm, .turn-splash",
       )
       .forEach((n) => n.remove());
   }
@@ -4045,25 +4048,30 @@ export class HUD {
       }
     }
 
-    // #29: the result is the final encounter step — let the player click it away
-    // to advance immediately, and scale how long it lingers to the chosen game
-    // speed (Relaxed waits longer, Fast clears quickly) so AI results don't flash
-    // by. Click-to-dismiss works for the human's own and spectated results alike.
-    const speed = this.game.getState().config.botSpeed ?? "normal";
-    const hold = speed === "relaxed" ? 5200 : speed === "fast" ? 2200 : 3400;
+    // Every encounter outcome — yours or an opponent's — now waits for an explicit
+    // OK so players have time to READ what they won or lost. A 10-second countdown
+    // auto-presses OK if they don't click. (Replaces the old speed-based fade.)
     let dismissed = false;
     const dismiss = (): void => {
       if (dismissed) return;
       dismissed = true;
+      if (this.encOkTimer) { window.clearInterval(this.encOkTimer); this.encOkTimer = 0; }
       toast.classList.remove("show");
       window.setTimeout(() => toast.remove(), 350);
     };
-    toast.style.cursor = "pointer";
-    toast.title = "Click to continue";
-    toast.addEventListener("click", dismiss);
-    // Untracked timers (see flyToken): a result toast must always clean itself up
-    // even if a dice roll clears diceTimers in the meantime.
-    window.setTimeout(dismiss, hold);
+    let remaining = 10;
+    const okBtn = el(
+      `<button class="er-ok">OK <span class="er-ok-count">${remaining}</span></button>`,
+    );
+    okBtn.addEventListener("click", dismiss);
+    toast.appendChild(okBtn);
+    const countEl = okBtn.querySelector(".er-ok-count")!;
+    if (this.encOkTimer) window.clearInterval(this.encOkTimer);
+    this.encOkTimer = window.setInterval(() => {
+      remaining -= 1;
+      if (remaining <= 0) { dismiss(); return; }
+      countEl.textContent = String(remaining);
+    }, 1000);
   }
 
   private fillFriendshipChoice(actions: HTMLElement, civ: AlienCiv, options: string[]): void {
@@ -4997,7 +5005,9 @@ function upgradeIco(kind: "booster" | "cannon" | "freightPod"): string {
 }
 
 function fameGlyphSvg(): string {
-  return `<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" stroke="none"><path d="M12 2 L14.6 8.6 L21.5 9 L16.2 13.4 L18 20.2 L12 16.4 L6 20.2 L7.8 13.4 L2.5 9 L9.4 8.6 Z"/></svg>`;
+  // A HALF star — fame medal pieces are worth ½ VP each, so the icon reads as
+  // "half": the full star is outlined, but only the left half is filled in.
+  return `<svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2 L14.6 8.6 L21.5 9 L16.2 13.4 L18 20.2 L12 16.4 L6 20.2 L7.8 13.4 L2.5 9 L9.4 8.6 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 2 L9.4 8.6 L2.5 9 L7.8 13.4 L6 20.2 L12 16.4 Z" fill="currentColor" stroke="none"/></svg>`;
 }
 
 function medalGlyphSvg(): string {
