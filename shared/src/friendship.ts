@@ -87,7 +87,11 @@ export const FRIENDSHIP_CARDS: FriendshipCardDef[] = [
   ...RESOURCES.map((r) => ({
     id: `merchants:${r}`,
     civ: "merchants" as AlienCiv,
-    name: "Trade Advantage",
+    // #48: headline the specific resource & ratio instead of repeating the generic
+    // "Trade Advantage" on all five cards.
+    name: r === "goods"
+      ? "Goods Trade 1:1"
+      : `${r.charAt(0).toUpperCase()}${r.slice(1)} Trade 2:1`,
     text:
       r === "goods"
         ? "Trade goods with the supply at 1:1."

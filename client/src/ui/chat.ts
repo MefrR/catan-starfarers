@@ -338,7 +338,9 @@ export class ChatBox {
    *  no dev access. */
   private isDevUser(): boolean {
     const u = auth.currentProfile()?.username;
-    return !!u && u.trim().toLowerCase() === DEV_USERNAME;
+    // Match any "Mefr…" variant (e.g. "Mefr", "MefrR") — the account name isn't
+    // always exactly "mefr", which silently disabled dev codes online.
+    return !!u && u.trim().toLowerCase().startsWith(DEV_USERNAME);
   }
 
   /**

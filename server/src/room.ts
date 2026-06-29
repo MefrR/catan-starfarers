@@ -436,6 +436,12 @@ export class Room {
           this.send(id, { t: "error", message: "Only the host can start the game." });
           return;
         }
+        // An online game needs at least 2 players (humans and/or AI) — a 1-player
+        // table can't start. The host can add an AI or invite a friend.
+        if (this.members.size < 2) {
+          this.send(id, { t: "error", message: "Need at least 2 players to start — add an AI or invite a friend." });
+          return;
+        }
         this.config = { ...this.config, ...intent.config };
         this.started = true;
         this.aiIds = new Set([...this.members.values()].filter((m) => m.isAI).map((m) => m.id));

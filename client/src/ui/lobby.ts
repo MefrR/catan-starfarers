@@ -416,7 +416,11 @@ export class LobbyUI {
     // LAN players load the host's server URL.
     const shareUrl = this.mode === "online" ? location.origin : net.currentUrl;
     const onlineInvite = this.mode === "online" && !!auth.currentProfile();
-    const startLabel = `START GAME · ${lobby.players.length} ${lobby.players.length === 1 ? "PLAYER" : "PLAYERS"}`;
+    // An online game needs ≥2 players to start; 1-player tables are blocked.
+    const canStart = lobby.players.length >= 2;
+    const startLabel = canStart
+      ? `START GAME · ${lobby.players.length} ${lobby.players.length === 1 ? "PLAYER" : "PLAYERS"}`
+      : "ADD A PLAYER TO START";
 
     // In-place update: when the screen is already up for this same room/role
     // (e.g. someone changed colour or joined), refresh only the bits that
@@ -437,8 +441,8 @@ export class LobbyUI {
       if (colorsRow) this.buildSwatches(colorsRow);
       const crewCount = this.root.querySelector("#crewcount");
       if (crewCount) crewCount.textContent = String(lobby.players.length);
-      const startBtn = this.root.querySelector("#start");
-      if (startBtn) startBtn.textContent = startLabel;
+      const startBtn = this.root.querySelector("#start") as HTMLButtonElement | null;
+      if (startBtn) { startBtn.textContent = startLabel; startBtn.disabled = !canStart; }
       return;
     }
     this.lobbySig = sig;
@@ -505,7 +509,7 @@ export class LobbyUI {
               ? `<div class="glow-wrap">
                    <div class="glow-layer glow-far"><i></i></div>
                    <div class="glow-layer glow-near"><i></i></div>
-                   <button class="glow-btn" id="start">${startLabel}</button>
+                   <button class="glow-btn" id="start" ${canStart ? "" : "disabled"}>${startLabel}</button>
                  </div>`
               : `<p class="sp-sub">Waiting for the host to start…</p>`}
             <div class="error">${this.errorText}</div>

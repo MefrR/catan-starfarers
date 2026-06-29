@@ -346,6 +346,7 @@ export class HUD {
     this.launchPicker?.remove();
     this.clearEstablishPopover();
     this.clearColonyNotice();
+    this.clearRollCenter();
     this.clearBoardConfirm();
     this.dismissMapConfirm();
     this.board.onViewChange = null;
@@ -367,7 +368,7 @@ export class HUD {
     this.root.replaceChildren();
     document
       .querySelectorAll(
-        ".gameover-overlay, .encounter-overlay, .enc-result, .discard-overlay, .shake-overlay, .dice-overlay, .result-toast, .fly-token, .marker-fly, .exit-confirm, .turn-splash, .colony-notice",
+        ".gameover-overlay, .encounter-overlay, .enc-result, .discard-overlay, .shake-overlay, .dice-overlay, .result-toast, .fly-token, .marker-fly, .exit-confirm, .turn-splash, .colony-notice, .roll-center-btn",
       )
       .forEach((n) => n.remove());
   }
@@ -727,6 +728,7 @@ export class HUD {
   private resetSelection(): void {
     this.mode = "idle";
     this.selectedShipId = null;
+    this.establishDismissedFor = null; // re-arm the establish bubble for the next pick
     this.moveTargets.clear();
     this.launchKind = null;
     this.launchPickSite = null;
@@ -1417,6 +1419,7 @@ export class HUD {
 
     this.syncEncounterOverlay(state, me);
     this.syncDiscardOverlay(state, me);
+    this.syncRollCenter(state); // #44: distinct center-screen Roll Dice button
     this.syncColonyNotice(state); // #20: "becomes a colony next turn" bubble
     this.syncEstablishPopover(state, me); // AD5: establish bubble above a tapped ship
     this.syncTurnTimer(state);
@@ -2837,11 +2840,10 @@ export class HUD {
   ): { label: string; sub: string; run: () => void } | null {
     const ps = state.phaseState;
     if (ps.phase === "production") {
-      return {
-        label: "Roll the dice", sub: "Production", run: () => {
-          if (!ps.lastRoll) this.act({ t: "rollDice" });
-        },
-      };
+      // #44: rolling is its own distinct center-screen button (syncRollCenter),
+      // deliberately NOT the yellow primary button — so it can't sit in the same
+      // spot as "End build → Shake" and invite an accidental early click.
+      return null;
     }
     if (ps.phase === "tradeBuild") {
       return { label: "End build → Shake", sub: "Trade & build", run: () => this.endBuildAndShake() };
@@ -2921,11 +2923,34 @@ export class HUD {
   private estabPop: HTMLElement | null = null;
   private estabRaf = 0;
   private estabKey = "";
+  /** Ship whose establish bubble the player dismissed by clicking elsewhere, so it
+   *  stops covering the green move-node behind it. Cleared when selection changes. */
+  private establishDismissedFor: string | null = null;
+  private estabOutside: ((e: PointerEvent) => void) | null = null;
   // #20: the "becomes a colony next turn" bubble (shown once per warning, 5s).
   private shownColonyNoticeSeq = 0;
   private colonyNoticeEl: HTMLElement | null = null;
   private colonyNoticeRaf = 0;
   private colonyNoticeTimer = 0;
+
+  // #44: the standalone center-screen Roll Dice button (distinct from the yellow
+  // primary button so the two are never in the same place).
+  private rollCenterEl: HTMLElement | null = null;
+  private clearRollCenter(): void { this.rollCenterEl?.remove(); this.rollCenterEl = null; }
+  private syncRollCenter(state: GameState): void {
+    const ps = state.phaseState;
+    const show = ps.phase === "production" && !ps.lastRoll && this.game.isHumanTurn();
+    if (!show) { this.clearRollCenter(); return; } // disappears after the roll / timeout
+    if (this.rollCenterEl) return; // already shown
+    const b = el(`<button class="roll-center-btn"><span class="rc-dice">🎲</span><span class="rc-label">Roll the Dice</span></button>`);
+    b.addEventListener("click", () => {
+      if (this.game.getState().phaseState.lastRoll) return;
+      this.act({ t: "rollDice" });
+      this.clearRollCenter();
+    });
+    document.body.appendChild(b);
+    this.rollCenterEl = b;
+  }
 
   private clearColonyNotice(): void {
     if (this.colonyNoticeRaf) { cancelAnimationFrame(this.colonyNoticeRaf); this.colonyNoticeRaf = 0; }
@@ -3002,6 +3027,7 @@ export class HUD {
 
   private clearEstablishPopover(): void {
     if (this.estabRaf) { cancelAnimationFrame(this.estabRaf); this.estabRaf = 0; }
+    if (this.estabOutside) { document.removeEventListener("pointerdown", this.estabOutside, true); this.estabOutside = null; }
     this.estabPop?.remove();
     this.estabPop = null;
     this.estabKey = "";
@@ -3018,7 +3044,9 @@ export class HUD {
       this.game.isHumanTurn() && ps.phase === "flight" && ps.shake && ship
         ? this.establishOptionFor(state, me, ship)
         : null;
-    if (!ship || !opt) {
+    // Dismissed (player clicked elsewhere) so it stops hiding the green move-node
+    // behind it — keep it hidden until they pick this ship again.
+    if (!ship || !opt || this.establishDismissedFor === ship.id) {
       this.clearEstablishPopover();
       return;
     }
@@ -3044,6 +3072,19 @@ export class HUD {
     }
     document.body.appendChild(pop);
     this.estabPop = pop;
+    // Clicking anywhere outside the bubble dismisses it (so the green move-node it
+    // was covering becomes clickable). The ship stays selected — only the bubble
+    // hides — until the player picks a ship again.
+    this.estabOutside = (e: PointerEvent): void => {
+      if (this.estabPop && !this.estabPop.contains(e.target as Node)) {
+        this.establishDismissedFor = ship.id;
+        this.clearEstablishPopover();
+      }
+    };
+    // Defer the listener so the click that opened the bubble doesn't instantly close it.
+    window.setTimeout(() => {
+      if (this.estabOutside) document.addEventListener("pointerdown", this.estabOutside, true);
+    }, 0);
     const place = (): void => {
       if (!this.estabPop) return;
       const pos = this.board.screenPosOf(ship.intersectionId);

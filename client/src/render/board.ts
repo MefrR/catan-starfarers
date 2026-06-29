@@ -1380,8 +1380,17 @@ export class BoardRenderer {
       const selected = ship.id === this.selectedShipId;
       const g = new Graphics();
       if (selected) g.circle(sx, sy, r * 1.5).stroke({ color: 0x57e389, width: 3, alpha: 0.95 });
-      if (damaged) g.circle(sx, sy, r * 1.5).stroke({ color: FROZEN_CYAN, width: 3, alpha: 0.95 });
       this.drawShip(g, ship.kind, sx, sy, r, color);
+      // #54: a ship damaged in an encounter is struck out with a big cyan X across
+      // the whole ship (cyan is a colour no player can pick, so it never reads as
+      // the red player's piece). Drawn over the ship with a dark halo for contrast.
+      if (damaged) {
+        const d = r * 1.2;
+        this.strokeLine(g, sx - d, sy - d, sx + d, sy + d, 6, 0x06222b, 0.9);
+        this.strokeLine(g, sx - d, sy + d, sx + d, sy - d, 6, 0x06222b, 0.9);
+        this.strokeLine(g, sx - d, sy - d, sx + d, sy + d, 3.5, FROZEN_CYAN, 1);
+        this.strokeLine(g, sx - d, sy + d, sx + d, sy - d, 3.5, FROZEN_CYAN, 1);
+      }
       g.eventMode = "static";
       // #55: a damaged (frozen) ship can't move, so clicking it must do NOTHING
       // (previously it spawned green move-nodes everywhere and only errored on a
@@ -1419,9 +1428,11 @@ export class BoardRenderer {
       shipLayer.addChild(hot);
       this.attachTip(hot, new Circle(sx, sy, r * 1.4), tip);
       // The tooltip overlay sits above the ship graphic; forward taps so clicking
-      // a ship still drives ship selection (move / establish flows).
-      hot.cursor = "pointer";
-      hot.on("pointertap", () => this.onShipClick?.(id));
+      // a ship still drives ship selection (move / establish flows). #55: a damaged
+      // (frozen) ship can't move, so its overlay must NOT forward taps either —
+      // otherwise clicking the X still spawned green move-nodes.
+      hot.cursor = damaged ? "default" : "pointer";
+      if (!damaged) hot.on("pointertap", () => this.onShipClick?.(id));
     }
 
     // #49: top-priority click targets for every highlighted legal node. Invisible
