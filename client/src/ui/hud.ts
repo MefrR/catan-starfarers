@@ -187,6 +187,9 @@ export class HUD {
   /** True until the first render, so initial markers don't trigger the +2 VP fly. */
   private markersInitialized = false;
   private diceTimers: number[] = [];
+  /** Timers owned by the shake overlay — kept SEPARATE from diceTimers so a dice
+   *  roll clearing diceTimers can never orphan the overlay (left stuck on screen). */
+  private shakeTimers: number[] = [];
   /** Countdown interval for the encounter-result OK button (auto-confirm at 0). */
   private encOkTimer = 0;
   /** Turn-timer state (host-configured limit, applied PER step). `turnDeadline` is
@@ -339,6 +342,8 @@ export class HUD {
     if (this.keyHandler) window.removeEventListener("keydown", this.keyHandler);
     this.diceTimers.forEach((t) => window.clearTimeout(t));
     this.diceTimers = [];
+    this.shakeTimers.forEach((t) => window.clearTimeout(t));
+    this.shakeTimers = [];
     if (this.encOkTimer) { window.clearInterval(this.encOkTimer); this.encOkTimer = 0; }
     if (this.turnTimerInterval) { window.clearInterval(this.turnTimerInterval); this.turnTimerInterval = 0; }
     this.costPop?.remove();
@@ -4450,12 +4455,20 @@ export class HUD {
    * shaking, cycles all 5 balls, then settles on the 2 drawn ones and reveals the
    * resulting speed & combat. Visible to ALL players so everyone sees the result.
    */
+  /** Tear down the shake overlay and cancel its timers (used before a new shake
+   *  and on HUD teardown), guaranteeing it can never linger on screen. */
+  private clearShakeOverlay(): void {
+    this.shakeTimers.forEach((t) => window.clearTimeout(t));
+    this.shakeTimers = [];
+    document.querySelectorAll(".shake-overlay").forEach((n) => n.remove());
+  }
+
   private playShakeCenter(state: GameState): void {
     const ps = state.phaseState;
     if (!ps.shake) return;
     const active = state.players[ps.activePlayerIndex];
     if (!active) return;
-    document.querySelectorAll(".shake-overlay").forEach((n) => n.remove());
+    this.clearShakeOverlay();
 
     const drawn = [...ps.shake.balls];
     const ballHtml = MOTHERSHIP_BALLS.map((b) => {
@@ -4501,7 +4514,7 @@ export class HUD {
       [...ballEls].sort(() => Math.random() - 0.5).slice(0, 2).forEach((b) => b.classList.add("flash"));
       elapsed += STEP;
       if (elapsed < CYCLE_MS) {
-        this.diceTimers.push(window.setTimeout(tick, STEP));
+        this.shakeTimers.push(window.setTimeout(tick, STEP));
       } else {
         ballEls.forEach((b) => b.classList.remove("flash"));
         ballEls.filter((b) => b.classList.contains("is-drawn")).forEach((b) => b.classList.add("settle"));
@@ -4509,11 +4522,11 @@ export class HUD {
         resultEl.classList.add("cs-pop");
       }
     };
-    this.diceTimers.push(window.setTimeout(tick, 30));
-    // #39: hold the Speed result on screen noticeably longer (it flashed too
-    // briefly to read before).
-    this.diceTimers.push(window.setTimeout(() => stage.classList.remove("show"), 3600));
-    this.diceTimers.push(window.setTimeout(() => overlay.remove(), 3950));
+    // These live on shakeTimers (NOT diceTimers) so a dice roll can't cancel the
+    // removal and leave the window stuck. Hard 5-second lifetime, then it's gone.
+    this.shakeTimers.push(window.setTimeout(tick, 30));
+    this.shakeTimers.push(window.setTimeout(() => stage.classList.remove("show"), 4650));
+    this.shakeTimers.push(window.setTimeout(() => this.clearShakeOverlay(), 5000));
   }
 
   /**
