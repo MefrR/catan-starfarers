@@ -334,6 +334,84 @@ export function openAccountPage(): void {
   show("record");
 }
 
+/** Open a read-only profile popup for ANY player (used from the in-game
+ *  scoreboard). A signed-in opponent shows their public record + recent games;
+ *  AI / guests (no username) show a minimal card. */
+export async function openPlayerProfile(opts: {
+  name: string;
+  color: PlayerColor;
+  username?: string | null;
+}): Promise<void> {
+  const overlay = el(`<div class="acct-overlay"></div>`);
+  const card = el(
+    `<div class="acct-card"><button class="acct-close" title="Close">✕</button>
+       <div class="acct-body"><div class="acct-loading">Loading ${escapeHtml(opts.name)}…</div></div></div>`,
+  );
+  overlay.appendChild(card);
+  const close = (): void => { overlay.classList.remove("show"); setTimeout(() => overlay.remove(), 200); };
+  card.querySelector(".acct-close")!.addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("show"));
+  const body = card.querySelector(".acct-body") as HTMLElement;
+
+  // Resolve a signed-in account by username (handle).
+  let user: FriendUser | null = null;
+  if (opts.username && isAuthConfigured) {
+    const handle = opts.username.trim().toLowerCase();
+    try {
+      const found = await searchUsers(handle);
+      user = found.find((u) => (u.username ?? "").toLowerCase() === handle) ?? null;
+    } catch { user = null; }
+    if (!body.isConnected) return;
+  }
+
+  if (!user) {
+    body.replaceChildren(el(`
+      <div class="acct-detail">
+        <div class="fp-head">
+          ${avatarMarkup("big", { displayName: opts.name, favoriteColor: opts.color, avatar: null })}
+          <div><div class="fp-name">${escapeHtml(opts.name)}</div><div class="fp-handle">No public profile</div></div>
+        </div>
+        <div class="acct-empty">${opts.username ? "Couldn't load this player's profile." : "This commander isn't signed in (AI or guest)."}</div>
+      </div>`));
+    return;
+  }
+
+  const [stats, history] = await Promise.all([fetchUserStats(user.id), fetchUserHistory(user.id, 50)]);
+  if (!body.isConnected) return;
+  const pct = stats && stats.games ? Math.round(stats.winRate * 100) : 0;
+  const handle = user.username ? "@" + escapeHtml(user.username) : "";
+  const view = el(`
+    <div class="acct-detail">
+      <div class="fp-head">
+        ${avatarMarkup("big", user)}
+        <div><div class="fp-name">${escapeHtml(user.displayName)}</div><div class="fp-handle">${handle}</div></div>
+      </div>
+      <div class="acct-stat-grid">
+        <div class="acct-stat"><div class="acct-stat-n">${stats?.games ?? 0}</div><div class="acct-stat-l">Games</div></div>
+        <div class="acct-stat win"><div class="acct-stat-n">${stats?.wins ?? 0}</div><div class="acct-stat-l">Wins</div></div>
+        <div class="acct-stat loss"><div class="acct-stat-n">${stats?.losses ?? 0}</div><div class="acct-stat-l">Losses</div></div>
+        <div class="acct-stat"><div class="acct-stat-n">${pct}%</div><div class="acct-stat-l">Win rate</div></div>
+        <div class="acct-stat"><div class="acct-stat-n">${stats?.bestVp ?? 0}</div><div class="acct-stat-l">Best VP</div></div>
+      </div>
+      <div class="acct-winbar" title="${pct}% wins"><i style="width:${pct}%"></i></div>
+      <div class="fr-title" style="margin-top:14px">Recent games</div>
+      <div class="acct-history fp-history"></div>
+    </div>`);
+  const list = view.querySelector(".fp-history") as HTMLElement;
+  if (history.length === 0) {
+    list.appendChild(el(`<div class="acct-empty">No games recorded yet.</div>`));
+  } else {
+    for (const g of history) {
+      const r = historyRow(g);
+      r.addEventListener("click", () => showGameDetail(body, g, () => body.replaceChildren(view)));
+      list.appendChild(r);
+    }
+  }
+  body.replaceChildren(view);
+}
+
 /** A grid picker for the profile photo — choose from the game's own art
  *  (outpost civs, resource icons, encounter motifs). Calls onPick(id) on choose. */
 function openAvatarPicker(current: string | null, onPick: (id: string) => void | Promise<void>): void {

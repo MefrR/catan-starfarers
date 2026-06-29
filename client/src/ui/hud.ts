@@ -29,7 +29,9 @@ import {
 } from "@starfarers/shared";
 import type { GameDriver } from "../game/store.js";
 import type { BoardRenderer } from "../render/board.js";
-import { ChatBox } from "./chat.js";
+import { ChatBox, FLING_EMOJIS } from "./chat.js";
+import { openAccountPage, openPlayerProfile } from "./account.js";
+import { auth } from "../auth.js";
 import { sfx, music } from "../audio.js";
 import { ShakerStreaks } from "../render/streaks.js";
 import { el, escapeHtml } from "./dom.js";
@@ -355,6 +357,7 @@ export class HUD {
     this.clearEstablishPopover();
     this.clearColonyNotice();
     this.clearRollCenter();
+    this.clearPlayerMenu();
     this.clearBoardConfirm();
     this.dismissMapConfirm();
     this.board.onViewChange = null;
@@ -376,7 +379,7 @@ export class HUD {
     this.root.replaceChildren();
     document
       .querySelectorAll(
-        ".gameover-overlay, .encounter-overlay, .enc-result, .discard-overlay, .shake-overlay, .dice-overlay, .result-toast, .fly-token, .marker-fly, .exit-confirm, .turn-splash, .colony-notice, .roll-center-btn",
+        ".gameover-overlay, .encounter-overlay, .enc-result, .discard-overlay, .shake-overlay, .dice-overlay, .result-toast, .fly-token, .marker-fly, .exit-confirm, .turn-splash, .colony-notice, .roll-center-btn, .player-menu",
       )
       .forEach((n) => n.remove());
   }
@@ -1125,7 +1128,7 @@ export class HUD {
       const row = el(`
         <div class="score-row ${isActive ? "active" : ""}" data-pid="${p.id}">
           <div class="score-main">
-            <span class="avatar" title="${escapeHtml(p.name)}">${avatarSvg(p.color)}</span>
+            <span class="avatar clickable" title="${escapeHtml(p.name)} — tap for profile / emoji">${avatarSvg(p.color)}</span>
             <span class="pname">${escapeHtml(p.name)}</span>
             ${
               p.id !== me.id && p.aiControlled
@@ -1141,6 +1144,9 @@ export class HUD {
           ${meta}
           ${upgRow}
         </div>`);
+      // Tap a player's avatar → a small Profile / Emoji menu.
+      const av = row.querySelector(".avatar") as HTMLElement | null;
+      if (av) av.addEventListener("click", (e) => { e.stopPropagation(); this.showPlayerMenu(p, av); });
       scoreRows.appendChild(row);
     }
     scoreboard.appendChild(scoreRows);
@@ -3025,6 +3031,63 @@ export class HUD {
         if (countEl) countEl.textContent = String(remaining);
       }, 1000);
     }
+  }
+
+  // Scoreboard avatar → Profile / Emoji menu.
+  private playerMenuEl: HTMLElement | null = null;
+  private playerMenuOutside: ((e: PointerEvent) => void) | null = null;
+  private clearPlayerMenu(): void {
+    if (this.playerMenuOutside) { document.removeEventListener("pointerdown", this.playerMenuOutside, true); this.playerMenuOutside = null; }
+    this.playerMenuEl?.remove();
+    this.playerMenuEl = null;
+  }
+  /** Small popup over a player's scoreboard avatar: open their profile, or fling
+   *  an emoji at them (quicker than typing in chat). */
+  private showPlayerMenu(p: PlayerState, anchor: HTMLElement): void {
+    this.clearPlayerMenu();
+    const isMe = p.id === this.game.humanId;
+    const menu = el(`
+      <div class="player-menu" style="--c:${COLOR_HEX[p.color]}">
+        <div class="pm-head">${escapeHtml(p.name)}</div>
+        <button class="pm-item" data-act="profile">👤 Profile</button>
+        <button class="pm-item" data-act="emoji">😀 Emoji</button>
+      </div>`);
+    document.body.appendChild(menu);
+    this.playerMenuEl = menu;
+
+    const place = (): void => {
+      const r = anchor.getBoundingClientRect();
+      const mw = menu.offsetWidth || 180, mh = menu.offsetHeight || 90;
+      let x = r.left, y = r.bottom + 8;
+      x = Math.min(Math.max(8, x), window.innerWidth - mw - 8);
+      if (y + mh > window.innerHeight - 8) y = r.top - mh - 8; // flip above if no room
+      menu.style.left = `${x}px`;
+      menu.style.top = `${Math.max(8, y)}px`;
+    };
+    place();
+    // Defer the outside-listener so the opening click doesn't immediately close it.
+    this.playerMenuOutside = (e: PointerEvent): void => {
+      if (this.playerMenuEl && !this.playerMenuEl.contains(e.target as Node)) this.clearPlayerMenu();
+    };
+    window.setTimeout(() => { if (this.playerMenuOutside) document.addEventListener("pointerdown", this.playerMenuOutside, true); }, 0);
+
+    menu.querySelector('[data-act="profile"]')!.addEventListener("click", () => {
+      this.clearPlayerMenu();
+      if (isMe && auth.currentProfile()) openAccountPage();
+      else void openPlayerProfile({ name: p.name, color: p.color, username: p.username ?? null });
+    });
+    menu.querySelector('[data-act="emoji"]')!.addEventListener("click", () => {
+      const grid = el(`<div class="pm-emoji"></div>`);
+      for (const f of FLING_EMOJIS) {
+        const b = el(`<button class="pm-emoji-btn" title="${f.label} → ${escapeHtml(p.name)}">${f.emoji}</button>`);
+        b.addEventListener("click", () => { this.chat?.flingTo(f.emoji, p.name); this.clearPlayerMenu(); });
+        grid.appendChild(b);
+      }
+      // Replace the two items with the emoji grid (keep the name header).
+      menu.querySelectorAll(".pm-item").forEach((n) => n.remove());
+      menu.appendChild(grid);
+      place();
+    });
   }
 
   private clearColonyNotice(): void {

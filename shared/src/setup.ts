@@ -26,6 +26,8 @@ export interface SetupMember {
   name: string;
   color: PlayerColor;
   connected: boolean;
+  /** Public account handle (lowercased) if signed in. */
+  username?: string;
 }
 
 const bagOf = (n: number): ResourceBag => ({ ore: n, fuel: n, carbon: n, food: n, goods: n });
@@ -94,6 +96,7 @@ export function createGameState(
     id: m.id,
     name: m.name,
     color: m.color,
+    username: m.username,
     connected: m.connected,
     hand: emptyBag(),
     victoryPoints: 0,

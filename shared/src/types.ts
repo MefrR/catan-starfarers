@@ -167,6 +167,9 @@ export interface PlayerState {
   id: PlayerId;
   name: string;
   color: PlayerColor;
+  /** Public account handle (lowercased) if the player is signed in — lets others
+   *  open their profile from the scoreboard. Absent for AI / guests. */
+  username?: string;
   connected: boolean;
   /** True when a disconnected human's seat is being played by the server AI
    *  (takeover after the grace period). Distinct from a host-added AI seat. */

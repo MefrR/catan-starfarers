@@ -24,6 +24,22 @@ const DEV_CODE = "warp9";
  *  chat line so the existing relay carries them with zero server changes. */
 const EMOTES = ["👍", "😄", "😮", "🤔", "😈"];
 const EMOTE_PREFIX = "::emote::";
+/** Generic targeted-emoji fling (any emoji at a named player). Carried as a
+ *  marked chat line: `::fling::<emoji>::<targetName>`. */
+const FLING_PREFIX = "::fling::";
+
+/** The flingable emojis offered in the scoreboard "Emoji" menu — the original
+ *  three plus a few more. `to` is the verb shown in the log line. */
+export const FLING_EMOJIS: { emoji: string; label: string }[] = [
+  { emoji: "❤", label: "Heart" },
+  { emoji: "🍑", label: "Ass" },
+  { emoji: "💩", label: "Shit" },
+  { emoji: "🔥", label: "Fire" },
+  { emoji: "😂", label: "LOL" },
+  { emoji: "👏", label: "Clap" },
+  { emoji: "👎", label: "Boo" },
+  { emoji: "😈", label: "Evil" },
+];
 
 /** Short canned lines an AI rival fires back so single-player chat feels alive
  *  (and demonstrates the unread-dot pulse when the panel is closed). */
@@ -148,6 +164,19 @@ export class ChatBox {
         // Z5: a quick emote floats from the sender's scoreboard row — no log line.
         if (msg.text.startsWith(EMOTE_PREFIX)) {
           this.floatEmote(msg.fromId, msg.text.slice(EMOTE_PREFIX.length));
+          return;
+        }
+        // Targeted emoji fling from the scoreboard menu: `::fling::<emoji>::<name>`.
+        if (msg.text.startsWith(FLING_PREFIX)) {
+          const rest = msg.text.slice(FLING_PREFIX.length);
+          const sep = rest.indexOf("::");
+          const emoji = sep >= 0 ? rest.slice(0, sep) : rest;
+          const target = sep >= 0 ? rest.slice(sep + 2) : "";
+          const myName = (this.me()?.name ?? "").toLowerCase();
+          const t = target.trim().toLowerCase();
+          if (t !== "" && (myName === t || myName.includes(t))) this.spawnEmoji(emoji);
+          const label = target ? `${emoji} to <b>${escapeHtml(target)}</b>` : emoji;
+          this.append(msg.name, COLOR_HEX[msg.color] ?? "#ff6b9d", label, !mine);
           return;
         }
         // A fling ("name <3", "ass to name", "shit to name") aimed at a player:
@@ -331,6 +360,17 @@ export class ChatBox {
     this.spawnEmoji(f.emoji);
     const who = f.target ? `<b>${escapeHtml(f.target)}</b>` : "everyone";
     this.append(this.me()?.name ?? "You", "#ff6b9d", `${f.emoji} to ${who}`);
+  }
+
+  /** Public: fling an emoji at a named player (from the scoreboard Emoji menu).
+   *  Multiplayer relays it so the target gets the rain; single-player shows it
+   *  locally. The chat panel doesn't need to be open. */
+  flingTo(emoji: string, targetName: string): void {
+    if (this.game.isMultiplayer) {
+      net.send({ t: "chat", text: `${FLING_PREFIX}${emoji}::${targetName}` });
+    } else {
+      this.flingLocal({ emoji, target: targetName });
+    }
   }
 
   /** True only for the signed-in developer account (@Mefr) — gates every dev

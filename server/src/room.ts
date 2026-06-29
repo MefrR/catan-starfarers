@@ -451,6 +451,7 @@ export class Room {
             name: m.name,
             color: m.color,
             connected: m.connected,
+            username: m.username,
           })),
           this.config,
         );
