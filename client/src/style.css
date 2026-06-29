@@ -2071,28 +2071,43 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
    blue-violet style — deliberately different from, and nowhere near, the yellow
    primary button — so a player rolling can't accidentally skip their build. It
    disappears the moment they roll (or the timer rolls for them). */
+/* Animatable angle for the sweeping border light. */
+@property --rcang { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
 .roll-center-btn {
   position: fixed; left: 50%; top: 46%; transform: translate(-50%, -50%); z-index: 58;
   pointer-events: auto; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 20px 46px; border-radius: 20px;
-  background: linear-gradient(165deg, #8b6bff, #5b4bd6);
-  color: #f3f0ff; border: 1px solid rgba(190, 175, 255, 0.85);
-  box-shadow: 0 16px 48px rgba(91, 75, 214, 0.5), 0 0 0 5px rgba(139, 107, 255, 0.16);
-  animation: rollBreathe 1.8s ease-in-out infinite;
+  padding: 22px 50px; border-radius: 20px;
+  /* Dark panel with FAINT starfield dots (like the build tiles) — the moving
+     border light (::after) is what makes it pop, not bright dots. */
+  background:
+    radial-gradient(circle 1px at 16% 30%, rgba(160, 190, 255, 0.22) 1px, transparent 2px),
+    radial-gradient(circle 1px at 78% 22%, rgba(160, 190, 255, 0.16) 1px, transparent 2px),
+    radial-gradient(circle 1px at 64% 74%, rgba(160, 190, 255, 0.18) 1px, transparent 2px),
+    radial-gradient(circle 1px at 32% 82%, rgba(160, 190, 255, 0.14) 1px, transparent 2px),
+    linear-gradient(160deg, #1a2444, #0a0e1f);
+  color: #eef2ff; border: 1px solid rgba(120, 170, 255, 0.22);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6), 0 0 36px rgba(91, 140, 255, 0.18);
   transition: transform 0.12s ease, filter 0.15s ease;
 }
-.roll-center-btn:hover { filter: brightness(1.08); transform: translate(-50%, -50%) scale(1.04); }
+/* The "light going around" — a conic-gradient masked to the border ring, its
+   angle animated so a bright arc orbits the edge. */
+.roll-center-btn::after {
+  content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 2px;
+  background: conic-gradient(from var(--rcang), transparent 0 58%, rgba(140, 185, 255, 0.95) 74%, rgba(180, 150, 255, 0.95) 86%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: rollBorderSpin 3.2s linear infinite;
+  pointer-events: none;
+}
+@keyframes rollBorderSpin { to { --rcang: 360deg; } }
+.roll-center-btn:hover { filter: brightness(1.08); transform: translate(-50%, -50%) scale(1.03); }
 .roll-center-btn:active { transform: translate(-50%, -50%) scale(0.98); }
 .roll-center-btn .rc-dice { font-size: 40px; line-height: 1; animation: rollWobble 2.2s ease-in-out infinite; }
 .roll-center-btn .rc-label { font-size: 18px; font-weight: 900; letter-spacing: 0.04em; }
 .roll-center-btn .rc-count {
   margin-top: 2px; font-size: 13px; font-weight: 800; opacity: 0.8;
   font-variant-numeric: tabular-nums;
-}
-@keyframes rollBreathe {
-  0%, 100% { box-shadow: 0 16px 48px rgba(91, 75, 214, 0.5), 0 0 0 5px rgba(139, 107, 255, 0.14); }
-  50% { box-shadow: 0 18px 56px rgba(91, 75, 214, 0.66), 0 0 0 9px rgba(139, 107, 255, 0.22); }
 }
 @keyframes rollWobble {
   0%, 100% { transform: rotate(-8deg); }
