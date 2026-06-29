@@ -10,7 +10,7 @@
 //   - A "colony site" is an intersection adjacent to >=2 planets — i.e. a corner
 //     shared by two planet-hexes of a system. A colony there produces from every
 //     adjacent planet whose number is rolled.
-//   - Alien outpost hexes expose their 6 corners as docking points for trade ships.
+//   - Alien outpost hexes expose 5 docking points for trade ships (#12).
 //   - Empty hexes (no planet) fill the rest of the lattice so the travel graph is
 //     fully connected and the board reads as a continuous hex field.
 

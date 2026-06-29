@@ -495,7 +495,8 @@ function doProduction(state: GameState, rng: Rng): void {
   // The active roller draws free reserve-pile cards based on VP (the catch-up
   // bonus) on EVERY roll, including a 7. On a 7 it's deferred until the steal /
   // discards resolve, then fires (in stealTarget / discard).
-  const draws = reserveDrawForVP(roller.victoryPoints);
+  // Reserve-pile catch-up is a host variant: when turned off, nobody draws.
+  const draws = state.config.reservePile === false ? 0 : reserveDrawForVP(roller.victoryPoints);
   const deferred = state.phaseState.awaitingSteal || !!state.phaseState.pendingDiscards;
   if (deferred) {
     if (draws > 0) state.phaseState.pendingReserveDraw = { playerId: roller.id, count: draws };

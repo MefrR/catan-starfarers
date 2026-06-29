@@ -1903,18 +1903,14 @@ export class BoardRenderer {
   }
 
   /**
-   * The six docking-node angles around an outpost hub, in dock-index order
-   * (i=0..2 lobes, each with a -0.42 then +0.42 offset node). Shared by
-   * `drawOutpost` (painted nodes), trade-station pips, and docked ships so all
-   * three land on exactly the same spots — otherwise stations render "next to"
-   * the painted docks instead of on them.
-   */
-  /**
-   * World-space positions of the six docking rings for an outpost hub at
-   * (cx,cy). EXACTLY mirrors the rings drawn by `drawOutpost`: three lobes one
-   * board-unit (= `scale` px) from the hub at 0/120/240°, each carrying two
-   * rings offset ±0.62 rad along the lobe arc. Trade-station pips and docked
-   * ships use this so they land on the painted rings, not near the hub.
+   * The 5 docking-node positions around an outpost hub (#12), in dock-index
+   * order. Shared by `drawOutpost` (painted nodes), trade-station pips, and
+   * docked ships so all three land on exactly the same spots — otherwise
+   * stations render "next to" the painted docks instead of on them.
+   *
+   * World-space positions for an outpost hub at (cx,cy): three lobes one board-
+   * unit (= `scale` px) from the hub, the first two carrying a pair of rings
+   * (±0.62 rad along the lobe arc) and the third a single centered ring = 5.
    */
   private dockNodePositions(
     cx: number,
@@ -1929,20 +1925,26 @@ export class BoardRenderer {
     // landscape).
     const ringOut = scale * 0.58 * 0.55; // lobeR * 0.55
     const pts: { x: number; y: number }[] = [];
-    for (const l of lobes) {
+    // #12: an Alien Outpost has 5 docking points (OUTPOST_DOCKS), not 6. With three
+    // lobes that's a 2 + 2 + 1 split — the first two lobes carry a pair of rings,
+    // the third a single centered ring. (Non-tri-lobe shapes fall back to a pair
+    // per lobe.)
+    const three = lobes.length === 3;
+    lobes.forEach((l, i) => {
       const away = Math.atan2(l.y - cy, l.x - cx);
-      for (const off of [-0.62, 0.62]) {
+      const offs = three && i === 2 ? [0] : [-0.62, 0.62];
+      for (const off of offs) {
         const a = away + off;
         pts.push({ x: l.x + Math.cos(a) * ringOut, y: l.y + Math.sin(a) * ringOut });
       }
-    }
+    });
     return pts;
   }
 
   /**
-   * Alien outpost station: a dark navy tri-lobe hub with six docking nodes and
-   * teal connector struts, echoing the printed outpost tokens. The civ emblem is
-   * layered on top by `drawCivIcon`.
+   * Alien outpost station: a dark navy tri-lobe hub with 5 docking nodes (#12)
+   * and teal connector struts, echoing the printed outpost tokens. The civ emblem
+   * is layered on top by `drawCivIcon`.
    */
   /**
    * AA6: the outpost station, redrawn at full size in the spirit of the
@@ -1987,16 +1989,11 @@ export class BoardRenderer {
       station.circle((cx + l.x) / 2, (cy + l.y) / 2, scale * 0.05).fill({ color: teal, alpha: 0.9 });
     }
 
-    // Twin docking rings per lobe, sitting on the outer arc (away from the hub).
-    for (const l of lobes) {
-      const away = Math.atan2(l.y - cy, l.x - cx);
-      for (const off of [-0.62, 0.62]) {
-        const a = away + off;
-        const nx = l.x + Math.cos(a) * lobeR * 0.55;
-        const ny = l.y + Math.sin(a) * lobeR * 0.55;
-        station.circle(nx, ny, scale * 0.15).fill({ color: edge }).stroke({ color: node, width: 2 });
-        station.circle(nx, ny, scale * 0.07).fill({ color: node });
-      }
+    // The 5 docking rings (#12), drawn on EXACTLY the spots dockNodePositions
+    // returns so pips/ships land on them. (2 + 2 + 1 across the three lobes.)
+    for (const n of this.dockNodePositions(cx, cy, scale, lobes)) {
+      station.circle(n.x, n.y, scale * 0.15).fill({ color: edge }).stroke({ color: node, width: 2 });
+      station.circle(n.x, n.y, scale * 0.07).fill({ color: node });
     }
     layer.addChild(station);
 

@@ -3212,21 +3212,24 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
 .er-chip.fame.gain { color: #ffd23f; border-color: rgba(255, 210, 63, 0.6); }
 .er-chip.fame.loss { color: #ff6b6b; border-color: rgba(255, 107, 107, 0.6); }
 /* OK button — every encounter result waits for it (auto-pressed after 10s) so
-   players have time to read what they gained or lost. The result panel itself is
-   pointer-events:none, so the button must re-enable clicks. */
+   players have time to read what they gained or lost. Plain high-contrast button
+   (white text on the standard blue→teal) so it's clearly visible against any
+   outcome tone. The result panel itself is pointer-events:none, so the button
+   must re-enable clicks. */
 .er-ok {
-  pointer-events: auto; cursor: pointer; margin-top: 4px;
-  padding: 9px 26px; border-radius: 999px;
-  font-size: 15px; font-weight: 800; letter-spacing: 0.04em;
-  color: #051018;
-  background: linear-gradient(160deg, color-mix(in srgb, var(--tone) 92%, #fff 8%), var(--tone));
-  border: none; box-shadow: 0 0 22px color-mix(in srgb, var(--tone) 55%, transparent);
+  pointer-events: auto; cursor: pointer; margin-top: 8px;
+  padding: 11px 34px; border-radius: 999px;
+  font-size: 16px; font-weight: 800; letter-spacing: 0.05em;
+  color: #eaf2ff;
+  background: linear-gradient(92deg, #5b8cff, #39d8c8);
+  border: 1px solid rgba(150, 210, 255, 0.7);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55), 0 0 18px rgba(57, 216, 200, 0.45);
   animation: erRise 0.4s ease-out 0.4s both;
 }
-.er-ok:hover { filter: brightness(1.08); }
+.er-ok:hover { filter: brightness(1.1); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6), 0 0 26px rgba(57, 216, 200, 0.6); }
 .er-ok .er-ok-count {
   display: inline-block; min-width: 1.2em; margin-left: 4px;
-  font-variant-numeric: tabular-nums; opacity: 0.7;
+  font-variant-numeric: tabular-nums; opacity: 0.85;
 }
 /* Duel result: winner glows, loser dims — instantly clear who won. */
 .encounter-card .enc-rost.duel-win {

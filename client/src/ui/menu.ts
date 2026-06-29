@@ -63,6 +63,8 @@ export class NewGameMenu {
    *  fair) / unbalanced (random, raw). Default official. */
   private layout: "official" | "balanced" | "unbalanced" = "official";
   private deck36Dice = false;
+  /** Reserve-pile catch-up draw (the VP-scaled free cards). Default on (faithful). */
+  private reservePile = true;
 
   /** When signed in, default the commander name to the profile's display name. */
   private defaultName = "Commander";
@@ -333,6 +335,7 @@ export class NewGameMenu {
       };
       chip("Hide Bank", "Hide the resource-bank counts", this.hideBank, () => (this.hideBank = !this.hideBank));
       chip("Deck36 Dice", "Even dice distribution (deck of 36)", this.deck36Dice, () => (this.deck36Dice = !this.deck36Dice));
+      chip("Reserve Pile", "Free catch-up cards each roll, scaled down by VP (off = none for anyone)", this.reservePile, () => (this.reservePile = !this.reservePile));
     };
     paintVariants();
 
@@ -371,6 +374,7 @@ export class NewGameMenu {
           layout: this.layout,
           balancedLayout: this.layout !== "unbalanced",
           deck36Dice: this.deck36Dice,
+          reservePile: this.reservePile,
         },
       };
       // The button bursts into shards, then the warp takes us into the game.
