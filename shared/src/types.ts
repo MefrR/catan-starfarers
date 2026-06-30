@@ -314,6 +314,14 @@ export interface GamePhaseState {
     stat: "combat" | "speed";
     seq: number;
   };
+  /** The option the subject just committed on an encounter — so every client can
+   *  flash that button before the card closes (spectators see the pick). */
+  encounterChoiceReveal?: {
+    subjectId: PlayerId;
+    awaiting: string;
+    choice: number | boolean;
+    seq: number;
+  };
   /** After building a trade station: the owner must choose a friendship ability. */
   pendingFriendship?: PendingFriendship;
   /** Diplomat "Galactic Relief Fund": the roller produced nothing and must pick 1

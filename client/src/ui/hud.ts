@@ -185,6 +185,8 @@ export class HUD {
   private lastAnimatedUpgrade = 0;
   /** Seq of the last duel result we played the side-by-side reveal for. */
   private lastDuelReveal = 0;
+  /** Last encounter-choice reveal seq we flashed (so it plays once). */
+  private lastChoiceReveal = 0;
   /** Per-player friendship-marker count seen last render (#8: detect new +2 VP gains). */
   private prevMarkerCount: Record<string, number> = {};
   /** True until the first render, so initial markers don't trigger the +2 VP fly. */
@@ -3800,20 +3802,50 @@ export class HUD {
       const subjectId = this.shownEncounter.subjectId;
       this.shownEncounter = null;
       this.shownConfirmCount = -1;
-      this.removeEncounterOverlay();
-      // If it resolved via a duel, reveal both motherships' rolls side by side
-      // FIRST (the climactic "who got what" moment), then the gain/loss chips.
-      const dr = state.phaseState.duelResult;
-      if (dr && dr.seq > this.lastDuelReveal) {
-        this.lastDuelReveal = dr.seq;
-        this.showDuelReveal(state, dr);
-        this.diceTimers.push(
-          window.setTimeout(() => this.playEncounterResult(state, subjectId, subjectId === me.id), 1900),
-        );
+      const proceed = (): void => {
+        this.removeEncounterOverlay();
+        // If it resolved via a duel, reveal both motherships' rolls side by side
+        // FIRST (the climactic "who got what" moment), then the gain/loss chips.
+        const dr = state.phaseState.duelResult;
+        if (dr && dr.seq > this.lastDuelReveal) {
+          this.lastDuelReveal = dr.seq;
+          this.showDuelReveal(state, dr);
+          this.diceTimers.push(
+            window.setTimeout(() => this.playEncounterResult(state, subjectId, subjectId === me.id), 1900),
+          );
+        } else {
+          this.playEncounterResult(state, subjectId, subjectId === me.id);
+        }
+      };
+      // Flash the option the subject committed on the (still-visible) card so every
+      // player sees the pick, THEN proceed to the result.
+      const cr = state.phaseState.encounterChoiceReveal;
+      if (cr && cr.seq > this.lastChoiceReveal && this.flashChosenButton(cr)) {
+        this.lastChoiceReveal = cr.seq;
+        this.diceTimers.push(window.setTimeout(proceed, 1050));
       } else {
-        this.playEncounterResult(state, subjectId, subjectId === me.id);
+        proceed();
       }
     }
+  }
+
+  /** Highlight the option the subject committed on the open encounter card so all
+   *  players can see what was chosen. Returns true if a matching button was found
+   *  (i.e. it's a button step we can flash). */
+  private flashChosenButton(cr: NonNullable<GameState["phaseState"]["encounterChoiceReveal"]>): boolean {
+    const overlay = document.querySelector(".encounter-overlay");
+    if (!overlay) return false;
+    const sel =
+      typeof cr.choice === "boolean"
+        ? `.enc-opt[data-choice="${cr.choice ? "yes" : "no"}"]`
+        : `.enc-opt[data-choice="${cr.choice}"]`;
+    const btn = overlay.querySelector(sel) as HTMLElement | null;
+    if (!btn) return false;
+    overlay.querySelectorAll(".enc-opt").forEach((b) => b.classList.add("dimmed"));
+    btn.classList.remove("dimmed");
+    btn.classList.add("chosen");
+    sfx.play("trade");
+    return true;
   }
 
   private snapshotPlayers(state: GameState): void {
@@ -4066,7 +4098,7 @@ export class HUD {
       }
       if (enc.awaiting === "confirm") {
         // Auto-resolving bounty card: a single acknowledgement button.
-        const b = el(`<button>Continue</button>`);
+        const b = el(`<button class="enc-opt" data-choice="0">Continue</button>`);
         b.addEventListener("click", () => this.act({ t: "encounterChoice", choice: 0 }));
         choices.appendChild(b);
       } else if (enc.awaiting === "number") {
@@ -4077,7 +4109,7 @@ export class HUD {
         for (const n of [0, 1, 2, 3]) {
           const label = n === 0 ? "Offer nothing" : `Offer ${n}`;
           const b = el(
-            `<button class="secondary enc-opt"><span class="eo-n">${n}</span><span class="eo-hint">${label}</span></button>`,
+            `<button class="secondary enc-opt" data-choice="${n}"><span class="eo-n">${n}</span><span class="eo-hint">${label}</span></button>`,
           );
           b.addEventListener("click", () => this.act({ t: "encounterChoice", choice: n }));
           choices.appendChild(b);
@@ -4086,9 +4118,9 @@ export class HUD {
         // Plain Yes / No — the card text poses the question; the outcome (reward
         // or risk) stays a surprise until you commit.
         choices.classList.add("col");
-        const yes = el(`<button class="enc-opt"><span class="eo-n">Yes</span></button>`);
+        const yes = el(`<button class="enc-opt" data-choice="yes"><span class="eo-n">Yes</span></button>`);
         yes.addEventListener("click", () => this.act({ t: "encounterChoice", choice: true }));
-        const no = el(`<button class="secondary enc-opt"><span class="eo-n">No</span></button>`);
+        const no = el(`<button class="secondary enc-opt" data-choice="no"><span class="eo-n">No</span></button>`);
         no.addEventListener("click", () => this.act({ t: "encounterChoice", choice: false }));
         choices.append(yes, no);
       }
@@ -4109,21 +4141,21 @@ export class HUD {
       } else if (enc.awaiting === "selectShip") {
         choices.appendChild(el(`<div class="enc-wait">Choosing which ship to immobilize…</div>`));
       } else if (enc.awaiting === "confirm") {
-        choices.appendChild(el(`<button class="enc-opt" disabled><span class="eo-n">Continue</span></button>`));
+        choices.appendChild(el(`<button class="enc-opt" data-choice="0" disabled><span class="eo-n">Continue</span></button>`));
       } else if (enc.awaiting === "number") {
         // Spectators see the OUTCOME of each offer (the "answer") — the chooser does not.
         choices.classList.add("col");
         for (const n of [0, 1, 2, 3]) {
           const hint = card?.choiceHints?.[n] ?? (n === 0 ? "Offer nothing" : `Offer ${n}`);
           choices.appendChild(
-            el(`<button class="secondary enc-opt" disabled><span class="eo-n">${n}</span><span class="eo-hint">${escapeHtml(hint)}</span></button>`),
+            el(`<button class="secondary enc-opt" data-choice="${n}" disabled><span class="eo-n">${n}</span><span class="eo-hint">${escapeHtml(hint)}</span></button>`),
           );
         }
       } else {
         // Spectators see what each answer does; the chooser sees only Yes / No.
         choices.classList.add("col");
-        choices.appendChild(el(`<button class="enc-opt" disabled><span class="eo-n">Yes</span>${card?.yesHint ? `<span class="eo-hint">${escapeHtml(card.yesHint)}</span>` : ""}</button>`));
-        choices.appendChild(el(`<button class="secondary enc-opt" disabled><span class="eo-n">No</span>${card?.noHint ? `<span class="eo-hint">${escapeHtml(card.noHint)}</span>` : ""}</button>`));
+        choices.appendChild(el(`<button class="enc-opt" data-choice="yes" disabled><span class="eo-n">Yes</span>${card?.yesHint ? `<span class="eo-hint">${escapeHtml(card.yesHint)}</span>` : ""}</button>`));
+        choices.appendChild(el(`<button class="secondary enc-opt" data-choice="no" disabled><span class="eo-n">No</span>${card?.noHint ? `<span class="eo-hint">${escapeHtml(card.noHint)}</span>` : ""}</button>`));
       }
       cardEl.appendChild(choices);
     }

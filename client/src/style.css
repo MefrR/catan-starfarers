@@ -1359,6 +1359,25 @@ button:disabled::after { content: none; } /* no traveling light on dead buttons 
   background: color-mix(in srgb, var(--accent) 24%, transparent); color: var(--text);
 }
 .encounter-card .enc-opt .eo-hint { font-size: 12px; font-weight: 600; color: var(--muted); line-height: 1.35; }
+/* The option the subject committed — flashed to EVERY player before the card
+   closes, so spectators see the choice. Others dim so it stands out. */
+.encounter-card .enc-opt.dimmed { opacity: 0.32; filter: grayscale(0.4); transition: opacity 0.2s ease; }
+.encounter-card .enc-opt.chosen {
+  opacity: 1; position: relative;
+  background: rgba(87, 227, 137, 0.22) !important;
+  border-color: rgba(110, 231, 168, 0.9) !important;
+  box-shadow: 0 0 0 2px rgba(110, 231, 168, 0.7), 0 0 24px rgba(87, 227, 137, 0.6);
+  animation: encChosen 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.encounter-card .enc-opt.chosen::after {
+  content: "✓"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  font-size: 18px; font-weight: 900; color: #6ee7a8;
+}
+@keyframes encChosen {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.09); }
+  100% { transform: scale(1.03); }
+}
 
 /* R9: spectator encounter view — a colored "watching X" banner and the same
    choice menu rendered read-only (dimmed, non-interactive). */

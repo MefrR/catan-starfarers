@@ -1647,6 +1647,14 @@ export function applyIntent(
         return { state };
       }
       if (ps.encounter.subjectId !== playerId) return fail(input, "Not your encounter.");
+      // Broadcast WHICH option the subject picked so every client can flash that
+      // button before the card closes (spectators otherwise never see the choice).
+      ps.encounterChoiceReveal = {
+        subjectId: ps.encounter.subjectId,
+        awaiting: ps.encounter.awaiting,
+        choice: intent.choice,
+        seq: (ps.encounterChoiceReveal?.seq ?? 0) + 1,
+      };
       resolveEncounter(state, intent.choice, rng, intent.resources);
       recomputeVp(state);
       return { state };
