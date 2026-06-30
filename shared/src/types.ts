@@ -316,6 +316,9 @@ export interface GamePhaseState {
   };
   /** After building a trade station: the owner must choose a friendship ability. */
   pendingFriendship?: PendingFriendship;
+  /** Diplomat "Galactic Relief Fund": the roller produced nothing and must pick 1
+   *  resource of choice from the bank (a center-screen picker). */
+  pendingRelief?: { playerId: PlayerId };
   /** A live player-to-player trade offer awaiting a response. */
   pendingTrade?: PendingTrade;
   /** Players who have used Diplomat "Fame for Sale" this turn (once per turn). */

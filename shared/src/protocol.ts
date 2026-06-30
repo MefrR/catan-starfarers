@@ -77,6 +77,7 @@ export type ClientIntent =
   | { t: "establishColony"; shipId: string }
   | { t: "establishTradeStation"; shipId: string; dock: number }
   | { t: "chooseFriendship"; cardId: string }
+  | { t: "chooseRelief"; resource: Resource } // Diplomat "Galactic Relief Fund": pick 1 resource
   | { t: "buyFame" } // Diplomat "Fame for Sale": pay 1 goods for 1 fame piece (once/turn)
   | {
       t: "encounterChoice";

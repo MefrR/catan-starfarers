@@ -71,6 +71,13 @@ export const FRIENDSHIP_CARDS: FriendshipCardDef[] = [
     text: "Once per turn you may pay 1 goods for 1 fame medal piece.",
   },
   {
+    // The Diplomat deck holds FIVE cards — a second Fame for Sale copy.
+    id: "diplomats:fameForSale2",
+    civ: "diplomats",
+    name: "Fame for Sale",
+    text: "Once per turn you may pay 1 goods for 1 fame medal piece.",
+  },
+  {
     id: "diplomats:helpingHand",
     civ: "diplomats",
     name: "A Helping Hand",
@@ -146,6 +153,11 @@ export function tradeRatioFor(p: PlayerState, r: Resource): number {
 }
 
 export const hasCard = has;
+
+/** Either Fame-for-Sale copy grants the once-per-turn "pay 1 goods → 1 fame". */
+export function hasFameForSale(p: PlayerState): boolean {
+  return has(p, "diplomats:fameForSale") || has(p, "diplomats:fameForSale2");
+}
 
 /** The set of friendship-card ids already held by ANY player (P6g: cards are
  *  physical and unique — once one is taken nobody else can draw the same one). */

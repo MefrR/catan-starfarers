@@ -130,6 +130,14 @@ export function aiObligation(state: GameState, seatId: string): ClientIntent | n
     return { t: "discard", resources };
   }
 
+  // Galactic Relief Fund: pick a resource (scarcest in hand that the bank still
+  // has) so the turn can proceed.
+  if (ps.pendingRelief?.playerId === seatId) {
+    const order = [...RESOURCES].sort((a, b) => me.hand[a] - me.hand[b]);
+    const r = order.find((x) => state.supplyBank[x] > 0) ?? RESOURCES.find((x) => state.supplyBank[x] > 0);
+    if (r) return { t: "chooseRelief", resource: r };
+  }
+
   // Wear & Tear (all-player) encounter: confirm so the table can proceed, even
   // when it's another player's turn.
   if (

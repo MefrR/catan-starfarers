@@ -40,6 +40,7 @@ import {
   diplomatDiscardLimit,
   tradeRatioFor,
   hasCard,
+  hasFameForSale,
   availableFriendshipCards,
   claimedFriendshipCards,
   FRIENDSHIP_CARDS,
@@ -602,15 +603,20 @@ function distributeProduction(state: GameState, rolled: number, rng: Rng): void 
     }
   }
 
-  // Diplomat "Galactic Relief Fund": a player who produced nothing takes 1 of choice.
+  // Diplomat "Galactic Relief Fund": a player who produced nothing takes 1 of
+  // CHOICE. For the active roller it's their turn, so prompt a picker; for any
+  // other holder who produced nothing we auto-grant (no off-turn prompt).
+  const reliefRoller = activePlayer(state);
   for (const p of state.players) {
-    if (!producedAny.has(p.id) && hasCard(p, "diplomats:galacticRelief")) {
-      const r = RESOURCES.find((x) => state.supplyBank[x] > 0);
-      if (r) {
-        state.supplyBank[r]--;
-        p.hand[r]++;
-        gains.push(`${p.name} +1 ${r} (relief fund)`);
-      }
+    if (producedAny.has(p.id) || !hasCard(p, "diplomats:galacticRelief")) continue;
+    if (!RESOURCES.some((x) => state.supplyBank[x] > 0)) continue; // bank empty — nothing to take
+    if (p.id === reliefRoller.id) {
+      state.phaseState.pendingRelief = { playerId: p.id }; // choose via a picker
+    } else {
+      const r = RESOURCES.find((x) => state.supplyBank[x] > 0)!;
+      state.supplyBank[r]--;
+      p.hand[r]++;
+      gains.push(`${p.name} +1 ${r} (relief fund)`);
     }
   }
 
@@ -1617,7 +1623,7 @@ export function applyIntent(
     case "buyFame": {
       // Diplomat "Fame for Sale": pay 1 goods for 1 fame medal piece, once/turn.
       if (!isActive) return fail(input, "Not your turn.");
-      if (!hasCard(me, "diplomats:fameForSale"))
+      if (!hasFameForSale(me))
         return fail(input, "You need the Diplomat 'Fame for Sale' alliance.");
       const used = ps.fameBoughtBy ?? [];
       if (used.includes(me.id)) return fail(input, "Already bought fame this turn.");
@@ -1717,11 +1723,32 @@ export function applyIntent(
       return { state };
     }
 
+    case "chooseRelief": {
+      const pr = ps.pendingRelief;
+      if (!pr) return fail(input, "No relief resource to take.");
+      if (pr.playerId !== playerId) return fail(input, "That choice isn't yours.");
+      const r = intent.resource;
+      if (state.supplyBank[r] <= 0) return fail(input, "The bank is out of that resource.");
+      state.supplyBank[r]--;
+      me.hand[r]++;
+      ps.pendingRelief = undefined;
+      bumpStat(state, "resourcesGained", me.id, 1);
+      log(state, `${me.name} takes 1 ${r} from the relief fund.`);
+      return { state };
+    }
+
     case "endTurn": {
       if (!isActive) return fail(input, "Not your turn.");
       if (ps.phase === "encounter") return fail(input, "Resolve the encounter first.");
       if (anyDiscardsPending()) return fail(input, "Resolve discards first.");
       if (stealPending()) return fail(input, "Steal a card first.");
+      // Relief fund not yet taken — auto-grant the first available so the turn
+      // can end (the picker is the nice path; this is the safety net).
+      if (ps.pendingRelief?.playerId === me.id) {
+        const r = RESOURCES.find((x) => state.supplyBank[x] > 0);
+        if (r) { state.supplyBank[r]--; me.hand[r]++; log(state, `${me.name} auto-takes 1 ${r} (relief fund).`); }
+        ps.pendingRelief = undefined;
+      }
       if (ps.pendingFriendship) return fail(input, "Choose your friendship ability first.");
       // #20: a colony ship may stop on a colony site, but may NOT stay there
       // indefinitely. It's allowed to sit through ONE turn-end (we flag a warning

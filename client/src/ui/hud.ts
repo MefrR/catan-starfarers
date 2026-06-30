@@ -361,6 +361,7 @@ export class HUD {
     this.clearEstablishPopover();
     this.clearColonyNotice();
     this.clearRollCenter();
+    this.clearReliefPicker();
     this.clearPlayerMenu();
     this.clearBoardConfirm();
     this.dismissMapConfirm();
@@ -383,7 +384,7 @@ export class HUD {
     this.root.replaceChildren();
     document
       .querySelectorAll(
-        ".gameover-overlay, .encounter-overlay, .enc-result, .discard-overlay, .shake-overlay, .dice-overlay, .result-toast, .fly-token, .marker-fly, .exit-confirm, .turn-splash, .colony-notice, .roll-center-btn, .player-menu",
+        ".gameover-overlay, .encounter-overlay, .enc-result, .discard-overlay, .shake-overlay, .dice-overlay, .result-toast, .fly-token, .marker-fly, .exit-confirm, .turn-splash, .colony-notice, .roll-center-btn, .player-menu, .relief-overlay",
       )
       .forEach((n) => n.remove());
   }
@@ -1444,6 +1445,7 @@ export class HUD {
     this.syncEncounterOverlay(state, me);
     this.syncDiscardOverlay(state, me);
     this.syncRollCenter(state); // #44: distinct center-screen Roll Dice button
+    this.syncReliefPicker(state, me); // Galactic Relief Fund resource picker
     this.syncColonyNotice(state); // #20: "becomes a colony next turn" bubble
     this.syncEstablishPopover(state, me); // AD5: establish bubble above a tapped ship
     this.syncTurnTimer(state);
@@ -2134,7 +2136,7 @@ export class HUD {
         const civ = (card?.civ ?? "travelers") as AlienCiv;
         // Diplomat "Fame for Sale" is an *active* ability — make its card a button
         // so the player can find/use it right here (#2). Other cards are passive.
-        if (id === "diplomats:fameForSale") {
+        if (id === "diplomats:fameForSale" || id === "diplomats:fameForSale2") {
           const used = (ps.fameBoughtBy ?? []).includes(me.id);
           const enabled = myTurn && !used && me.hand.goods >= 1;
           const hint = !myTurn
@@ -2859,6 +2861,10 @@ export class HUD {
     // A ship may move repeatedly until its cumulative distance reaches its speed.
     const remaining = speed - ship.distanceMoved;
     this.selectedShipId = shipId;
+    // Re-arm the establish bubble: tapping the ship again should always re-show
+    // "Establish Colony/Station" even if it was dismissed earlier this turn (so it
+    // shows after a move onto a colony site).
+    this.establishDismissedFor = null;
     this.mode = "moveShip";
     this.moveTargets =
       remaining > 0 ? reachable(state, ship, me, remaining) : new Map();
@@ -3035,6 +3041,38 @@ export class HUD {
         if (countEl) countEl.textContent = String(remaining);
       }, 1000);
     }
+  }
+
+  // Galactic Relief Fund: center-screen resource picker shown to the holder when
+  // their production produced nothing.
+  private reliefEl: HTMLElement | null = null;
+  private clearReliefPicker(): void { this.reliefEl?.remove(); this.reliefEl = null; }
+  private syncReliefPicker(state: GameState, me: PlayerState): void {
+    const pr = state.phaseState.pendingRelief;
+    if (!pr || pr.playerId !== me.id) { this.clearReliefPicker(); return; }
+    if (this.reliefEl) return; // already shown
+    const tiles = RESOURCES.map(
+      (r) => `<button class="relief-res" data-res="${r}" title="${RESOURCE_LABEL[r]}" style="--res:${RES_COLOR[r]}">
+                <span class="relief-ico">${resourceGlyphSvg(r)}</span><span class="relief-lbl">${RESOURCE_LABEL[r]}</span>
+              </button>`,
+    ).join("");
+    const pop = el(`
+      <div class="relief-overlay">
+        <div class="relief-card">
+          <div class="relief-title">Galactic Relief Fund</div>
+          <div class="relief-sub">Your colonies produced nothing — take 1 resource of choice.</div>
+          <div class="relief-grid">${tiles}</div>
+        </div>
+      </div>`);
+    pop.querySelectorAll<HTMLElement>(".relief-res").forEach((bn) => {
+      bn.addEventListener("click", () => {
+        const r = bn.dataset.res as Resource;
+        this.act({ t: "chooseRelief", resource: r });
+        this.clearReliefPicker();
+      });
+    });
+    document.body.appendChild(pop);
+    this.reliefEl = pop;
   }
 
   // Scoreboard avatar → Profile / Emoji menu.
@@ -3306,7 +3344,7 @@ export class HUD {
         // of square tiles under the action bar) — they light up during this
         // phase. The center bar keeps only the phase-specific actions.
         // Diplomat "Fame for Sale": pay 1 goods for 1 fame piece, once per turn.
-        if (me.friendshipCards.includes("diplomats:fameForSale")) {
+        if (me.friendshipCards.includes("diplomats:fameForSale") || me.friendshipCards.includes("diplomats:fameForSale2")) {
           const used = (ps.fameBoughtBy ?? []).includes(me.id);
           actions.appendChild(
             btn("Buy Fame (1 goods)", () => this.act({ t: "buyFame" }), {
