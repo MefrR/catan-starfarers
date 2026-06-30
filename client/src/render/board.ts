@@ -1498,10 +1498,12 @@ export class BoardRenderer {
     this.fx.addChild(trail, comet);
     const start = performance.now();
     const dur = 820;
-    const toScreen = (x: number, y: number): { x: number; y: number } => ({
-      x: this.fit.ox + x * this.fit.scale,
-      y: this.fit.oy + y * this.fit.scale,
-    });
+    // Project through the orientation rotation (fx-space is oriented, like the
+    // baked geometry) so the trail follows the ship correctly in landscape too.
+    const toScreen = (x: number, y: number): { x: number; y: number } => {
+      const o = this.ori(x, y);
+      return { x: this.fit.ox + o.x * this.fit.scale, y: this.fit.oy + o.y * this.fit.scale };
+    };
     const a = toScreen(fx, fy);
     const b = toScreen(tx, ty);
     const s = this.fit.scale;
@@ -1608,8 +1610,9 @@ export class BoardRenderer {
   }
 
   private spawnNumberPulse(bx: number, by: number): void {
-    const cx = this.fit.ox + bx * this.fit.scale;
-    const cy = this.fit.oy + by * this.fit.scale;
+    const o = this.ori(bx, by); // orient so the pulse lands on the planet in landscape
+    const cx = this.fit.ox + o.x * this.fit.scale;
+    const cy = this.fit.oy + o.y * this.fit.scale;
     const s = this.fit.scale;
     const g = new Graphics();
     this.fx.addChild(g);
@@ -1635,8 +1638,9 @@ export class BoardRenderer {
    *  (fit-space): a double ripple plus a handful of radiating sparks, so a new
    *  piece lands with a satisfying pop instead of a single thin ring. */
   private spawnBuildFx(bx: number, by: number, color: number): void {
-    const cx = this.fit.ox + bx * this.fit.scale;
-    const cy = this.fit.oy + by * this.fit.scale;
+    const o = this.ori(bx, by); // orient so the build burst lands on the piece in landscape
+    const cx = this.fit.ox + o.x * this.fit.scale;
+    const cy = this.fit.oy + o.y * this.fit.scale;
     const s = this.fit.scale;
     const ring = new Graphics();
     this.fx.addChild(ring);

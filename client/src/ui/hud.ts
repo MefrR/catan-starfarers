@@ -32,6 +32,7 @@ import type { BoardRenderer } from "../render/board.js";
 import { ChatBox, FLING_EMOJIS } from "./chat.js";
 import { openAccountPage, openPlayerProfile } from "./account.js";
 import { auth } from "../auth.js";
+import { enableWakeLock, disableWakeLock } from "../wakelock.js";
 import { sfx, music } from "../audio.js";
 import { ShakerStreaks } from "../render/streaks.js";
 import { el, escapeHtml } from "./dom.js";
@@ -291,6 +292,8 @@ export class HUD {
     };
     // F2/F4/F5: toggle-able chat box (dev-mode + heart codes live here).
     this.chat = new ChatBox(game);
+    // Keep the screen awake while a game is on screen (all platforms).
+    enableWakeLock();
     // On-map colony/trade-ship picker, anchored over the clicked launch point.
     this.launchPicker = document.createElement("div");
     this.launchPicker.className = "map-picker";
@@ -340,6 +343,7 @@ export class HUD {
    *  all subscriptions, window listeners, pending timers, and body-level overlays
    *  so a freshly-mounted HUD starts from a clean slate. */
   destroy(): void {
+    disableWakeLock();
     this.unsubscribe?.();
     if (this.keyHandler) window.removeEventListener("keydown", this.keyHandler);
     this.diceTimers.forEach((t) => window.clearTimeout(t));
