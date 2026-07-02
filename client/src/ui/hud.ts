@@ -145,6 +145,9 @@ export class HUD {
   /** Last `${activePlayer}:${phase}` rendered — drives the action-bar swap-in
    *  animation only when the turn/phase actually changes (not every state tick). */
   private lastBannerKey = "";
+  /** Last `${activePlayer}:${phase}` for the transient-state reset (audit fix):
+   *  selection/mode/launch-picker state is cleared whenever this changes. */
+  private lastResetKey = "";
   /** Turn-handoff tracking: was it the human's turn on the previous render?
    *  null = first render (suppress the splash for the opening state). */
   private wasMyTurn: boolean | null = null;
@@ -867,6 +870,17 @@ export class HUD {
   private render(state: GameState): void {
     const ps = state.phaseState;
     const active = state.players[ps.activePlayerIndex]!;
+
+    // Audit fix: transient interaction state (selected ship, move targets, a
+    // half-placed launch picker, trade compose) must not leak across a turn or
+    // phase boundary — a stale launchPickSite used to re-open the picker on a
+    // LATER turn at an unrelated site. Reset once per boundary, before wiring.
+    const resetKey = `${active.id}:${ps.phase}`;
+    if (this.lastResetKey !== "" && this.lastResetKey !== resetKey &&
+        (this.mode !== "idle" || this.selectedShipId || this.launchPickSite || this.tradeOpen)) {
+      this.resetSelection();
+    }
+    this.lastResetKey = resetKey;
 
     // #36: keep the trade window in step with the live offer. Each proposal bumps
     // phaseState.tradeProposals, so a change in this signature means the offer was
@@ -2456,9 +2470,11 @@ export class HUD {
       onClick: () => { this.launchKind = "tradeShip"; this.mode = "launchShip"; this.rerender(); },
     });
     tile({
-      ico: spaceportIco(), name: "Port", left: colonyCount,
+      // Audit fix: the almanac gives 3 spaceport pieces per player — the tile
+      // shows how many are LEFT and grays out when they're all placed.
+      ico: spaceportIco(), name: "Port", left: me.supply.shipyards,
       cost: BUILD_COSTS.spaceport, uses: BUILD_USES.spaceport,
-      ok: buildPhase && afford(BUILD_COSTS.spaceport) && colonyCount > 0,
+      ok: buildPhase && afford(BUILD_COSTS.spaceport) && colonyCount > 0 && me.supply.shipyards > 0,
       onClick: () => { this.mode = "pickColony"; this.rerender(); },
     });
     const upTile = (k: UpgradeKind, name: string): void => {
@@ -2769,7 +2785,7 @@ export class HUD {
       const myColonies = state.buildings
         .filter((b) => b.owner === me.id && b.kind === "colony")
         .map((b) => b.intersectionId);
-      const canPort = canAfford(BUILD_COSTS.spaceport) && myColonies.length > 0;
+      const canPort = canAfford(BUILD_COSTS.spaceport) && myColonies.length > 0 && me.supply.shipyards > 0;
       const shipSites = canShip ? sites : [];
       const portSites = canPort ? myColonies : [];
       if (shipSites.length || portSites.length) {
@@ -2798,6 +2814,14 @@ export class HUD {
 
     if (state.phaseState.phase === "flight" && state.phaseState.shake) {
       // Space jump: pick one of your ships, then tap ANY open point on the map.
+      if (this.mode === "spaceJump") {
+        // Audit fix: if the jump grant is gone (used up, or lost mid-turn), the
+        // mode is a dead end — the Cancel button disappears with it. Bail back
+        // to normal flight interaction instead of stranding the player.
+        if ((state.phaseState.spaceJumps?.[me.id] ?? 0) <= 0) {
+          this.resetSelection();
+        }
+      }
       if (this.mode === "spaceJump") {
         this.board.onShipClick = (id) => {
           const s = state.ships.find((x) => x.id === id);

@@ -900,8 +900,13 @@ function doBuild(
       (b) => b.owner === player.id && b.kind === "colony" && b.intersectionId === targetId,
     );
     if (!colony) return "Select one of your colonies to upgrade to a spaceport.";
+    // Audit fix: the almanac gives each player only 3 spaceport pieces — enforce
+    // it, and return the swapped-out colony piece to the supply (physical swap).
+    if (player.supply.shipyards <= 0) return "No spaceports left in your supply (max 3).";
     pay(player.hand, state.supplyBank, cost);
     colony.kind = "spaceport";
+    player.supply.shipyards--;
+    player.supply.colonies++;
     log(state, `${player.name} upgraded a colony to a spaceport.`);
     recomputeVp(state);
     return undefined;
@@ -1771,7 +1776,13 @@ export function applyIntent(
         if (!onSite) { s.parkedTurns = 0; continue; }
         s.parkedTurns = (s.parkedTurns ?? 0) + 1;
         if (s.parkedTurns >= 2) {
-          doEstablishColony(state, me, s.id, rng); // second turn parked → settle now
+          // Second turn parked → settle now. This can FAIL (e.g. no colonies left
+          // in supply): keep the ship parked, tell the table once, and retry on
+          // later turn-ends (a spaceport upgrade can return a colony to supply).
+          const err = doEstablishColony(state, me, s.id, rng);
+          if (err && s.parkedTurns === 2) {
+            log(state, `${me.name}'s colony ship can't settle — ${err} It stays parked.`);
+          }
         } else {
           // First turn parked: allow it, but warn it converts next turn.
           state.colonyNotice = { intersectionId: it!.id, seq: (state.colonyNotice?.seq ?? 0) + 1 };

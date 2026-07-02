@@ -1504,23 +1504,6 @@ export class BoardRenderer {
       const o = this.ori(x, y);
       return { x: this.fit.ox + o.x * this.fit.scale, y: this.fit.oy + o.y * this.fit.scale };
     };
-    const a = toScreen(fx, fy);
-    const b = toScreen(tx, ty);
-    const s = this.fit.scale;
-    // Control point: midpoint lifted perpendicular to the path (~18% of length).
-    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-    const lift = Math.min(len * 0.18, s * 0.9);
-    const cp = {
-      x: (a.x + b.x) / 2 + (-(b.y - a.y) / len) * lift,
-      y: (a.y + b.y) / 2 + ((b.x - a.x) / len) * lift,
-    };
-    const along = (u: number): { x: number; y: number } => {
-      const v = 1 - u;
-      return {
-        x: v * v * a.x + 2 * v * u * cp.x + u * u * b.x,
-        y: v * v * a.y + 2 * v * u * cp.y + u * u * b.y,
-      };
-    };
     // Smooth ease-in-out so the ship accelerates away and brakes on arrival.
     const ease = (t: number): number => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
     const tick = (): void => {
@@ -1531,6 +1514,25 @@ export class BoardRenderer {
         comet.destroy();
         return;
       }
+      // Audit fix: project EVERY FRAME (not once at spawn) so an orientation
+      // toggle or re-fit mid-animation doesn't strand the trail at stale coords.
+      const a = toScreen(fx, fy);
+      const b = toScreen(tx, ty);
+      const s = this.fit.scale;
+      // Control point: midpoint lifted perpendicular to the path (~18% of length).
+      const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      const lift = Math.min(len * 0.18, s * 0.9);
+      const cp = {
+        x: (a.x + b.x) / 2 + (-(b.y - a.y) / len) * lift,
+        y: (a.y + b.y) / 2 + ((b.x - a.x) / len) * lift,
+      };
+      const along = (u: number): { x: number; y: number } => {
+        const v = 1 - u;
+        return {
+          x: v * v * a.x + 2 * v * u * cp.x + u * u * b.x,
+          y: v * v * a.y + 2 * v * u * cp.y + u * u * b.y,
+        };
+      };
       const e = ease(t);
       const head = along(e);
       // Tapering tail: a few segments behind the head, thinner + fainter rearward.
@@ -1610,10 +1612,6 @@ export class BoardRenderer {
   }
 
   private spawnNumberPulse(bx: number, by: number): void {
-    const o = this.ori(bx, by); // orient so the pulse lands on the planet in landscape
-    const cx = this.fit.ox + o.x * this.fit.scale;
-    const cy = this.fit.oy + o.y * this.fit.scale;
-    const s = this.fit.scale;
     const g = new Graphics();
     this.fx.addChild(g);
     const start = performance.now();
@@ -1625,6 +1623,12 @@ export class BoardRenderer {
         g.destroy();
         return;
       }
+      // Audit fix: orient + project per frame so an orientation toggle
+      // mid-animation keeps the pulse pinned to its planet.
+      const o = this.ori(bx, by);
+      const cx = this.fit.ox + o.x * this.fit.scale;
+      const cy = this.fit.oy + o.y * this.fit.scale;
+      const s = this.fit.scale;
       const e = 1 - Math.pow(1 - t, 3);
       g.clear();
       g.circle(cx, cy, s * (0.64 + e * 0.5))
@@ -1638,10 +1642,6 @@ export class BoardRenderer {
    *  (fit-space): a double ripple plus a handful of radiating sparks, so a new
    *  piece lands with a satisfying pop instead of a single thin ring. */
   private spawnBuildFx(bx: number, by: number, color: number): void {
-    const o = this.ori(bx, by); // orient so the build burst lands on the piece in landscape
-    const cx = this.fit.ox + o.x * this.fit.scale;
-    const cy = this.fit.oy + o.y * this.fit.scale;
-    const s = this.fit.scale;
     const ring = new Graphics();
     this.fx.addChild(ring);
     const start = performance.now();
@@ -1655,6 +1655,12 @@ export class BoardRenderer {
         ring.destroy();
         return;
       }
+      // Audit fix: orient + project per frame so an orientation toggle
+      // mid-animation keeps the burst pinned to the new piece.
+      const o = this.ori(bx, by);
+      const cx = this.fit.ox + o.x * this.fit.scale;
+      const cy = this.fit.oy + o.y * this.fit.scale;
+      const s = this.fit.scale;
       const e = 1 - Math.pow(1 - t, 3); // ease-out cubic
       ring.clear();
       // Primary ripple.

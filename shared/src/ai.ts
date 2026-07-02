@@ -407,7 +407,7 @@ function tradeBuildAction(state: GameState, me: PlayerState): ClientIntent {
   //    expanding farther out). Prefer the colony farthest from home; the hard
   //    AI only upgrades colonies already out past the inner cluster.
   const upgradeColony = bestSpaceportColony(state, me, k.spaceportMinDistFrac);
-  if (upgradeColony && canAfford(me.hand, BUILD_COSTS.spaceport)) {
+  if (upgradeColony && me.supply.shipyards > 0 && canAfford(me.hand, BUILD_COSTS.spaceport)) {
     return { t: "build", what: "spaceport", targetId: upgradeColony.intersectionId };
   }
 
@@ -480,7 +480,7 @@ function tradeBuildAction(state: GameState, me: PlayerState): ClientIntent {
   //     resources toward its carbon/food cost BEFORE spending fuel on boosters —
   //     otherwise the AI hoards dead-end boosters and never converts colonies
   //     into victory points, stalling games short of 15.
-  if (upgradeColony) {
+  if (upgradeColony && me.supply.shipyards > 0) {
     const towardSpaceport = bankTradeToward(me, BUILD_COSTS.spaceport);
     if (towardSpaceport) return towardSpaceport;
   }
