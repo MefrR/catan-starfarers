@@ -58,18 +58,19 @@ export function createGameState(
     ...config,
   };
 
-  // #15/#16 Map layout mode. "official" = the recommended FIXED board (a constant
-  // seed, so the same arrangement every game) with the balance repair on;
-  // "balanced" = randomized each game with the repair; "unbalanced" = randomized,
-  // raw. Falls back to the old balancedLayout boolean for back-compat.
+  // #15/#16 Map layout mode. "official" = the printed disc TABLE (per-half disc
+  // pools + per-half pirate/ice strengths + home trios kept together), with the
+  // placement randomized WITHIN those rules each game; "balanced" = the same
+  // disc set shuffled anywhere with the no-adjacent-6/8 repair; "unbalanced" =
+  // shuffled anywhere, raw. Falls back to the old balancedLayout boolean.
   const layout =
     cfg.layout ?? (cfg.balancedLayout === false ? "unbalanced" : "balanced");
-  const OFFICIAL_SEED = 0x57a4; // fixed → the recommended layout reproduces exactly
   const { sectors, intersections } = generateBoard({
     setup: "beginner",
-    seed: layout === "official" ? OFFICIAL_SEED : Date.now() & 0xffff,
+    seed: Date.now() & 0xffff,
     randomizeLayout: cfg.fogMap,
     balancedLayout: layout !== "unbalanced",
+    layout,
   });
   void homeColonySites; // retained helper (used by tests / future variants)
 

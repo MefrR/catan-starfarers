@@ -79,8 +79,15 @@ function shuffle<T>(arr: T[], rand: () => number): T[] {
 // non-home planets (8 systems × 3): 19 carry an ordinary production disc and 5 are
 // covered by a special token (pirate base / ice planet) with a face-down "reserve"
 // disc that's revealed when the special is cleared.
-/** 19 ordinary discs for the non-home, non-special planets (top + bottom halves). */
-const OFFICIAL_REGULAR = [3, 4, 4, 11, 12, 2, 5, 5, 6, 9, 10, 10, 3, 4, 11, 5, 8, 9, 10];
+/** Top-half (filled-symbol) discs: ▲{3,4,4,11,12} ▯{2,5,5,6,9} ⬢{10,10} = 12.
+ *  With the 3 top specials (pirate 4, pirate 5, ice 3) they cover the top half's
+ *  5 systems × 3 planets = 15 exactly. */
+const OFFICIAL_TOP = [3, 4, 4, 11, 12, 2, 5, 5, 6, 9, 10, 10];
+/** Bottom-half (empty-symbol) discs: △{3,4,11} ▢{5,8,9} ⬡{10} = 7. With the 2
+ *  bottom specials (pirate 6, ice 4) they cover 3 systems × 3 planets = 9 exactly. */
+const OFFICIAL_BOTTOM = [3, 4, 11, 5, 8, 9, 10];
+/** All 19 ordinary discs merged — Balanced/Unbalanced shuffle this set anywhere. */
+const OFFICIAL_REGULAR = [...OFFICIAL_TOP, ...OFFICIAL_BOTTOM];
 /** 5 reserve discs hidden under the special tokens, revealed on clearing them. */
 const OFFICIAL_RESERVE = [3, 9, 10, 11, 11];
 /** The four Catanian home trios (α β γ δ). An entry [a,b] is an either/or disc on
@@ -201,6 +208,14 @@ export interface GenerateBoardOptions {
    * fully-random placement (the "Balanced Layout off" host option).
    */
   balancedLayout?: boolean;
+  /**
+   * #15 map-layout mode. "official" applies the printed disc TABLE: exactly 5
+   * systems in the top half (filled-symbol discs + pirate 4/5 + ice 3) and 3 in
+   * the bottom half (empty-symbol discs + pirate 6 + ice 4), home trios kept
+   * together — with placement randomized WITHIN those rules each game.
+   * "balanced"/"unbalanced" shuffle the same disc set anywhere on the board.
+   */
+  layout?: "official" | "balanced" | "unbalanced";
 }
 
 /**
@@ -239,9 +254,27 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
     for (const s of botOut) s.topHalf = false;
     // Reassign EVERY upper slot from scratch (don't trust pre-randomization
     // roles, or leftover original outposts would survive as extras).
-    let fi = 0;
-    for (const s of upper) {
-      s.role = outpostSet.has(s) ? "outpost" : fillRoles[fi++]!;
+    if (opts.layout === "official") {
+      // #15 Official: the printed board carries exactly 5 systems in the TOP
+      // half and 3 in the BOTTOM (matching the filled/empty disc pool sizes).
+      // Positions within each half still shuffle every game.
+      const topFill = shuffle(
+        [...new Array(5).fill("system"), ...new Array(topHalf.length - 2 - 5).fill("emptyCluster")] as SlotRole[],
+        rand,
+      );
+      const botFill = shuffle(
+        [...new Array(3).fill("system"), ...new Array(bottomHalf.length - 2 - 3).fill("emptyCluster")] as SlotRole[],
+        rand,
+      );
+      let ti = 0, bi = 0;
+      for (const s of upper) {
+        s.role = outpostSet.has(s) ? "outpost" : s.vrow <= 2 ? topFill[ti++]! : botFill[bi++]!;
+      }
+    } else {
+      let fi = 0;
+      for (const s of upper) {
+        s.role = outpostSet.has(s) ? "outpost" : fillRoles[fi++]!;
+      }
     }
   }
 
@@ -303,6 +336,9 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
     r: number;
     hexes: [number, number][];
     home: boolean;
+    /** True when the slot sits in the top half of the map (vrows 0–2) — drives
+     *  the Official per-half disc pools & special-token strengths. */
+    topHalf: boolean;
   }
   const homeSystems: SysDef[] = [];
   const otherSystems: SysDef[] = [];
@@ -325,6 +361,7 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
         r: slot.r,
         hexes: slot.hexes,
         home: slot.role === "home",
+        topHalf: slot.vrow <= 2,
       };
       (slot.role === "home" ? homeSystems : otherSystems).push(def);
     } else if (slot.role === "outpost") {
@@ -552,23 +589,51 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
   // and 2 Ice Planets needing 3/4 freight pods. Reachable: cannon max 6, freight
   // pod max 5. (The under-disc production numbers from the reserve set are part of
   // the Official Layout rewrite — tracked as Phase 2 in PLAYTEST_TODO.md.)
-  const tokenPlan: { special: "pirateBase" | "icePlanet"; value: number }[] = [
-    { special: "pirateBase", value: 4 },
-    { special: "pirateBase", value: 5 },
-    { special: "pirateBase", value: 6 },
-    { special: "icePlanet", value: 3 },
-    { special: "icePlanet", value: 4 },
-  ];
-  const shuffledNonHome = shuffle(otherSystems, rand);
-  tokenPlan.forEach((tok, i) => {
-    const sysDef = shuffledNonHome[i];
-    const sector = sysDef && sectors.find((s) => s.id === sysDef.sectorId);
-    if (!sector || sector.planets.length === 0) return;
-    // A random planet within the chosen system carries the token.
-    const planet = sector.planets[Math.floor(rand() * sector.planets.length)]!;
-    planet.special = tok.special;
-    planet.specialValue = tok.value;
-  });
+  const placeTokens = (
+    plan: { special: "pirateBase" | "icePlanet"; value: number }[],
+    pool: typeof otherSystems,
+  ): void => {
+    const shuffled = shuffle(pool, rand);
+    plan.forEach((tok, i) => {
+      const sysDef = shuffled[i];
+      const sector = sysDef && sectors.find((s) => s.id === sysDef.sectorId);
+      if (!sector || sector.planets.length === 0) return;
+      // A random planet within the chosen system carries the token.
+      const planet = sector.planets[Math.floor(rand() * sector.planets.length)]!;
+      planet.special = tok.special;
+      planet.specialValue = tok.value;
+    });
+  };
+  if (opts.layout === "official") {
+    // #15 Official: the printed halves — top carries pirate 4, pirate 5 & ice 3;
+    // bottom carries pirate 6 & ice 4 (each on a different system of its half).
+    placeTokens(
+      [
+        { special: "pirateBase", value: 4 },
+        { special: "pirateBase", value: 5 },
+        { special: "icePlanet", value: 3 },
+      ],
+      otherSystems.filter((s) => s.topHalf),
+    );
+    placeTokens(
+      [
+        { special: "pirateBase", value: 6 },
+        { special: "icePlanet", value: 4 },
+      ],
+      otherSystems.filter((s) => !s.topHalf),
+    );
+  } else {
+    placeTokens(
+      [
+        { special: "pirateBase", value: 4 },
+        { special: "pirateBase", value: 5 },
+        { special: "pirateBase", value: 6 },
+        { special: "icePlanet", value: 3 },
+        { special: "icePlanet", value: 4 },
+      ],
+      otherSystems,
+    );
+  }
 
   // #15: hand out the official disc distribution to the non-home planets now that
   // specials are placed. The 19 ordinary discs go on ordinary planets; the 5
@@ -576,15 +641,32 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
   // are sized to match exactly (19 + 5 = 24 non-home planets); cycle defensively
   // if a degenerate board ever has a different count.
   {
-    const nonHome = sectors
-      .filter((s) => s.kind === "planetarySystem" && !s.home)
-      .flatMap((s) => s.planets);
+    const topIds = new Set(otherSystems.filter((s) => s.topHalf).map((s) => s.sectorId));
+    const nonHomeSectors = sectors.filter((s) => s.kind === "planetarySystem" && !s.home);
+    const nonHome = nonHomeSectors.flatMap((s) => s.planets);
     const specialPlanets = nonHome.filter((p) => p.special !== "none");
-    const regularPlanets = nonHome.filter((p) => p.special === "none");
     const reservePool = shuffle([...OFFICIAL_RESERVE], rand);
-    const regularPool = shuffle([...OFFICIAL_REGULAR], rand);
     specialPlanets.forEach((p, i) => { p.number = reservePool[i % reservePool.length]!; });
-    regularPlanets.forEach((p, i) => { p.number = regularPool[i % regularPool.length]!; });
+    if (opts.layout === "official") {
+      // #15 Official: the filled-symbol discs shuffle across the TOP half's 12
+      // ordinary planets, the empty-symbol discs across the BOTTOM half's 7 —
+      // never mixing halves, exactly like the printed table.
+      const assign = (planets: typeof nonHome, pool: number[]): void => {
+        const shuffled = shuffle([...pool], rand);
+        planets.forEach((p, i) => { p.number = shuffled[i % shuffled.length]!; });
+      };
+      const regular = (top: boolean): typeof nonHome =>
+        nonHomeSectors
+          .filter((s) => topIds.has(s.id) === top)
+          .flatMap((s) => s.planets)
+          .filter((p) => p.special === "none");
+      assign(regular(true), OFFICIAL_TOP);
+      assign(regular(false), OFFICIAL_BOTTOM);
+    } else {
+      const regularPlanets = nonHome.filter((p) => p.special === "none");
+      const regularPool = shuffle([...OFFICIAL_REGULAR], rand);
+      regularPlanets.forEach((p, i) => { p.number = regularPool[i % regularPool.length]!; });
+    }
   }
 
   // Q8: never let the two "hot" numbers (6 and 8 — the highest-frequency chits)
@@ -592,8 +674,11 @@ export function generateBoard(opts: GenerateBoardOptions = {}): BoardTopology {
   // swapping a conflicting hot number with a cool one elsewhere on the board.
   // Home planets are protected so the two-6s/two-8s starting rule is preserved.
   // Skipped when "Balanced Layout" is off (opts.balancedLayout === false), which
-  // allows raw/random chit placement (adjacent 6s & 8s become possible).
-  if (opts.balancedLayout !== false) {
+  // allows raw/random chit placement (adjacent 6s & 8s become possible). Also
+  // skipped in Official mode: a repair swap could move a disc across the half
+  // boundary and break the printed per-half pools (Official IS the table; its
+  // pools only hold one 6 and one 8 outside the protected homes anyway).
+  if (opts.layout !== "official" && opts.balancedLayout !== false) {
     separateHotNumbers(sectors, intersections, rand, homePlanetIds);
   }
 

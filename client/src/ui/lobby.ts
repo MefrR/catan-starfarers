@@ -384,7 +384,7 @@ export class LobbyUI {
     return `
       ${pill("Visibility", lobby.isPublic ? "Public" : "Private")}
       ${pill("Galaxy", c.fogMap ? "Uncharted" : "Charted")}
-      ${pill("Map layout", `${cap(layoutMode)}${layoutMode === "official" ? " (fixed)" : ""}`)}
+      ${pill("Map layout", cap(layoutMode))}
       ${pill("Bot speed", cap(c.botSpeed ?? "normal"))}
       ${pill("Victory target", `${c.targetVictoryPoints ?? 15} VP`)}
       <div class="setup-row"><div class="setup-label">Variants</div><div class="setup-ctrl"><div class="variant-chips ro">${chips}</div></div></div>
@@ -633,7 +633,7 @@ export class LobbyUI {
           });
           layoutRow.appendChild(b);
         };
-        layoutChip("Official", "The recommended board — same setup every game", "official");
+        layoutChip("Official", "The printed disc layout — official numbers & pirates per map half", "official");
         layoutChip("Balanced", "Random each game, fair (no 6 next to 8)", "balanced");
         layoutChip("Unbalanced", "Random each game, raw (6 can touch 8)", "unbalanced");
       };

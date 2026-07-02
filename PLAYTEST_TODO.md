@@ -73,14 +73,16 @@ bottom {3,4,11,5,8,9,10}.
 
 ## 4. NUMBER TOKENS & LAYOUT MODES
 15. Official Layout (ON by default) using the disc table above + "Unbalanced
-    Layout" button. — ✅ (a real 3-way "Map layout" selector now shows in BOTH the
-    New Game screen and the multiplayer lobby: **Official** (default), **Balanced**,
-    **Unbalanced**. Official = the recommended FIXED board (deterministic seed → the
-    same arrangement every game) using the official disc distribution; it's the
-    default. Verified: two official games are byte-identical, balanced/unbalanced
-    vary each game. NOTE: "Official" reproduces a consistent board with the official
-    disc SET; matching the exact printed symbol-group POSITIONS still rides on the
-    topology rewrite (#6/#7).)
+    Layout" button. — ✅ REWORKED per re-check: **Official** now applies the disc
+    TABLE itself (not a fixed seed): exactly 5 systems in the TOP half carrying
+    the filled-symbol discs {3,4,4,11,12 / 2,5,5,6,9 / 10,10} + pirate(4),
+    pirate(5), ice(3); exactly 3 systems in the BOTTOM half carrying the
+    empty-symbol discs {3,4,11 / 5,8,9 / 10} + pirate(6), ice(4); home trios kept
+    together (assignment randomized); reserve {3,9,10,11,11} shuffled under the 5
+    specials. Placement randomizes every game WITHIN those rules. Verified
+    headlessly across 5 seeds: pools + specials per half exact, boards vary.
+    (Matching the printed per-SYMBOL positions still rides on the topology
+    rewrite #6/#7.)
 16. "Balanced Layout" mode (same tokens, randomized, no illegal duplicates). — ✅
     (the "Balanced" option in the new selector: randomized every game with the
     separateHotNumbers repair so no two 6/8 share a corner (home opening protected).

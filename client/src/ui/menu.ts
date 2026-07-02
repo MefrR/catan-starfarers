@@ -353,7 +353,7 @@ export class NewGameMenu {
         b.addEventListener("click", () => { this.layout = mode; paintLayout(); });
         layoutRow.appendChild(b);
       };
-      layoutChip("Official", "The recommended board — same setup every game", "official");
+      layoutChip("Official", "The printed disc layout — official numbers & pirates per map half", "official");
       layoutChip("Balanced", "Random each game, fair (no 6 next to 8)", "balanced");
       layoutChip("Unbalanced", "Random each game, raw (6 can touch 8)", "unbalanced");
     };
